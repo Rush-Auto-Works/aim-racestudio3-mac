@@ -424,7 +424,14 @@ do_import() {
       ;;
     *)
       [ -d "$p" ] || die "Import: folder not found: $p"
-      import_merge "$p"
+      # A RaceStudio3 user tree merges; otherwise a folder of loose .xrk sessions is imported.
+      if [ -n "$(_find_user_tree "$p")" ]; then
+        import_merge "$p"
+      elif _dir_has_xrk "$p"; then
+        import_xrk_dir "$p"
+      else
+        die "Import: '$p' has no RaceStudio3 user folder and no .xrk files."
+      fi
       ;;
   esac
 }
