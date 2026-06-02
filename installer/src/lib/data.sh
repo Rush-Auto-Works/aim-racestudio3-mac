@@ -150,23 +150,45 @@ data_relocate_safe() {
   return 0
 }
 
+# _find_user_tree <dir> : echo the RaceStudio3 "user" folder inside <dir> (the dir itself if it IS
+# one, else a RaceStudio3/user or AIM_SPORT/RaceStudio3/user under it), or nothing if none.
+_find_user_tree() {
+  local in="$1"
+  if [ -d "$in/cfgs" ] || [ -d "$in/system" ] || [ -d "$in/profiles" ]; then echo "$in"
+  elif [ -d "$in/RaceStudio3/user" ]; then echo "$in/RaceStudio3/user"
+  elif [ -d "$in/AIM_SPORT/RaceStudio3/user" ]; then echo "$in/AIM_SPORT/RaceStudio3/user"
+  fi
+}
+
+# _dir_has_xrk <dir> : true if <dir> contains at least one .xrk file (recursive, case-insensitive).
+_dir_has_xrk() { [ -n "$(find "$1" -type f -iname '*.xrk' -print -quit 2>/dev/null)" ]; }
+
 # import_merge <source_dir> : public entry point for the Import droplet and the installer's
 # optional "I have a folder" step. Merges an external AIM_SPORT/user (or its parent) into the
 # live DATA_DIR using the SAME copy-if-absent engine — never overwrites existing user data.
 # Accepts either a folder that IS the user tree (has cfgs/ or system/) or a parent containing
 # AIM_SPORT/RaceStudio3/user.
 import_merge() {
-  local in="$1" usr=""
-  if [ -d "$in/cfgs" ] || [ -d "$in/system" ] || [ -d "$in/profiles" ]; then
-    usr="$in"
-  elif [ -d "$in/RaceStudio3/user" ]; then
-    usr="$in/RaceStudio3/user"
-  elif [ -d "$in/AIM_SPORT/RaceStudio3/user" ]; then
-    usr="$in/AIM_SPORT/RaceStudio3/user"
-  fi
+  local in="$1" usr
+  usr="$(_find_user_tree "$in")"
   if [ -z "$usr" ]; then ui_error "couldn't find a RaceStudio3 user folder under: $in"; return 1; fi
   mkdir -p "$DATA_DIR"
   _merge_copy_if_absent "$usr" "$DATA_DIR" || { ui_error "import failed"; return 1; }
   local n; n="$(cd "$usr" && find . -type f | wc -l | tr -d ' ')"
   ui_say "Imported (merged, nothing overwritten): $n files from $usr"
+}
+
+# import_xrk_dir <dir> : import a folder of loose .xrk sessions (no RaceStudio3 user tree). Copies
+# every .xrk found (recursively, preserving relative paths) into DATA_DIR/data/<dir-name>/, never
+# overwriting. Errors if the folder has no .xrk files.
+import_xrk_dir() {
+  local in="${1%/}" dest n=0 f rel
+  dest="$DATA_DIR/data/$(basename "$in")"
+  if ! _dir_has_xrk "$in"; then ui_error "no .xrk files found under: $in"; return 1; fi
+  while IFS= read -r f; do
+    rel="${f#"$in"/}"
+    mkdir -p "$dest/$(dirname "$rel")"
+    if [ ! -e "$dest/$rel" ]; then ditto "$f" "$dest/$rel" && n=$((n+1)); fi
+  done < <(find "$in" -type f -iname '*.xrk')
+  ui_say "Imported $n .xrk session file(s) into $dest (nothing overwritten)."
 }
