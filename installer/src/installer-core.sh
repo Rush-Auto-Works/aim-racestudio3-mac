@@ -73,6 +73,11 @@ die() { ui_error "$1"; log "FATAL: $1"; exit 1; }
 
 # resolve the Wine binary if present (don't trust a stale path)
 WINE_BIN=""; if [ -d "$WINE_ROOT" ]; then WINE_BIN="$(find_wine_binary "$WINE_ROOT" || true)"; fi
+# Bundled-Wine mode: the app passes RS3_WINE_BIN pointing at Wine inside its own bundle.
+if [ -n "${RS3_WINE_BIN:-}" ] && [ -x "${RS3_WINE_BIN}" ]; then
+  WINE_BIN="$RS3_WINE_BIN"
+  WINE_ROOT="$(cd "$(dirname "$RS3_WINE_BIN")/.." && pwd)"
+fi
 
 # single EXIT trap (no ERR — Wine's benign nonzero exits would double-fire it)
 cleanup() {
@@ -170,6 +175,10 @@ phase_acquire_installer() {
 
 phase_download_wine() {
   ui_progress 3 8 "Downloading the engine (Wine ${WINE_PINNED_VER})…"
+  # Bundled-Wine mode: the engine ships inside the app — nothing to download.
+  if [ -n "${RS3_WINE_BIN:-}" ] && [ -x "${RS3_WINE_BIN}" ]; then
+    ui_say "Engine is bundled with the app."; ledger_mark wine; return 0
+  fi
   if ledger_skip_if_done wine; then ui_say "Engine already installed."; return 0; fi
 
   local asset; asset="$(basename "$WINE_PINNED_URL")"
@@ -447,7 +456,7 @@ case "$ACTION" in
   import)            do_import ;;
   uninstall)         do_uninstall "${args[@]:1}" ;;
   set-config)        ui_persist "${args[1]:?key}" "${args[2]:-}" ;;
-  is-installed)      if ledger_verify installed && [ -f "$INSTALL_ROOT/bin/launch.sh" ]; then echo RS3_INSTALLED; else echo RS3_ABSENT; fi ;;
+  is-installed)      if ledger_verify installed; then echo RS3_INSTALLED; else echo RS3_ABSENT; fi ;;
   help)              usage ;;
   *) die "unknown action: $ACTION" ;;
 esac

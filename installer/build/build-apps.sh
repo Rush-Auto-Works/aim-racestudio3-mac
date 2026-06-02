@@ -51,6 +51,31 @@ ditto "$SRC/pins.env"          "$RES/pins.env"
 ditto "$SRC/lib"               "$RES/lib"
 chmod +x "$RES/installer-core.sh"
 
+# ---- 1b. bundle the Wine engine INSIDE the app ----------------------------------------------
+# So macOS resolves Wine's NSBundle.mainBundle to RaceStudio 3.app (menu bar reads "RaceStudio 3")
+# AND first launch skips the Wine download. CRITICAL: extract the bare wine/ tree, NOT the Gcenx
+# "Wine Staging.app" wrapper — otherwise mainBundle resolves to that inner .app and still says "Wine".
+say "Bundling Wine engine (this is the big step)"
+. "$SRC/pins.env"   # WINE_PINNED_URL / SIZE / SHA256
+WINE_TARBALL="${WINE_TARBALL:-/tmp/claude/wine11.tar.xz}"
+if [ ! -f "$WINE_TARBALL" ]; then
+  WINE_TARBALL="$DIST/wine.tar.xz"
+  say "downloading pinned Wine…"
+  curl -fSL --proto '=https' -o "$WINE_TARBALL" "$WINE_PINNED_URL" || { echo "wine download failed"; exit 1; }
+fi
+TMPW="$DIST/winetmp"; rm -rf "$TMPW"; mkdir -p "$TMPW"
+tar -xJf "$WINE_TARBALL" -C "$TMPW" || { echo "wine extract failed"; exit 1; }
+WBIN="$(find "$TMPW" -type f -name wine -path '*/bin/wine' | head -1)"
+[ -n "$WBIN" ] || { echo "wine binary not found in tarball"; exit 1; }
+WTREE="$(dirname "$(dirname "$WBIN")")"   # .../wine  (the dir containing bin/, lib/, share/)
+ditto "$WTREE" "$RES/wine"
+xattr -dr com.apple.quarantine "$RES/wine" 2>/dev/null || true
+rm -rf "$TMPW"
+# RS3 is native + CEF — it never uses .NET (Wine-Mono) or the HTML engine (Wine-Gecko), and we
+# disable both via WINEDLLOVERRIDES anyway. Dropping them cuts ~290 MB from the bundle.
+rm -rf "$RES/wine/share/wine/gecko" "$RES/wine/share/wine/mono" 2>/dev/null || true
+[ -x "$RES/wine/bin/wine" ] && say "bundled wine: Contents/Resources/wine/bin/wine" || { echo "bundled wine missing"; exit 1; }
+
 # ---- 2. icon (dark rounded square + Rush logo) ----------------------------------------------
 say "Building app icon"
 PYVENV="${PYVENV:-/tmp/rs3-build-venv}"
@@ -92,11 +117,16 @@ if [ "${SKIP_SIGN:-0}" = 1 ]; then say "SKIP_SIGN=1 — compiled only."; exit 0;
 #   -S apple-tool:,apple:,codesign: -s -k "<pw>" ~/Library/Keychains/login.keychain-db
 have_identity() { security find-identity -v -p codesigning 2>/dev/null | grep -q "$TEAMID"; }
 if ! have_identity; then say "No Developer ID ($TEAMID) in keychain — compiled only in $DIST."; exit 0; fi
-TS="--timestamp"; [ "${NO_TIMESTAMP:-0}" = 1 ] && TS=""
-say "Codesigning (hardened runtime)"
+# Now that Wine is bundled, the app has hundreds of mach-o files -> --deep signs them all.
+# Hardened runtime is OFF by default: Wine needs JIT/unsigned-memory entitlements to run under it,
+# which we add in the notarization pass (HARDENED_RUNTIME=1). Timestamp only with hardened runtime
+# (per-file TSA calls across all of Wine are slow + only needed for notarization).
+HARDENED=""; [ "${HARDENED_RUNTIME:-0}" = 1 ] && HARDENED="--options runtime --entitlements $HERE/wine.entitlements.plist"
+TS=""; { [ -n "$HARDENED" ] && [ "${NO_TIMESTAMP:-0}" != 1 ]; } && TS="--timestamp"
+say "Codesigning (deep — Wine has many binaries, takes a minute)…"
 # shellcheck disable=SC2086
-codesign --force --options runtime $TS --sign "$IDENTITY" "$APP" || { echo "codesign failed"; exit 1; }
-codesign --verify --deep --strict "$APP" && say "signature verifies"
+codesign --deep --force $HARDENED $TS --sign "$IDENTITY" "$APP" || { echo "codesign failed"; exit 1; }
+codesign --verify --strict "$APP" && say "signature verifies"
 
 # ---- 5. notarize + staple (if creds) --------------------------------------------------------
 NOTARY_ARGS=""
