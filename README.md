@@ -6,6 +6,9 @@ and profiles from a Windows/Parallels install.
 
 No Windows license, no 60 GB virtual machine. Just RaceStudio 3 in a window.
 
+![RaceStudio 3 running on macOS via CrossOver](img/working-config-shift-lights.png)
+*RaceStudio 3 (v3.83.20) running on an Apple Silicon Mac under a current CrossOver — clean text, full UI.*
+
 > **TL;DR:** On a **current CrossOver (v24+, ideally v26+)** the official AiM installer
 > *just works*. Make a Windows 10 bottle, run the installer, click through. Done.
 > Everything below the "Easy path" is optional (data import) or only needed on old Wine.
@@ -24,22 +27,24 @@ No Windows license, no 60 GB virtual machine. Just RaceStudio 3 in a window.
 | Thing | Notes |
 |-------|-------|
 | Apple Silicon Mac | Tested on M5 Max, macOS 26. Intel Macs work too (no Rosetta needed). |
-| **CrossOver 24+** (26+ recommended) | Paid (~$74), 14-day free trial. This is the easy path. Free Wine alternatives in [docs/free-wine.md](docs/free-wine.md). |
+| **CrossOver** — [home](https://www.codeweavers.com/crossover) · [download / free trial](https://www.codeweavers.com/crossover/download) · [buy](https://www.codeweavers.com/store) | Paid (~$74), 14-day free trial. Use a **current** version. This is the easy path. Free Wine alternatives in [docs/free-wine.md](docs/free-wine.md). |
 | RaceStudio 3 installer | Free from AiM: <https://www.aim-sportline.com/en/sw-fw-download.htm> |
 
 ### Why CrossOver and not free Wine?
-RaceStudio 3 is a **Chromium (CEF) + native** app, so the quality of the graphics
-translation matters a lot. CrossOver's tuned Wine + D3DMetal renders it cleanly. Free
-Wine builds vary — the CrossOver-derived **Gcenx `wine-crossover`** build is the free
-option most likely to match. See [docs/free-wine.md](docs/free-wine.md). Plain WineHQ
-tends to reintroduce rendering glitches.
+RaceStudio 3 is a **Chromium (CEF) + native** app, and its text/UI renders cleanly only on
+a **modern Wine** (≈ Wine 10+). A current CrossOver ships exactly that, paired with good
+graphics. The free options we tested either use an **old Wine base** (Apple's Game Porting
+Toolkit is Wine 7.7 → garbled text, even with great graphics) or are awkward to install —
+so free Wine is fine for **offline `.xrk` analysis** but glitchy for daily UI use. Full
+tested comparison and the no-CrossOver routes are in [docs/free-wine.md](docs/free-wine.md).
 
 ---
 
 ## Easy path (current CrossOver) — 5 steps
 
-1. **Install CrossOver** (v26+ ideal). If you already have an old one, **update it** —
-   this alone fixes the installer crashes and UI rendering bugs that plague Wine 8 and older.
+1. **Install CrossOver** ([download / free trial](https://www.codeweavers.com/crossover/download)).
+   If you already have it, **make sure it's up to date** — a current version is what makes
+   the installer and UI rendering "just work"; older Wine builds don't.
 2. **Download** the RaceStudio 3 installer (`RaceStudio3-64_*.exe`) from AiM (link above).
 3. **Make a bottle:** open CrossOver → **+ Install** → choose **"unlisted application"** →
    select the installer → when asked, create a **new Windows 10 bottle** (name it
@@ -121,15 +126,18 @@ This PC  →  Z:  →  Users  →  <your-mac-username>
 
 ---
 
-## Troubleshooting / old CrossOver
+## Troubleshooting / old or free Wine
 
-If you're stuck on an **old CrossOver (≤23, Wine 8 or older)** and can't update, the
-installer will crash and the UI will render with garbled text. The full set of
-workarounds (install .NET 4.8, the CrossOver-wrapper `cxwine` shim, Win7-mode to skip a
-hanging theme action, extracting the app tree manually because the MSI's file-copy hangs)
-is documented in **[docs/old-crossover-workarounds.md](docs/old-crossover-workarounds.md)**.
+On an **old Wine (8 or older)** — an out-of-date CrossOver, or a free build like Apple's
+Game Porting Toolkit — the official installer crashes and the UI renders with garbled
+text. There's a full set of workarounds (install .NET 4.8, a `cxwine` shim for CrossOver's
+wrapper, Win7-mode to skip a hanging theme action, extracting the app tree manually
+because the MSI's file-copy hangs) documented in
+**[docs/old-crossover-workarounds.md](docs/old-crossover-workarounds.md)** — useful if you
+*must* use an older or free Wine.
 
-**The real fix is to update CrossOver.** Every one of those hacks disappears on Wine 10.
+**The real fix is a modern Wine.** Every one of those hacks disappears on Wine 10+ — i.e.
+a current CrossOver.
 
 ---
 
@@ -143,5 +151,5 @@ specific setup.
 
 ## Credits / status
 
-Worked out the hard way on a 2026 Apple Silicon Mac, RaceStudio 3 v3.83.20, CrossOver
-23.7.1 → 26.1. Community contribution, not affiliated with AiM. PRs welcome.
+Worked out on a 2026 Apple Silicon Mac with a current CrossOver, RaceStudio 3 v3.83.20.
+Community contribution, not affiliated with AiM or CodeWeavers. PRs welcome.

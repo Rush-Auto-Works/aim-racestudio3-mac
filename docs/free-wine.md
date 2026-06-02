@@ -1,10 +1,29 @@
 # Running it free (no CrossOver)
 
-CrossOver is the easy, paid path (~$74, 14-day trial). RaceStudio 3 can run on **free
-Wine** too — the catch is graphics. RaceStudio 3 renders its UI with Chromium (CEF), so
-the quality of the Direct3D→Metal translation makes or breaks it. Builds with Apple's
-**D3DMetal** / Game Porting Toolkit graphics render it cleanly; plainer Wine builds tend
-to show garbled text and compositing glitches.
+[CrossOver](https://www.codeweavers.com/crossover) is the easy, paid path (~$74,
+[14-day free trial](https://www.codeweavers.com/crossover/download) ·
+[buy](https://www.codeweavers.com/store)). RaceStudio 3 can run on **free Wine** too — but
+as of mid-2026, **no free option matches a current CrossOver's clean experience**, and the
+reason is subtle.
+
+## TL;DR (tested on Apple Silicon, RS3 3.83.20)
+| Stack | Wine base | Graphics | RS3 result |
+|-------|-----------|----------|------------|
+| **CrossOver** (current, paid) | Wine 10+ | D3DMetal | ✅ runs, renders clean |
+| **GPTk 3.0** (free) | **Wine 7.7** | D3DMetal | ⚠️ runs, **garbled text** (verified) |
+| WineHQ `wine-stable` 11 (free) | Wine 11 | none | ❓ untested — install needs `sudo`, deprecated |
+| any Wine ≤ 8 (old) | Wine 8 or older | — | ⚠️ garbled text (the bug this works around) |
+
+**The lesson:** RaceStudio 3's text/UI rendering quality tracks the **Wine version**, not
+the graphics layer. CEF's text rendering is broken on Wine ≤8 and fixed around Wine 10.
+GPTk has Apple's excellent **D3DMetal** graphics but is stuck on a **Wine 7.7** base, so it
+shows garbled text anyway — good D3D doesn't help. The only stack today that pairs a
+**modern Wine** with **good graphics** is a current CrossOver. That's what you're paying for.
+
+So: **for clean daily use, a current CrossOver is worth the money.** Free Wine (GPTk) is fine for
+**offline `.xrk` analysis** if you can tolerate UI glitches. RaceStudio 3 renders its UI
+with Chromium (CEF), so graphics translation matters — but the Wine *version* matters more
+for the text bug specifically.
 
 One nice side effect of *real* Wine (vs CrossOver's wrapper): it honors `WINEPREFIX` and
 resolves paths normally, so **winetricks just works and you don't need the `cxwine` shim**

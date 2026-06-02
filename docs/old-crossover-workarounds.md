@@ -1,9 +1,10 @@
 # Old CrossOver / old Wine workarounds (you probably don't need these)
 
-**If you can update CrossOver to 24+ (26+ ideal), do that and skip this entire page.**
-On Wine 10 the official RaceStudio 3 installer just works and the UI renders cleanly.
-Everything below is the archaeology of getting it working on **CrossOver 23.7.1 (Wine 8)**,
-kept for people who genuinely can't update, and as a reference for the failure modes.
+**If you can get a modern Wine (Wine 10+ — e.g. a current CrossOver), do that and skip
+this entire page.** On Wine 10 the official RaceStudio 3 installer just works and the UI
+renders cleanly. Everything below is the archaeology of getting it working on an **old
+Wine 8 build**, kept for people who genuinely can't update (or are using a free old-Wine
+build like GPTk), and as a reference for the failure modes.
 
 The RaceStudio 3 installer is an **Advanced Installer (Caphyon) self-extractor** wrapping
 an **MSI**, with a Chromium-based **Enhanced UI**. The app itself is native + CEF
@@ -83,13 +84,30 @@ $CX/bin/wineserver --bottle RaceStudio3 -k
 $CX/bin/cxstart --bottle RaceStudio3 -- 'C:\AIM_SPORT\RaceStudio3\64\AiMRS3-64-ReleaseU.exe'
 ```
 
-## 5. Garbled red text in the UI (old Wine)
-CEF GPU-compositing glitch on old Wine. `corefonts` helps a little; the real fix is —
-again — updating CrossOver. Do **not** use `--disable-gpu` (it launches RS3 with no window).
+## 5. Garbled / missing text in the UI (old Wine)
+On an old Wine base (Wine ≤8, including Apple's Game Porting Toolkit at Wine 7.7) RS3's
+Chromium (CEF) UI mis-renders text — overlapping garbled glyphs, and some toolbars draw as
+blank boxes. It is a **Wine-version** bug in CEF text rendering, not a graphics-driver
+issue: GPTk has excellent D3DMetal graphics and still shows it. `corefonts` barely helps,
+and `--disable-gpu` makes it worse (RS3 launches with no window). **The only real fix is a
+modern Wine (10+) — i.e. a current CrossOver.**
+
+What it looks like (all on old Wine):
+
+![Garbled red text where custom sensor names should be](../img/bug-garbled-sensor-text.png)
+*Channel config: the custom sensor/calibration names render as overlapping garbled red text.*
+
+![Blank toolbar controls](../img/bug-blank-toolbar-controls.png)
+*Firmware view: toolbar search/controls draw as empty white boxes.*
+
+The app still launches and simple screens are fine — it's the data-dense panes that break:
+
+![RS3 splash screen on old Wine](../img/home-splash.png)
+*The splash/home screen renders fine; the rendering bug only bites in the config panes above.*
 
 ---
 
 ### Moral
-All five of these vanish on CrossOver 26 / Wine 10. The single highest-leverage action for
+All five of these vanish on a modern Wine (10+) / a current CrossOver. The single highest-leverage action for
 RaceStudio-3-on-Mac is **using a current CrossOver**. This page exists so the failure
 signatures are searchable, not because you should follow it.
