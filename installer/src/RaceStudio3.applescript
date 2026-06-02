@@ -8,18 +8,39 @@
 -- Trash (and optionally delete that Application Support folder).
 
 property phaseList : {"preflight", "acquire-installer", "download-wine", "make-prefix", "silent-install", "relocate-data", "make-launcher", "done"}
-property phaseLabel : {"Checking your Mac", "Downloading RaceStudio 3 (~345 MB — a few minutes)", "Downloading the engine (~190 MB — a few minutes)", "Setting up the Windows environment", "Installing RaceStudio 3 (several minutes)", "Securing your data folder", "Finishing setup", "Almost done"}
+property phaseLabel : {"Checking your Mac", "Downloading RaceStudio 3 (~345 MB — a few minutes)", "Preparing the engine", "Setting up the Windows environment", "Installing RaceStudio 3 (several minutes)", "Securing your data folder", "Finishing setup", "Almost done"}
 property phaseTimeout : {180, 2700, 2100, 420, 1500, 900, 180, 90}
 property barScale : 1000
 
 on run
 	set coreScript to corePath()
 	if isInstalled(coreScript) then
-		launchRS3()
+		showLauncher(coreScript)
 	else
 		doFirstRunSetup(coreScript)
 	end if
 end run
+
+-- A true menu bar can't work here (while RaceStudio 3 runs, Wine owns the menu bar), so the
+-- options live in a small launcher dialog. Default = Open, so Return launches instantly.
+on showLauncher(coreScript)
+	set b to button returned of (display dialog "RaceStudio 3" & return & return & "Open the app, import data from another computer, or uninstall." buttons {"Uninstall…", "Import Data…", "Open RaceStudio 3"} default button "Open RaceStudio 3" with title "RaceStudio 3" with icon note)
+	if b is "Open RaceStudio 3" then
+		launchRS3()
+	else if b is "Import Data…" then
+		set f to choose folder with prompt "Choose your AIM_SPORT folder, a RaceStudio3 “user” folder, or a folder of .xrk files to import:"
+		if importOne(coreScript, POSIX path of f) then
+			display dialog "Import complete — merged into your data folder. Nothing existing was overwritten." buttons {"OK"} default button 1 with title "Import RaceStudio 3 Data" with icon note
+		end if
+	else if b is "Uninstall…" then
+		set u to button returned of (display dialog "To uninstall RaceStudio 3:" & return & return & "• Drag “RaceStudio 3” from your Applications folder to the Trash." & return & return & "Your telemetry in ~/Documents/AIM_SPORT is kept. To also remove the Windows environment, delete this folder:" & return & "~/Library/Application Support/RaceStudio3" buttons {"Reveal App in Finder", "OK"} default button "OK" with title "Uninstall RaceStudio 3" with icon caution)
+		if u is "Reveal App in Finder" then
+			try
+				do shell script "open -R " & quoted form of (POSIX path of (path to me))
+			end try
+		end if
+	end if
+end showLauncher
 
 -- Drag-and-drop import. If not set up yet, set up first, then import the dropped items.
 on open theItems
@@ -53,14 +74,26 @@ on doFirstRunSetup(coreScript)
 	if b is "Open RaceStudio 3" then launchRS3()
 end doFirstRunSetup
 
+-- Launch RS3 by exec'ing the Wine bundled INSIDE this app, so macOS resolves Wine's main bundle
+-- to RaceStudio 3.app and the menu bar reads "RaceStudio 3" (not "Wine"). Runs detached.
 on launchRS3()
-	set lp to (POSIX path of (path to application support folder from user domain)) & "RaceStudio3/bin/launch.sh"
+	set wb to wineBin()
+	set root to (POSIX path of (path to application support folder from user domain)) & "RaceStudio3"
+	set sh to "export WINEPREFIX=" & quoted form of (root & "/prefix") & " WINEARCH=win64 WINEDEBUG=-all; " & ¬
+		"export WINEDLLOVERRIDES=" & quoted form of "mscoree=d;mshtml=d" & "; " & ¬
+		"export XDG_CACHE_HOME=" & quoted form of (root & "/cache") & " XDG_CONFIG_HOME=" & quoted form of (root & "/xdg-config") & " XDG_DATA_HOME=" & quoted form of (root & "/xdg-data") & "; " & ¬
+		"mkdir -p " & quoted form of (root & "/logs") & "; " & ¬
+		"nohup arch -x86_64 " & quoted form of wb & " 'C:\\AIM_SPORT\\RaceStudio3\\64\\AiMRS3-64-ReleaseU.exe' >> " & quoted form of (root & "/logs/run.log") & " 2>&1 & "
 	try
-		do shell script "bash " & quoted form of lp
+		do shell script sh
 	on error
 		display dialog "Couldn't start RaceStudio 3. Try opening this app again to repair the setup." buttons {"OK"} default button 1 with icon caution
 	end try
 end launchRS3
+
+on wineBin()
+	return (POSIX path of (path to me)) & "Contents/Resources/wine/bin/wine"
+end wineBin
 
 on isInstalled(coreScript)
 	try
@@ -107,7 +140,7 @@ on runCoreAsync(coreScript, ph, tmo, stepIndex, total)
 	set base to do shell script "mktemp /tmp/rs3phase.XXXXXX"
 	set outF to base & ".out"
 	set rcF to base & ".rc"
-	set cmd to "( RS3_SINGLE_APP=1 UI_MODE=applet " & quoted form of coreScript & " " & ph & " >" & quoted form of outF & " 2>&1; echo $? >" & quoted form of rcF & " ) </dev/null >/dev/null 2>&1 &"
+	set cmd to "( RS3_SINGLE_APP=1 RS3_WINE_BIN=" & quoted form of wineBin() & " UI_MODE=applet " & quoted form of coreScript & " " & ph & " >" & quoted form of outF & " 2>&1; echo $? >" & quoted form of rcF & " ) </dev/null >/dev/null 2>&1 &"
 	do shell script cmd
 
 	set baseUnits to ((stepIndex - 1) / total) * barScale
