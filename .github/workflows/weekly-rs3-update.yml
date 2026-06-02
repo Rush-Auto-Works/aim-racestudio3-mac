@@ -26,7 +26,9 @@ jobs:
   check:
     runs-on: ubicloud-standard-2
     steps:
-      - uses: actions/checkout@v4
+      # Pinned to a commit SHA (supply-chain hardening). Default persist-credentials: true is
+      # required — the bump/tag step below runs git push/tag with the checkout-provided token.
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
 
       - name: Check AiM for a newer RaceStudio 3 (updates pins.env if found)
         id: check

@@ -65,10 +65,21 @@ tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 dest="$tmp/$latest_file"
 echo "downloading $best_url …" >&2
 curl -fSL --proto '=https' -o "$dest" "$best_url" || die "download failed: $best_url"
-size="$(stat -f %z "$dest" 2>/dev/null || stat -c %s "$dest")"
-sha="$(shasum -a 256 "$dest" 2>/dev/null | awk '{print $1}')"
-[ -z "$sha" ] && sha="$(sha256sum "$dest" | awk '{print $1}')"
-[ -n "$size" ] && [ -n "$sha" ] || die "couldn't compute size/sha256"
+[ -r "$dest" ] || die "downloaded installer not readable: $dest"
+
+# size: BSD stat (-f, macOS) then GNU stat (-c, Linux).
+size="$(stat -f %z "$dest" 2>/dev/null || stat -c %s "$dest" 2>/dev/null)" || true
+[ -n "$size" ] || die "couldn't read size of $dest (no working 'stat')"
+
+# sha256: shasum (macOS/perl) or sha256sum (Linux) — report which tool is missing.
+if command -v shasum >/dev/null 2>&1; then
+  sha="$(shasum -a 256 "$dest" | awk '{print $1}')"
+elif command -v sha256sum >/dev/null 2>&1; then
+  sha="$(sha256sum "$dest" | awk '{print $1}')"
+else
+  die "no sha256 tool found (need 'shasum' or 'sha256sum')"
+fi
+[ -n "$sha" ] || die "sha256 computation failed for $dest"
 
 # Rewrite the five pinned fields in place (anchored, one per line).
 ed_pins() { # <key> <new-value-line>
