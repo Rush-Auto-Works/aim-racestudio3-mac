@@ -13,9 +13,9 @@ Cannot run on Linux/Ubicloud.
 | 1 | embed engine | ditto `installer-core.sh` + `lib/` + `pins.env` into Resources |
 | 1b | bundle Wine | extract pinned tarball (cache `/tmp/claude/wine11.tar.xz`); drop gecko+mono (~290 MB) |
 | 1c | **rebrand Wine app-menu** | `patch-wine-appname.py` rewrites `CFBundleName` in every `*-unix/wine` loader; fails if zero patched |
-| 2 | icon | `compose-icon.py` → iconset → `rs3.icns` (kept for the applets) |
+| 2 | icons | `build_icns` runs `compose-icon.py` 3× → `rs3.icns` (plain), `rs3-import.icns` (badge), `rs3-uninstall.icns` (badge) |
 | 3 | Info.plist | `CFBundleName`/version (= `RS3_PINNED_VER`); delete `CFBundleIconName` droplet quirk |
-| 3b | Import/Uninstall applets | osacompile siblings in `$DIST`; embed engine into Import; `brand_applet` sets icon/id/version |
+| 3b | Import/Uninstall applets | osacompile siblings in `$DIST`; embed engine into Import; `brand_applet` applies the badged icns + id/version, deletes `CFBundleIconName` |
 | 4 | codesign | non-hardened `--deep` (local) OR `HARDENED_RUNTIME=1` per-file + entitlements (notarizable); signs all 3 apps |
 | 5 | notarize+staple | each app + DMG individually (offline Gatekeeper). `notarize_staple` rc 2 = no creds (ok), else fail build |
 | 6 | DMG | stage `AiM` folder (3 apps) + `/Applications` symlink + bg; Finder layout; `RaceStudio3-<VERSION>.dmg` |
@@ -29,7 +29,7 @@ Key vars: `VERSION` ← `RS3_PINNED_VER` (override `RS3_VERSION`); `VOL="RaceStu
 | File | Role |
 |------|------|
 | `patch-wine-appname.py <loader> [name]` | Patch `CFBundleName` in the loader's Mach-O `__TEXT,__info_plist` (fixed-size section: strips XML indent, pads). Idempotency scoped to the `CFBundleName` key. |
-| `compose-icon.py <logo> <out>` | 1024² app icon (white rounded tile + RS3 wordmark). |
+| `compose-icon.py <logo> <out> [none\|import\|uninstall]` | 1024² app icon (white rounded tile + RS3 wordmark). Optional badge: `import` = bottom-left orange file→RS3, `uninstall` = bottom-left red trash. |
 | `compose-dmg-bg.py <logo> <out>` | DMG background ("Drag the AiM folder into Applications"). PIL fallback font lacks `▸` → use ASCII. |
 | `check-rs3-update.sh [--apply]` | Scrape AiM page; max `RaceStudio3-64_<vercode>_*.exe` (38320→3.83.20); `--apply` downloads, hashes, rewrites pins.env. |
 

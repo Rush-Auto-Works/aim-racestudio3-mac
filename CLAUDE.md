@@ -38,6 +38,10 @@ This file is constraints, conventions, and hard-won gotchas only.
   Reliable kill is `wineserver -k`. Intercepting Cmd-Q needs an Accessibility/Input-Monitoring grant
   (parked at the user's request). The Uninstall app + a future `Quit` app use `wineserver -k`.
 - **Trusting `lsappinfo`/`localizedName`** for the menu name (filename-derived, not the menu title).
+- **Patching `CFBundleExecutable` to fix the Dock name** ("wine"): doesn't work — macOS derives the
+  Dock/process name from the real on-disk loader filename, not the plist. Worse, a `CFBundleExecutable`
+  that doesn't match the actual binary breaks LaunchServices icon resolution → blank Dock icon.
+  `patch-wine-appname.py` patches `CFBundleName` only. Verified 2026-06-02. Dock "wine" is accepted (like Cmd-Q).
 
 ## Gotchas
 
