@@ -52,9 +52,12 @@ ditto "$SRC/lib"               "$RES/lib"
 chmod +x "$RES/installer-core.sh"
 
 # ---- 1b. bundle the Wine engine INSIDE the app ----------------------------------------------
-# So macOS resolves Wine's NSBundle.mainBundle to RaceStudio 3.app (menu bar reads "RaceStudio 3")
-# AND first launch skips the Wine download. CRITICAL: extract the bare wine/ tree, NOT the Gcenx
-# "Wine Staging.app" wrapper — otherwise mainBundle resolves to that inner .app and still says "Wine".
+# Bundling Wine lets first launch skip the ~190 MB Wine download. Extract the bare wine/ tree,
+# NOT the Gcenx "Wine Staging.app" wrapper (we only want bin/, lib/, share/).
+# NOTE: bundling alone does NOT rename the menu bar — the Wine GUI process runs unbundled
+# (its image is lib/wine/<arch>-unix/wine), so macOS reads its app name from the Mach-O
+# __TEXT,__info_plist section embedded in that loader, which ships CFBundleName="Wine".
+# We rebrand the app menu by patching that embedded plist below (step 1c).
 say "Bundling Wine engine (this is the big step)"
 . "$SRC/pins.env"   # WINE_PINNED_URL / SIZE / SHA256
 WINE_TARBALL="${WINE_TARBALL:-/tmp/claude/wine11.tar.xz}"
@@ -75,6 +78,15 @@ rm -rf "$TMPW"
 # disable both via WINEDLLOVERRIDES anyway. Dropping them cuts ~290 MB from the bundle.
 rm -rf "$RES/wine/share/wine/gecko" "$RES/wine/share/wine/mono" 2>/dev/null || true
 [ -x "$RES/wine/bin/wine" ] && say "bundled wine: Contents/Resources/wine/bin/wine" || { echo "bundled wine missing"; exit 1; }
+
+# ---- 1c. rebrand the Wine app menu to "RaceStudio 3" ----------------------------------------
+# Patch CFBundleName in every unix loader's embedded __info_plist (Wine ships "Wine"). This is
+# what the bold top-left app menu reads, since the GUI process runs unbundled. Must run BEFORE
+# signing (it edits the Mach-O, invalidating any signature — the sign pass below re-signs it).
+say "Rebranding Wine app menu -> RaceStudio 3"
+while IFS= read -r loader; do
+  python3 "$HERE/patch-wine-appname.py" "$loader" "RaceStudio 3" || { echo "appname patch failed for $loader"; exit 1; }
+done < <(find "$RES/wine/lib/wine" -type f -name wine -path '*-unix/wine')
 
 # ---- 2. icon (dark rounded square + Rush logo) ----------------------------------------------
 say "Building app icon"
@@ -178,14 +190,16 @@ elif [ -n "${NOTARY_APPLE_ID:-}" ] && [ -n "${NOTARY_PASSWORD:-}" ]; then
 fi
 notarize_staple() { # <path>
   [ -n "$NOTARY_ARGS" ] || return 2
-  local t="$1" zip="$1.notarize.zip"
+  local t="$1" submitpath
   say "Notarizing $(basename "$t") (waits for Apple)…"
-  if [ "${t##*.}" = "app" ]; then ditto -c -k --keepParent "$t" "$zip"; else cp "$t" "$zip"; fi
+  # .app must be zipped for upload; .dmg/.pkg are submitted directly (zipping a DMG makes
+  # notarytool try to unpack it -> "no signed executables / could not be unpacked").
+  if [ "${t##*.}" = "app" ]; then submitpath="$t.notarize.zip"; ditto -c -k --keepParent "$t" "$submitpath"; else submitpath="$t"; fi
   # shellcheck disable=SC2086
-  if xcrun notarytool submit "$zip" $NOTARY_ARGS --wait; then
-    [ "${t##*.}" = "app" ] && rm -f "$zip"
+  if xcrun notarytool submit "$submitpath" $NOTARY_ARGS --wait; then
+    [ "${t##*.}" = "app" ] && rm -f "$submitpath"
     xcrun stapler staple "$t" && say "stapled $(basename "$t")"
-  else echo "notarytool failed for $t"; rm -f "$zip"; return 1; fi
+  else echo "notarytool failed for $t"; [ "${t##*.}" = "app" ] && rm -f "$submitpath"; return 1; fi
 }
 notarize_staple "$APP" || true
 
