@@ -20,6 +20,14 @@ let WINEXE = #"C:\AIM_SPORT\RaceStudio3\64\AiMRS3-64-ReleaseU.exe"#
 // single-quote-escape a path for embedding in a bash command
 func q(_ s: String) -> String { "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'" }
 
+// debug log (remove once the status item is confirmed)
+func hlog(_ s: String) {
+    let line = "[\(ProcessInfo.processInfo.processIdentifier)] " + s + "\n"
+    let path = "/tmp/rs3helper.log"
+    if let h = FileHandle(forWritingAtPath: path) { h.seekToEndOfFile(); h.write(line.data(using: .utf8)!); try? h.close() }
+    else { try? line.write(toFile: path, atomically: true, encoding: .utf8) }
+}
+
 @discardableResult
 func bash(_ script: String, wait: Bool = false) -> Int32 {
     let p = Process()
@@ -53,13 +61,30 @@ class Delegate: NSObject, NSApplicationDelegate {
     var sawRS3 = false
 
     func applicationDidFinishLaunching(_ note: Notification) {
+        hlog("didFinishLaunching; bundleId=\(Bundle.main.bundleIdentifier ?? "nil") APP_PATH=\(APP_PATH)")
         // single-instance: if another helper is already up, bow out
         let me = Bundle.main.bundleIdentifier ?? "com.rushautoworks.racestudio3.helper"
-        if NSRunningApplication.runningApplications(withBundleIdentifier: me).count > 1 {
-            NSApp.terminate(nil); return
+        let count = NSRunningApplication.runningApplications(withBundleIdentifier: me).count
+        hlog("instances=\(count)")
+        if count > 1 {
+            hlog("another instance running -> terminating"); NSApp.terminate(nil); return
         }
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.title = "RS3"
+        statusItem.behavior = []                       // not removable, don't auto-hide
+        if let b = statusItem.button {
+            // Plain bold text — image-less, so SF-Symbol availability and template-tinting can't hide it.
+            b.title = "🏁 RS3"
+            b.toolTip = "RaceStudio 3 — click for Import / Quit / Uninstall"
+            b.font = NSFont.menuBarFont(ofSize: 0)
+        }
+        statusItem.isVisible = true
+        hlog("statusItem created; button=\(statusItem.button != nil) title=\(statusItem.button?.title ?? "nil") len=\(statusItem.length) screens=\(NSScreen.screens.count) mainScreen=\(NSScreen.main?.localizedName ?? "nil") active=\(NSApp.isActive)")
+        // Visible confirmation that the helper actually launched, in case the status item ends up hidden
+        // (e.g. by Bartender, an overlay app, or a Tahoe redraw quirk).
+        let n = NSUserNotification()
+        n.title = "RaceStudio 3 Helper running"
+        n.informativeText = "Look for “🏁 RS3” in your menu bar. Click it for Import, Quit, Uninstall."
+        NSUserNotificationCenter.default.deliver(n)
         let menu = NSMenu()
         let items = [
             ("Open RaceStudio 3", #selector(openRS3)),
@@ -133,8 +158,10 @@ class Delegate: NSObject, NSApplicationDelegate {
     @objc func quitHelper() { NSApp.terminate(nil) }
 }
 
+hlog("main start; argv=\(CommandLine.arguments)")
 let app = NSApplication.shared
 let delegate = Delegate()
 app.delegate = delegate
 app.setActivationPolicy(.accessory)   // menu-bar agent, no Dock icon
+hlog("calling app.run()")
 app.run()
