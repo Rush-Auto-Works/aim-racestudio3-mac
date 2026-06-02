@@ -71,6 +71,15 @@ wineserver_kill() {
   WINEPREFIX="$PREFIX" watchdog 30 "$ws" -k 2>/dev/null || true
 }
 
+# wineserver_wait : block until wineserver finishes all pending work and exits. wineboot --init
+# returns BEFORE the registry/drive_c are fully written (wineserver finishes async), so we must
+# drain it before checking a prefix postcondition — otherwise the check races and false-fails.
+wineserver_wait() {
+  local ws; ws="$(wineserver_path)" || return 0
+  [ -n "$ws" ] || return 0
+  WINEPREFIX="$PREFIX" watchdog 180 "$ws" -w 2>/dev/null || true
+}
+
 # run_wine <args...> : run the Wine binary with array argv under the watchdog. Echoes nothing
 # special; callers verify the postcondition. $1 of the env var RUN_WINE_TIMEOUT sets the limit.
 run_wine() {
