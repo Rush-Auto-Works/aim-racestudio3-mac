@@ -18,7 +18,7 @@ logo = Image.open(logo_path).convert("RGBA")
 bbox = logo.getbbox()                      # trim transparent margins so it sits centered + sized right
 if bbox:
     logo = logo.crop(bbox)
-target = int(S * 0.66)                      # fit within ~66% of the tile (square-ish margin)
+target = int(S * 0.80)                      # fit within ~80% of the tile (fuller, small margin)
 scale = min(target / logo.width, target / logo.height)
 logo = logo.resize((max(1, int(logo.width * scale)), max(1, int(logo.height * scale))), Image.LANCZOS)
 img.paste(logo, ((S - logo.width) // 2, (S - logo.height) // 2), logo)
