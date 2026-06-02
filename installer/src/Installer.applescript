@@ -4,8 +4,9 @@
 -- the core's machine-readable signals (NEEDS_ROSETTA / NEEDS_CHOICE / NEEDS_CONFIRM / NEEDS_INSTALLER).
 
 property phaseList : {"preflight", "acquire-installer", "download-wine", "make-prefix", "silent-install", "relocate-data", "make-launcher", "done"}
-property phaseLabel : {"Checking your Mac", "Getting the installer", "Downloading the engine (Wine)", "Setting up the Windows environment", "Installing RaceStudio 3", "Securing your data folder", "Creating your RaceStudio 3 app", "Finishing up"}
+property phaseLabel : {"Checking your Mac", "Downloading RaceStudio 3 (~345 MB — a few minutes)", "Downloading the engine (~190 MB — a few minutes)", "Setting up the Windows environment", "Installing RaceStudio 3 (several minutes)", "Securing your data folder", "Creating your RaceStudio 3 app", "Finishing up"}
 property phaseTimeout : {180, 2700, 2100, 420, 1500, 900, 180, 90}
+property barScale : 1000
 
 on run
 	set coreScript to corePath()
@@ -15,13 +16,14 @@ on run
 	if b is "Quit" then return
 
 	set total to count of phaseList
+	set progress total steps to barScale
 	repeat with i from 1 to total
-		set progress total steps to total
-		set progress completed steps to (i - 1)
 		set progress description to "Step " & i & " of " & total & ": " & (item i of phaseLabel) & "…"
-		runPhase(coreScript, item i of phaseList, item i of phaseTimeout)
+		-- runPhase drives the bar smoothly within this step's slice (async poll), so the bar
+		-- keeps moving during long downloads instead of looking frozen.
+		runPhase(coreScript, item i of phaseList, item i of phaseTimeout, i, total)
 	end repeat
-	set progress completed steps to total
+	set progress completed steps to barScale
 
 	-- Done
 	set b to button returned of (display dialog "RaceStudio 3 is installed! 🎉" & return & return & "• Open it from Applications → “RaceStudio 3”." & return & "• Connect AiM devices over Wi-Fi (USB isn't supported under Wine)." & return & "• If macOS asks “Wine wants to access Documents”, click Allow." buttons {"Done", "Launch RaceStudio 3"} default button "Launch RaceStudio 3" with title "All set" with icon note)
@@ -33,9 +35,9 @@ on run
 end run
 
 -- Run one phase, retrying the SAME phase after collecting any decision, until it advances (exit 0).
-on runPhase(coreScript, ph, tmo)
+on runPhase(coreScript, ph, tmo, stepIndex, total)
 	repeat
-		set out to runCore(coreScript, ph, tmo)
+		set out to runCoreAsync(coreScript, ph, tmo, stepIndex, total)
 		set rc to rcOf(out)
 		if rc is 0 then
 			return
@@ -50,23 +52,52 @@ on runPhase(coreScript, ph, tmo)
 	end repeat
 end runPhase
 
-on runCore(coreScript, ph, tmo)
+-- Run the phase as a DETACHED background job and poll for completion, advancing the progress bar
+-- within this step's slice each second. This is the only way to keep the bar alive — a synchronous
+-- `do shell script` blocks the applet's main thread, so the bar can't repaint during a long download.
+on runCoreAsync(coreScript, ph, tmo, stepIndex, total)
 	set extraEnv to ""
 	if ph is "make-launcher" then
 		set appsRes to POSIX path of ((path to me as text) & "Contents:Resources:apps:")
 		set extraEnv to "LAUNCHER_APP_SRC=" & quoted form of (appsRes & "RaceStudio 3.app") & " UNINSTALL_APP_SRC=" & quoted form of (appsRes & "Uninstall RaceStudio 3.app") & " "
 	end if
-	set cmd to extraEnv & "UI_MODE=applet " & quoted form of coreScript & " " & ph & " 2>&1; echo RC:$?"
+	set base to do shell script "mktemp /tmp/rs3phase.XXXXXX"
+	set outF to base & ".out"
+	set rcF to base & ".rc"
+	set cmd to "( " & extraEnv & "UI_MODE=applet " & quoted form of coreScript & " " & ph & " >" & quoted form of outF & " 2>&1; echo $? >" & quoted form of rcF & " ) </dev/null >/dev/null 2>&1 &"
+	do shell script cmd
+
+	set baseUnits to ((stepIndex - 1) / total) * barScale
+	set sliceUnits to (1 / total) * barScale
+	set waited to 0
+	set creep to 0.0
+	repeat
+		if (do shell script "if [ -f " & quoted form of rcF & " ]; then echo y; else echo n; fi") is "y" then exit repeat
+		if waited ≥ tmo then exit repeat
+		if creep < 0.92 then set creep to creep + 0.03
+		try
+			set progress completed steps to (round (baseUnits + sliceUnits * creep))
+		end try
+		delay 1
+		set waited to waited + 1
+	end repeat
+
 	set out to ""
 	try
-		with timeout of tmo seconds
-			set out to do shell script cmd
-		end timeout
-	on error errMsg number errNum
-		set out to errMsg & return & "RC:" & errNum
+		set out to do shell script "cat " & quoted form of outF
 	end try
-	return out
-end runCore
+	set rc to 1
+	try
+		set rc to (do shell script "cat " & quoted form of rcF) as integer
+	on error
+		set rc to 124 -- treat a no-RC (timeout/never-wrote) as a timeout-ish failure
+	end try
+	try
+		set progress completed steps to (round (baseUnits + sliceUnits)) -- snap to end of this step
+	end try
+	do shell script "rm -f " & quoted form of outF & " " & quoted form of rcF & " " & quoted form of base
+	return out & return & "RC:" & rc
+end runCoreAsync
 
 on handleNeeds(coreScript, out)
 	if out contains "NEEDS_CHOICE: icloud_location" then
