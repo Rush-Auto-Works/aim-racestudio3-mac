@@ -168,9 +168,14 @@ codesign --verify --strict "$APP" && say "signature verifies"
 
 # ---- 5. notarize + staple (if creds) --------------------------------------------------------
 NOTARY_ARGS=""
-if [ -n "${NOTARY_PROFILE:-}" ]; then NOTARY_ARGS="--keychain-profile $NOTARY_PROFILE"
+if [ -n "${NOTARY_PROFILE:-}" ]; then
+  NOTARY_ARGS="--keychain-profile $NOTARY_PROFILE"
+elif [ -n "${NOTARY_KEY:-}" ] && [ -n "${NOTARY_KEY_ID:-}" ] && [ -n "${NOTARY_ISSUER:-}" ]; then
+  # App Store Connect API key (.p8) — preferred; doesn't need account.apple.com
+  NOTARY_ARGS="--key $NOTARY_KEY --key-id $NOTARY_KEY_ID --issuer $NOTARY_ISSUER"
 elif [ -n "${NOTARY_APPLE_ID:-}" ] && [ -n "${NOTARY_PASSWORD:-}" ]; then
-  NOTARY_ARGS="--apple-id $NOTARY_APPLE_ID --password $NOTARY_PASSWORD --team-id $TEAMID"; fi
+  NOTARY_ARGS="--apple-id $NOTARY_APPLE_ID --password $NOTARY_PASSWORD --team-id $TEAMID"
+fi
 notarize_staple() { # <path>
   [ -n "$NOTARY_ARGS" ] || return 2
   local t="$1" zip="$1.notarize.zip"

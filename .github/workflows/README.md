@@ -24,9 +24,14 @@ Settings → Secrets and variables → Actions → *New repository secret*:
 | `DEVELOPER_ID_CERT_P12` | base64 of your **Developer ID Application** cert exported as `.p12` (incl. private key) |
 | `DEVELOPER_ID_CERT_PASSWORD` | the password you set when exporting the `.p12` |
 | `KEYCHAIN_PASSWORD` | any throwaway string (names the ephemeral build keychain) |
-| `APPLE_ID` | your Apple ID email |
-| `APPLE_TEAM_ID` | `HYBSCYDCMB` |
-| `APPLE_APP_PASSWORD` | an **app-specific password** from account.apple.com → Sign-In & Security |
+| `ASC_KEY_P8` | base64 of your **App Store Connect API key** (`AuthKey_XXXX.p8`) |
+| `ASC_KEY_ID` | the key id — the `XXXX` in `AuthKey_XXXX.p8` |
+| `ASC_ISSUER_ID` | the **Issuer ID** (UUID) at App Store Connect → Users and Access → Integrations → Keys |
+
+> Notarization uses an **App Store Connect API key** (created at appstoreconnect.apple.com →
+> Users and Access → Integrations → Keys → **+**). It avoids account.apple.com entirely and is the
+> recommended CI credential. (An app-specific password works too — set `APPLE_ID` + `APPLE_APP_PASSWORD`
+> + `APPLE_TEAM_ID` instead and the build falls back to it.)
 
 Optional:
 
@@ -49,9 +54,9 @@ Set them from the CLI if you prefer:
 gh secret set DEVELOPER_ID_CERT_P12      -R Rush-Auto-Works/aim-racestudio3-mac < <(base64 -i DeveloperID.p12)
 gh secret set DEVELOPER_ID_CERT_PASSWORD -R Rush-Auto-Works/aim-racestudio3-mac
 gh secret set KEYCHAIN_PASSWORD          -R Rush-Auto-Works/aim-racestudio3-mac
-gh secret set APPLE_ID                   -R Rush-Auto-Works/aim-racestudio3-mac
-gh secret set APPLE_TEAM_ID --body HYBSCYDCMB -R Rush-Auto-Works/aim-racestudio3-mac
-gh secret set APPLE_APP_PASSWORD         -R Rush-Auto-Works/aim-racestudio3-mac
+gh secret set ASC_KEY_P8   -R Rush-Auto-Works/aim-racestudio3-mac < <(base64 -i AuthKey_XXXX.p8)
+gh secret set ASC_KEY_ID --body XXXX                 -R Rush-Auto-Works/aim-racestudio3-mac
+gh secret set ASC_ISSUER_ID --body '<issuer-uuid>'   -R Rush-Auto-Works/aim-racestudio3-mac
 # optional RS3 icon:
 gh secret set RS3_LOGO_B64 -R Rush-Auto-Works/aim-racestudio3-mac < <(base64 -i "RaceStudio3_logo_colored.png")
 ```
