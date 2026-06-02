@@ -1,8 +1,9 @@
 -- Uninstall RaceStudio 3 — a standalone app (installed into /Applications/AiM). Stops RaceStudio
--- 3, then removes its engine, the Windows environment, and the AiM helper apps. Your telemetry in
--- ~/Documents/AIM_SPORT is kept unless you ask to remove it too. It runs the self-contained
--- uninstaller the installer generated at ~/Library/Application Support/RaceStudio3/bin/uninstall.sh
--- (which deletes this app itself last, detached, so it can finish cleanly).
+-- 3, then removes everything in /Applications/AiM (the app, the engine, the Windows environment,
+-- and the helper apps). Your telemetry in ~/Documents/AIM_SPORT is kept unless you ask to remove it
+-- too. It runs the self-contained uninstaller the installer generated at
+-- ~/Library/Application Support/RaceStudio3/bin/uninstall.sh (which deletes this app itself last,
+-- detached, so it can finish cleanly).
 
 on run
 	set root to (POSIX path of (path to application support folder from user domain)) & "RaceStudio3"
@@ -14,7 +15,7 @@ on run
 		return
 	end try
 
-	set b to button returned of (display dialog "Remove RaceStudio 3 from this Mac?" & return & return & "This stops RaceStudio 3 and removes its engine and helper apps. Your telemetry in ~/Documents/AIM_SPORT is kept unless you choose to remove it." buttons {"Cancel", "Remove everything", "Remove (keep my data)"} default button "Remove (keep my data)" with title "Uninstall RaceStudio 3" with icon caution)
+	set b to button returned of (display dialog "Remove RaceStudio 3 from this Mac?" & return & return & "This stops RaceStudio 3 and removes everything in /Applications/AiM (the app, the engine, and the helpers). Your telemetry in ~/Documents/AIM_SPORT is kept unless you choose to remove it." buttons {"Cancel", "Remove everything", "Remove (keep my data)"} default button "Remove (keep my data)" with title "Uninstall RaceStudio 3" with icon caution)
 	if b is "Cancel" then return
 
 	set extra to ""
@@ -30,8 +31,7 @@ on run
 		return
 	end try
 
-	set msg to "RaceStudio 3's engine and helper apps were removed."
+	set msg to "RaceStudio 3 has been removed — the app, the engine, and the helper apps are gone."
 	if extra is "" then set msg to msg & return & return & "Your telemetry in ~/Documents/AIM_SPORT was kept."
-	set msg to msg & return & return & "To finish, drag “RaceStudio 3” from your Applications folder to the Trash."
 	display dialog msg buttons {"OK"} default button 1 with title "Uninstalled" with icon note
 end run

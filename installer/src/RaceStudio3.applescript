@@ -5,8 +5,8 @@
 --   • Drop an AIM_SPORT folder / .zip / .xrk onto the app to import data (never overwrites).
 -- The Wine engine + Windows prefix live in ~/Library/Application Support/RaceStudio3 (outside the
 -- signed app, as required), your data in ~/Documents/AIM_SPORT. Import / Uninstall are standalone
--- apps placed in /Applications/AiM on first run (see Contents/Resources/apps, copied out by the
--- make-launcher phase). Uninstall: run "Uninstall RaceStudio 3", then drag this app to the Trash.
+-- apps that ship beside this one in /Applications/AiM (the DMG drops the whole AiM folder in).
+-- Uninstall: run "Uninstall RaceStudio 3" — it removes the engine, this app, and the helpers.
 
 property phaseList : {"preflight", "acquire-installer", "download-wine", "make-prefix", "silent-install", "relocate-data", "make-launcher", "done"}
 property phaseLabel : {"Checking your Mac", "Downloading RaceStudio 3 (~345 MB — a few minutes)", "Preparing the engine", "Setting up the Windows environment", "Installing RaceStudio 3 (several minutes)", "Securing your data folder", "Finishing setup", "Almost done"}
@@ -82,11 +82,6 @@ on wineBin()
 	return (POSIX path of (path to me)) & "Contents/Resources/wine/bin/wine"
 end wineBin
 
--- a standalone helper app bundled inside this app (copied out to /Applications/AiM on first run)
-on embeddedApp(name)
-	return (POSIX path of (path to me)) & "Contents/Resources/apps/" & name
-end embeddedApp
-
 on isInstalled(coreScript)
 	try
 		set out to do shell script "UI_MODE=applet " & quoted form of coreScript & " is-installed 2>/dev/null"
@@ -132,11 +127,9 @@ on runCoreAsync(coreScript, ph, tmo, stepIndex, total)
 	set base to do shell script "mktemp /tmp/rs3phase.XXXXXX"
 	set outF to base & ".out"
 	set rcF to base & ".rc"
-	-- Tell make-launcher where the bundled Import/Uninstall apps are, so it copies them into
-	-- /Applications/AiM. (LAUNCHER_APP_SRC is intentionally unset — this single app IS the launcher.)
-	set srcEnv to "IMPORT_APP_SRC=" & quoted form of embeddedApp("Import RaceStudio 3 Data.app") & ¬
-		" UNINSTALL_APP_SRC=" & quoted form of embeddedApp("Uninstall RaceStudio 3.app") & " "
-	set cmd to "( " & srcEnv & "RS3_SINGLE_APP=1 RS3_WINE_BIN=" & quoted form of wineBin() & " UI_MODE=applet " & quoted form of coreScript & " " & ph & " >" & quoted form of outF & " 2>&1; echo $? >" & quoted form of rcF & " ) </dev/null >/dev/null 2>&1 &"
+	-- Import / Uninstall ship as sibling apps in the same /Applications/AiM folder (placed by the
+	-- DMG drag), so there's nothing for make-launcher to copy out.
+	set cmd to "( RS3_SINGLE_APP=1 RS3_WINE_BIN=" & quoted form of wineBin() & " UI_MODE=applet " & quoted form of coreScript & " " & ph & " >" & quoted form of outF & " 2>&1; echo $? >" & quoted form of rcF & " ) </dev/null >/dev/null 2>&1 &"
 	do shell script cmd
 
 	set baseUnits to ((stepIndex - 1) / total) * barScale

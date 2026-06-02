@@ -126,22 +126,21 @@ pset CFBundleIconFile "applet" string
 /usr/libexec/PlistBuddy -c "Delete :CFBundleIconName" "$PL" 2>/dev/null || true
 
 # ---- 3b. standalone Import / Uninstall apps -------------------------------------------------
-# AppleScript applets the installer copies into ~/Applications/AiM on first run (via make-launcher
-# reading IMPORT_APP_SRC/UNINSTALL_APP_SRC). They ship INSIDE this app at Contents/Resources/apps.
-# Wine owns the macOS menu bar while RS3 runs and that menu can't host custom items, and the old
-# NSStatusItem menu-bar helper proved unreliable (Bartender/Tahoe), so these standalone apps are
-# the reachable Import/Uninstall surface (Finder, Spotlight, Launchpad, Dock).
+# AppleScript applets that ship as SIBLINGS of RaceStudio 3.app inside the DMG's "AiM" folder, so
+# the whole folder drops into /Applications/AiM in one drag. Wine owns the macOS menu bar while RS3
+# runs and that menu can't host custom items, and the old NSStatusItem menu-bar helper proved
+# unreliable (Bartender/Tahoe), so these standalone apps are the reachable Import/Uninstall surface.
 say "Building Import / Uninstall apps"
-APPS_EMBED="$RES/apps"; rm -rf "$APPS_EMBED"; mkdir -p "$APPS_EMBED"
-IMPORT_EMBED="$APPS_EMBED/Import RaceStudio 3 Data.app"
-UNINSTALL_EMBED="$APPS_EMBED/Uninstall RaceStudio 3.app"
-osacompile -o "$IMPORT_EMBED"    "$SRC/import-app.applescript"    || { echo "osacompile import failed"; exit 1; }
-osacompile -o "$UNINSTALL_EMBED" "$SRC/uninstall-app.applescript" || { echo "osacompile uninstall failed"; exit 1; }
+IMPORT_APP_BUILT="$DIST/Import RaceStudio 3 Data.app"
+UNINSTALL_APP_BUILT="$DIST/Uninstall RaceStudio 3.app"
+rm -rf "$IMPORT_APP_BUILT" "$UNINSTALL_APP_BUILT"
+osacompile -o "$IMPORT_APP_BUILT"    "$SRC/import-app.applescript"    || { echo "osacompile import failed"; exit 1; }
+osacompile -o "$UNINSTALL_APP_BUILT" "$SRC/uninstall-app.applescript" || { echo "osacompile uninstall failed"; exit 1; }
 
 # Import merges data, so it needs the engine — embed installer-core.sh + lib + pins.env (same
-# layout as this app's Resources). Uninstall calls the self-contained uninstall.sh at run time, so
-# it needs nothing extra.
-IMP_RES="$IMPORT_EMBED/Contents/Resources"
+# layout as RaceStudio 3.app's Resources). Uninstall calls the self-contained uninstall.sh at run
+# time, so it needs nothing extra.
+IMP_RES="$IMPORT_APP_BUILT/Contents/Resources"
 ditto "$SRC/installer-core.sh" "$IMP_RES/installer-core.sh"
 ditto "$SRC/pins.env"          "$IMP_RES/pins.env"
 ditto "$SRC/lib"               "$IMP_RES/lib"
@@ -158,8 +157,8 @@ brand_applet() { # <app> <bundle-id> <name>
   /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$pl" 2>/dev/null || true
   /usr/libexec/PlistBuddy -c "Add :LSMinimumSystemVersion string $MIN_OS" "$pl" 2>/dev/null || true
 }
-brand_applet "$IMPORT_EMBED"    "$BUNDLE_ID.import"    "Import RaceStudio 3 Data"
-brand_applet "$UNINSTALL_EMBED" "$BUNDLE_ID.uninstall" "Uninstall RaceStudio 3"
+brand_applet "$IMPORT_APP_BUILT"    "$BUNDLE_ID.import"    "Import RaceStudio 3 Data"
+brand_applet "$UNINSTALL_APP_BUILT" "$BUNDLE_ID.uninstall" "Uninstall RaceStudio 3"
 rm -f "$DIST/rs3.icns"
 
 if [ "${SKIP_SIGN:-0}" = 1 ]; then say "SKIP_SIGN=1 — compiled only."; exit 0; fi
@@ -181,11 +180,10 @@ if [ "${HARDENED_RUNTIME:-0}" = 1 ]; then
   # Notarization-grade: hardened runtime needs EVERY Mach-O signed individually (the --deep
   # shortcut is rejected by notarytool). Sign all of Wine's binaries first, then the app bundle.
   TS="--timestamp"; [ "${NO_TIMESTAMP:-0}" = 1 ] && TS=""
-  # Nested .app bundles must be signed before the outer app (the per-file Wine pass below only
-  # touches $RES/wine, not Resources/apps). No special entitlements — they bundle no Mach-O.
+  # Sibling helper apps (no special entitlements — they bundle no Mach-O of their own).
   say "Signing the Import / Uninstall apps…"
-  codesign --force --options runtime $TS --sign "$IDENTITY" "$IMPORT_EMBED"    || { echo "import codesign failed"; exit 1; }
-  codesign --force --options runtime $TS --sign "$IDENTITY" "$UNINSTALL_EMBED" || { echo "uninstall codesign failed"; exit 1; }
+  codesign --force --options runtime $TS --sign "$IDENTITY" "$IMPORT_APP_BUILT"    || { echo "import codesign failed"; exit 1; }
+  codesign --force --options runtime $TS --sign "$IDENTITY" "$UNINSTALL_APP_BUILT" || { echo "uninstall codesign failed"; exit 1; }
   say "Signing nested Wine binaries individually (notarization-grade — slow)…"
   while IFS= read -r f; do
     case "$(file -b "$f" 2>/dev/null)" in
@@ -200,6 +198,8 @@ else
   # Fast local signing (not notarizable): --deep, no hardened runtime so bundled Wine still runs.
   say "Codesigning (deep — Wine has many binaries, takes a minute)…"
   codesign --deep --force --sign "$IDENTITY" "$APP" || { echo "codesign failed"; exit 1; }
+  codesign --deep --force --sign "$IDENTITY" "$IMPORT_APP_BUILT"    || { echo "import codesign failed"; exit 1; }
+  codesign --deep --force --sign "$IDENTITY" "$UNINSTALL_APP_BUILT" || { echo "uninstall codesign failed"; exit 1; }
 fi
 codesign --verify --strict "$APP" && say "signature verifies"
 
@@ -228,7 +228,10 @@ notarize_staple() { # <path>
 }
 # rc 2 = no notarytool credentials configured (fine — signed-only build); any other nonzero is
 # a real upload/staple failure that must fail the build (this is the release artifact path).
-notarize_staple "$APP" || { rc=$?; [ "$rc" -eq 2 ] || { echo "app notarization failed (rc=$rc)"; exit "$rc"; }; }
+# Staple each app individually so they pass Gatekeeper OFFLINE after being dragged out of the DMG.
+notarize_staple "$APP"                 || { rc=$?; [ "$rc" -eq 2 ] || { echo "app notarization failed (rc=$rc)"; exit "$rc"; }; }
+notarize_staple "$IMPORT_APP_BUILT"    || { rc=$?; [ "$rc" -eq 2 ] || { echo "Import app notarization failed (rc=$rc)"; exit "$rc"; }; }
+notarize_staple "$UNINSTALL_APP_BUILT" || { rc=$?; [ "$rc" -eq 2 ] || { echo "Uninstall app notarization failed (rc=$rc)"; exit "$rc"; }; }
 
 # ---- 6. branded drag-to-Applications DMG ----------------------------------------------------
 if [ "${NO_DMG:-0}" = 1 ]; then say "NO_DMG=1 — skipping DMG."; exit 0; fi
@@ -237,8 +240,12 @@ BG="$DIST/.bg.png"
 "$PY" "$HERE/compose-dmg-bg.py" "$ASSETS/logo-wide-black.png" "$BG" || { echo "compose-dmg-bg.py failed"; exit 1; }
 
 say "Staging DMG contents"
-STAGE="$DIST/.dmgstage"; rm -rf "$STAGE"; mkdir -p "$STAGE/.background"
-ditto "$APP" "$STAGE/RaceStudio 3.app" || { echo "staging ditto failed"; exit 1; }
+# Ship a single "AiM" folder holding all three apps; the user drags the whole folder onto
+# /Applications, landing everything in /Applications/AiM in one move.
+STAGE="$DIST/.dmgstage"; rm -rf "$STAGE"; mkdir -p "$STAGE/.background" "$STAGE/AiM"
+ditto "$APP"                 "$STAGE/AiM/RaceStudio 3.app"            || { echo "staging ditto failed (app)"; exit 1; }
+ditto "$IMPORT_APP_BUILT"    "$STAGE/AiM/Import RaceStudio 3 Data.app" || { echo "staging ditto failed (import)"; exit 1; }
+ditto "$UNINSTALL_APP_BUILT" "$STAGE/AiM/Uninstall RaceStudio 3.app"   || { echo "staging ditto failed (uninstall)"; exit 1; }
 ln -s /Applications "$STAGE/Applications"
 cp "$BG" "$STAGE/.background/bg.png"
 
@@ -269,7 +276,7 @@ tell application "Finder"
     set icon size of vo to 128
     set text size of vo to 12
     set background picture of vo to file ".background:bg.png"
-    set position of item "RaceStudio 3.app" of container window to {160, 235}
+    set position of item "AiM" of container window to {160, 235}
     set position of item "Applications" of container window to {480, 235}
     try
       set position of item ".background" of container window to {1100, 1100}

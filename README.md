@@ -25,21 +25,22 @@ to AiM devices over WiFi. **Option A is the easy, free path** — start there.
 
 ## Option A — the free app (recommended)
 
-No Windows, no Parallels, no CrossOver, nothing to buy. It's a normal Mac app you drag to
-Applications; the first time you open it, it sets itself up.
+No Windows, no Parallels, no CrossOver, nothing to buy. It's a normal Mac app; the first time you
+open it, it sets itself up.
 
 1. **Download `RaceStudio 3.dmg`** from this repo's
    [**Releases**](https://github.com/Rush-Auto-Works/aim-racestudio3-mac/releases) page and open it.
-2. **Drag `RaceStudio 3` onto the Applications folder** (the disk image shows an arrow — just
-   like installing any Mac app).
-3. **Open RaceStudio 3** from Applications. The **first launch** sets everything up — it
+2. **Drag the `AiM` folder onto the Applications folder** (the disk image shows an arrow). That
+   one drag installs everything to `/Applications/AiM`: **RaceStudio 3**, plus the **Import** and
+   **Uninstall** helper apps.
+3. **Open RaceStudio 3** from **Applications ▸ AiM**. The **first launch** sets everything up — it
    downloads the bits it needs and configures RaceStudio 3 for you (about 10 minutes, needs
    internet, no Terminal ever). Every launch after that just opens the app.
 
 That's it. Your data lives in **`~/Documents/AIM_SPORT`**; the engine lives quietly in
-`~/Library/Application Support/RaceStudio3`. First launch also puts two small helper apps in
-**`/Applications/AiM`** — **Import RaceStudio 3 Data** and **Uninstall RaceStudio 3** — for
-bringing data in and cleanly removing everything later.
+`~/Library/Application Support/RaceStudio3`. The **Import RaceStudio 3 Data** and **Uninstall
+RaceStudio 3** apps sit beside RaceStudio 3 in **`/Applications/AiM`** — for bringing data in and
+cleanly removing everything later.
 
 **A couple of normal prompts you might see on first launch:**
 - *"Wine wants to access Documents"* — click **Allow**. (It says *Wine*, the open-source
@@ -48,11 +49,10 @@ bringing data in and cleanly removing everything later.
   local folder instead — iCloud's "Optimize Storage" can otherwise move your database off the
   Mac and break it. Pick the safe option if unsure.
 
-**To uninstall:** open **Uninstall RaceStudio 3** in `/Applications/AiM` — it stops the engine
-and removes the engine, the helper apps, and the launcher; your data in `~/Documents/AIM_SPORT`
-is kept. Then drag **RaceStudio 3** from Applications to the Trash. (Manual route, same result:
-trash `RaceStudio 3.app`, then delete the `/Applications/AiM` folder and
-`~/Library/Application Support/RaceStudio3`.)
+**To uninstall:** open **Uninstall RaceStudio 3** in `/Applications/AiM` — it stops RaceStudio 3
+and removes everything in `/Applications/AiM` (the app, the engine, and the helpers); your data in
+`~/Documents/AIM_SPORT` is kept unless you choose to remove it. (Manual route, same result: delete
+the `/Applications/AiM` folder and `~/Library/Application Support/RaceStudio3`.)
 
 > **Don't see a release yet?** The notarized DMG is produced from this repo by
 > `installer/build/build-apps.sh` (needs an Apple Developer ID). Until a release is posted you
