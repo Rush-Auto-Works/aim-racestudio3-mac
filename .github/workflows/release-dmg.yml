@@ -109,14 +109,14 @@ jobs:
       - name: Verify notarization stapled
         run: |
           set -euo pipefail
-          xcrun stapler validate "installer/dist/RaceStudio 3.dmg"
-          spctl -a -t open --context context:primary-signature -v "installer/dist/RaceStudio 3.dmg" || true
+          xcrun stapler validate installer/dist/*.dmg
+          spctl -a -t open --context context:primary-signature -v installer/dist/*.dmg || true
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: RaceStudio-3-dmg
-          path: installer/dist/RaceStudio 3.dmg
+          path: installer/dist/*.dmg
           if-no-files-found: error
 
       - name: Publish Release (tags only)
@@ -126,9 +126,10 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          notes="Free RaceStudio 3 for macOS — drag to Applications, open once to set up. Connect AiM devices over Wi-Fi (USB unsupported). Notarized; no Gatekeeper prompt."
+          notes="RaceStudio 3 for macOS — drag to Applications, open once to set up. Connect AiM devices over Wi-Fi (USB unsupported). Notarized; no Gatekeeper prompt."
+          dmg="$(ls installer/dist/*.dmg)"   # versioned name, e.g. RaceStudio3-3.83.20.dmg
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "installer/dist/RaceStudio 3.dmg" --clobber
+            gh release upload "$TAG" "$dmg" --clobber
           else
-            gh release create "$TAG" "installer/dist/RaceStudio 3.dmg" --title "RaceStudio 3 $TAG" --notes "$notes"
+            gh release create "$TAG" "$dmg" --title "RaceStudio 3 $TAG" --notes "$notes"
           fi
