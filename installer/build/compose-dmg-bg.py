@@ -1,29 +1,33 @@
 #!/usr/bin/env python3
-"""Compose the drag-to-Applications DMG background: Rush Auto Works logo on top, a big arrow
-pointing from the app slot to the Applications slot, and a one-line instruction.
+"""Compose the drag-to-Applications DMG background: WHITE background (so any window area beyond
+the image blends in seamlessly), black Rush Auto Works logo on top, an orange arrow from the app
+slot to the Applications slot, and a black caption.
 
-Usage: compose-dmg-bg.py <logo.png> <out.png>
+Usage: compose-dmg-bg.py <black-logo.png> <out.png>
 The canvas + icon-slot coordinates here MUST match the Finder layout in build-apps.sh.
 """
 import sys
 from PIL import Image, ImageDraw, ImageFont
 
-W, H = 640, 420
-LEFT_SLOT = (160, 215)   # center of the app icon
-RIGHT_SLOT = (480, 215)  # center of the Applications alias
-DARK = (18, 20, 24, 255)
-FG = (235, 238, 242, 255)
+W, H = 640, 400
+LEFT_SLOT = (160, 190)    # center of the app icon
+RIGHT_SLOT = (480, 190)   # center of the Applications alias
+WHITE = (255, 255, 255, 255)
+BLACK = (20, 22, 26, 255)
+GRAY = (130, 136, 144, 255)
 ACCENT = (255, 122, 0, 255)  # Rush orange
 
 
 def load_font(size, bold=False):
-    for path in [
-        "/System/Library/Fonts/SFNSDisplay.ttf",
+    names = (["SFNSDisplay-Bold.otf", "HelveticaNeue-Bold.ttf"] if bold else
+             ["SFNSDisplay.ttf", "HelveticaNeue.ttf"])
+    paths = [f"/System/Library/Fonts/{n}" for n in names] + [
         "/System/Library/Fonts/Helvetica.ttc",
         "/Library/Fonts/Arial.ttf",
-    ]:
+    ]
+    for p in paths:
         try:
-            return ImageFont.truetype(path, size)
+            return ImageFont.truetype(p, size)
         except Exception:
             continue
     return ImageFont.load_default()
@@ -31,29 +35,29 @@ def load_font(size, bold=False):
 
 def main():
     logo_path, out_path = sys.argv[1], sys.argv[2]
-    img = Image.new("RGBA", (W, H), DARK)
+    img = Image.new("RGBA", (W, H), WHITE)
     d = ImageDraw.Draw(img)
 
-    # logo, scaled to ~260px wide, centered near the top
+    # black logo, ~240px wide, centered near the top
     try:
         logo = Image.open(logo_path).convert("RGBA")
-        scale = 260 / logo.width
-        logo = logo.resize((260, max(1, int(logo.height * scale))), Image.LANCZOS)
-        img.paste(logo, ((W - logo.width) // 2, 28), logo)
-    except Exception as e:
-        d.text((W // 2, 50), "Rush Auto Works", fill=FG, anchor="mm", font=load_font(28, True))
+        scale = 240 / logo.width
+        logo = logo.resize((240, max(1, int(logo.height * scale))), Image.LANCZOS)
+        img.paste(logo, ((W - logo.width) // 2, 34), logo)
+    except Exception:
+        d.text((W // 2, 60), "RUSH AUTO WORKS", fill=BLACK, anchor="mm", font=load_font(30, True))
 
-    # arrow from just right of the app slot to just left of the Applications slot
+    # orange arrow between the two icon slots
     y = LEFT_SLOT[1]
-    x0, x1 = LEFT_SLOT[0] + 78, RIGHT_SLOT[0] - 78
-    d.line([(x0, y), (x1 - 14, y)], fill=ACCENT, width=8)
-    d.polygon([(x1, y), (x1 - 20, y - 14), (x1 - 20, y + 14)], fill=ACCENT)  # arrowhead
+    x0, x1 = LEFT_SLOT[0] + 82, RIGHT_SLOT[0] - 82
+    d.line([(x0, y), (x1 - 16, y)], fill=ACCENT, width=9)
+    d.polygon([(x1, y), (x1 - 22, y - 15), (x1 - 22, y + 15)], fill=ACCENT)
 
-    # instruction line under the slots
-    d.text((W // 2, 340), "Drag  RaceStudio 3  into  Applications",
-           fill=FG, anchor="mm", font=load_font(20, True))
-    d.text((W // 2, 372), "then open it from Applications — the first launch sets everything up",
-           fill=(150, 156, 164, 255), anchor="mm", font=load_font(13))
+    # caption, below the icon name labels (which sit ~y=265 under 128px icons)
+    d.text((W // 2, 320), "Drag  RaceStudio 3  into  Applications",
+           fill=BLACK, anchor="mm", font=load_font(21, True))
+    d.text((W // 2, 352), "then open it from Applications — the first launch sets everything up",
+           fill=GRAY, anchor="mm", font=load_font(13))
 
     img.convert("RGB").save(out_path, "PNG")
     print("wrote", out_path)
