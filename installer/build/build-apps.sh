@@ -161,7 +161,7 @@ chmod +x "$IMP_RES/installer-core.sh"
 # brand each applet: RS3 icon + identity/version. osacompile makes a droplet (uses droplet.icns)
 # when the script has `on open`, else an applet (applet.icns) — overwrite whichever exists.
 brand_applet() { # <app> <bundle-id> <name> <icns>
-  local a="$1" bid="$2" nm="$3" icns="$4" pl="$1/Contents/Info.plist" r="$1/Contents/Resources"
+  local bid="$2" nm="$3" icns="$4" pl="$1/Contents/Info.plist" r="$1/Contents/Resources"
   [ -f "$r/applet.icns" ]  && cp "$icns" "$r/applet.icns"
   [ -f "$r/droplet.icns" ] && cp "$icns" "$r/droplet.icns"
   /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $bid" "$pl" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string $bid" "$pl"
