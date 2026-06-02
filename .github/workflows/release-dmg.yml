@@ -1,0 +1,130 @@
+name: release-dmg
+
+# Build, codesign, notarize, staple, and release the RaceStudio 3 DMG.
+#
+# Runs on a GitHub-hosted macOS runner — NOT Ubicloud. The DMG needs Apple-only tooling
+# (osacompile / codesign / hdiutil / notarytool / iconutil / sips) that does not exist on Linux,
+# so the org's Ubicloud (Ubuntu) runners can't build it.
+#
+# Trigger: push a tag like v1.0.0, or run manually (workflow_dispatch — builds an artifact,
+# only a tag publishes a Release).
+#
+# Required repo secrets (Settings -> Secrets and variables -> Actions). See SECRETS section in
+# .github/workflows/README.md:
+#   DEVELOPER_ID_CERT_P12        base64 of your "Developer ID Application" .p12 export
+#   DEVELOPER_ID_CERT_PASSWORD   password used when exporting that .p12
+#   KEYCHAIN_PASSWORD            any throwaway string (ephemeral build keychain)
+#   APPLE_ID                     Apple ID email for notarization
+#   APPLE_TEAM_ID                HYBSCYDCMB
+#   APPLE_APP_PASSWORD           app-specific password (appleid.apple.com)
+# Optional:
+#   CODESIGN_IDENTITY            full identity name; defaults to "Developer ID Application: Samuel Reed (HYBSCYDCMB)"
+#   RS3_LOGO_B64                 base64 of the colored RS3 icon PNG (else falls back to the Rush logo)
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # create releases / upload assets
+
+concurrency:
+  group: release-dmg-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache pinned Wine tarball
+        id: winecache
+        uses: actions/cache@v4
+        with:
+          path: ~/wine-cache
+          key: wine-staging-11.9-osx64
+
+      - name: Fetch Wine if not cached
+        run: |
+          set -euo pipefail
+          mkdir -p ~/wine-cache
+          f="$HOME/wine-cache/wine-staging-11.9-osx64.tar.xz"
+          if [ ! -f "$f" ]; then
+            curl -fSL --proto '=https' -o "$f" \
+              "https://github.com/Gcenx/macOS_Wine_builds/releases/download/11.9/wine-staging-11.9-osx64.tar.xz"
+          fi
+          echo "WINE_TARBALL=$f" >> "$GITHUB_ENV"
+
+      - name: Import Developer ID certificate
+        env:
+          CERT_B64: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
+          CERT_PW: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
+          KC_PW: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KC="$RUNNER_TEMP/build.keychain-db"
+          security create-keychain -p "$KC_PW" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KC_PW" "$KC"
+          printf '%s' "$CERT_B64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KC" -P "$CERT_PW" -T /usr/bin/codesign
+          # allow codesign to use the key without an interactive prompt (the CI equivalent of "Always Allow")
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KC_PW" "$KC" >/dev/null
+          # put our keychain first in the search list so find-identity/codesign see it
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | sed 's/"//g')
+          rm -f "$RUNNER_TEMP/cert.p12"
+          security find-identity -v -p codesigning "$KC"
+
+      - name: Decode RS3 icon (optional)
+        env:
+          RS3_LOGO_B64: ${{ secrets.RS3_LOGO_B64 }}
+        run: |
+          set -euo pipefail
+          if [ -n "${RS3_LOGO_B64:-}" ]; then
+            printf '%s' "$RS3_LOGO_B64" | base64 --decode > installer/build/assets/rs3-logo.png
+            echo "decoded RS3 icon"
+          else
+            echo "no RS3_LOGO_B64 — icon falls back to the Rush logo"
+          fi
+
+      - name: Build + notarize + staple the DMG
+        env:
+          CODESIGN_IDENTITY: ${{ secrets.CODESIGN_IDENTITY }}
+          HARDENED_RUNTIME: "1"
+          NOTARY_APPLE_ID: ${{ secrets.APPLE_ID }}
+          NOTARY_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          NOTARY_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          : "${CODESIGN_IDENTITY:=Developer ID Application: Samuel Reed (HYBSCYDCMB)}"
+          export CODESIGN_IDENTITY
+          bash installer/build/build-apps.sh
+
+      - name: Verify notarization stapled
+        run: |
+          set -euo pipefail
+          xcrun stapler validate "installer/dist/RaceStudio 3.dmg"
+          spctl -a -t open --context context:primary-signature -v "installer/dist/RaceStudio 3.dmg" || true
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RaceStudio-3-dmg
+          path: installer/dist/RaceStudio 3.dmg
+          if-no-files-found: error
+
+      - name: Publish Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          notes="Free RaceStudio 3 for macOS — drag to Applications, open once to set up. Connect AiM devices over Wi-Fi (USB unsupported). Notarized; no Gatekeeper prompt."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "installer/dist/RaceStudio 3.dmg" --clobber
+          else
+            gh release create "$TAG" "installer/dist/RaceStudio 3.dmg" --title "RaceStudio 3 $TAG" --notes "$notes"
+          fi

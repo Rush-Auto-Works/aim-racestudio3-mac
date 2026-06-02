@@ -121,11 +121,26 @@ if ! have_identity; then say "No Developer ID ($TEAMID) in keychain — compiled
 # Hardened runtime is OFF by default: Wine needs JIT/unsigned-memory entitlements to run under it,
 # which we add in the notarization pass (HARDENED_RUNTIME=1). Timestamp only with hardened runtime
 # (per-file TSA calls across all of Wine are slow + only needed for notarization).
-HARDENED=""; [ "${HARDENED_RUNTIME:-0}" = 1 ] && HARDENED="--options runtime --entitlements $HERE/wine.entitlements.plist"
-TS=""; { [ -n "$HARDENED" ] && [ "${NO_TIMESTAMP:-0}" != 1 ]; } && TS="--timestamp"
-say "Codesigning (deep — Wine has many binaries, takes a minute)…"
-# shellcheck disable=SC2086
-codesign --deep --force $HARDENED $TS --sign "$IDENTITY" "$APP" || { echo "codesign failed"; exit 1; }
+ENT="$HERE/wine.entitlements.plist"
+if [ "${HARDENED_RUNTIME:-0}" = 1 ]; then
+  # Notarization-grade: hardened runtime needs EVERY Mach-O signed individually (the --deep
+  # shortcut is rejected by notarytool). Sign all of Wine's binaries first, then the app bundle.
+  TS="--timestamp"; [ "${NO_TIMESTAMP:-0}" = 1 ] && TS=""
+  say "Signing nested Wine binaries individually (notarization-grade — slow)…"
+  while IFS= read -r f; do
+    case "$(file -b "$f" 2>/dev/null)" in
+      *Mach-O*) codesign --force --options runtime $TS --entitlements "$ENT" --sign "$IDENTITY" "$f" 2>/dev/null || \
+                say "  warn: could not sign $f" ;;
+    esac
+  done < <(find "$RES/wine" -type f)
+  say "Signing the app bundle…"
+  # shellcheck disable=SC2086
+  codesign --force --options runtime $TS --entitlements "$ENT" --sign "$IDENTITY" "$APP" || { echo "codesign failed"; exit 1; }
+else
+  # Fast local signing (not notarizable): --deep, no hardened runtime so bundled Wine still runs.
+  say "Codesigning (deep — Wine has many binaries, takes a minute)…"
+  codesign --deep --force --sign "$IDENTITY" "$APP" || { echo "codesign failed"; exit 1; }
+fi
 codesign --verify --strict "$APP" && say "signature verifies"
 
 # ---- 5. notarize + staple (if creds) --------------------------------------------------------
