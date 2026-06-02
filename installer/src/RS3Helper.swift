@@ -63,6 +63,7 @@ class Delegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         let items = [
             ("Open RaceStudio 3", #selector(openRS3)),
+            ("Quit RaceStudio 3", #selector(quitRS3)),
             ("Import Data…", #selector(importData)),
             ("Uninstall…", #selector(uninstall)),
         ]
@@ -83,6 +84,13 @@ class Delegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func openRS3() { launchRS3() }
+
+    // Reliable quit — Wine's flaky "Wine" menu / Cmd-Q often won't close RS3, so kill wineserver
+    // for our prefix (closes all RS3 windows cleanly).
+    @objc func quitRS3() {
+        let ws = RES + "/wine/bin/wineserver"
+        bash("WINEPREFIX=\(q(ROOT + "/prefix")) \(q(ws)) -k 2>/dev/null; pkill -f AiMRS3-64 2>/dev/null; true")
+    }
 
     @objc func importData() {
         let panel = NSOpenPanel()
