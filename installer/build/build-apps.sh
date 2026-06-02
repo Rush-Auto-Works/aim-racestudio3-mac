@@ -107,7 +107,7 @@ iconutil -c icns "$ICONSET" -o "$DIST/rs3.icns" || { echo "iconutil failed"; exi
 # osacompile made a DROPLET (because of `on open`), so it uses droplet.icns — overwrite BOTH.
 cp "$DIST/rs3.icns" "$RES/applet.icns"
 [ -f "$RES/droplet.icns" ] && cp "$DIST/rs3.icns" "$RES/droplet.icns"
-rm -rf "$ICONSET" "$ICON_PNG" "$DIST/rs3.icns"
+rm -rf "$ICONSET" "$ICON_PNG"   # keep $DIST/rs3.icns — the Import/Uninstall applets reuse it (removed after 3b)
 
 # ---- 3. Info.plist --------------------------------------------------------------------------
 PL="$APP/Contents/Info.plist"
@@ -121,26 +121,42 @@ pset CFBundleIconFile "applet" string
 # generic system droplet icon. Remove it so our applet.icns (the RS3 icon) is used.
 /usr/libexec/PlistBuddy -c "Delete :CFBundleIconName" "$PL" 2>/dev/null || true
 
-# ---- 3b. menu-bar helper (Swift agent) ------------------------------------------------------
-# A tiny status-bar app launched alongside RS3 (Import / Uninstall / Open), since Wine owns the
-# main menu bar while RaceStudio 3 runs. Lives inside the app; self-locates the parent bundle.
-say "Building menu-bar helper (swiftc)"
-HELPER="$APP/Contents/Helpers/RaceStudio 3 Helper.app"
-mkdir -p "$HELPER/Contents/MacOS"
-swiftc -O -framework Cocoa -o "$HELPER/Contents/MacOS/RS3Helper" "$SRC/RS3Helper.swift" || { echo "swiftc failed"; exit 1; }
-cat > "$HELPER/Contents/Info.plist" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-	<key>CFBundleExecutable</key><string>RS3Helper</string>
-	<key>CFBundleIdentifier</key><string>$BUNDLE_ID.helper</string>
-	<key>CFBundleName</key><string>RaceStudio 3 Helper</string>
-	<key>CFBundlePackageType</key><string>APPL</string>
-	<key>CFBundleShortVersionString</key><string>$VERSION</string>
-	<key>LSMinimumSystemVersion</key><string>$MIN_OS</string>
-	<key>LSUIElement</key><true/>
-</dict></plist>
-PLIST
+# ---- 3b. standalone Import / Uninstall apps -------------------------------------------------
+# AppleScript applets the installer copies into ~/Applications/AiM on first run (via make-launcher
+# reading IMPORT_APP_SRC/UNINSTALL_APP_SRC). They ship INSIDE this app at Contents/Resources/apps.
+# Wine owns the macOS menu bar while RS3 runs and that menu can't host custom items, and the old
+# NSStatusItem menu-bar helper proved unreliable (Bartender/Tahoe), so these standalone apps are
+# the reachable Import/Uninstall surface (Finder, Spotlight, Launchpad, Dock).
+say "Building Import / Uninstall apps"
+APPS_EMBED="$RES/apps"; rm -rf "$APPS_EMBED"; mkdir -p "$APPS_EMBED"
+IMPORT_EMBED="$APPS_EMBED/Import RaceStudio 3 Data.app"
+UNINSTALL_EMBED="$APPS_EMBED/Uninstall RaceStudio 3.app"
+osacompile -o "$IMPORT_EMBED"    "$SRC/import-app.applescript"    || { echo "osacompile import failed"; exit 1; }
+osacompile -o "$UNINSTALL_EMBED" "$SRC/uninstall-app.applescript" || { echo "osacompile uninstall failed"; exit 1; }
+
+# Import merges data, so it needs the engine — embed installer-core.sh + lib + pins.env (same
+# layout as this app's Resources). Uninstall calls the self-contained uninstall.sh at run time, so
+# it needs nothing extra.
+IMP_RES="$IMPORT_EMBED/Contents/Resources"
+ditto "$SRC/installer-core.sh" "$IMP_RES/installer-core.sh"
+ditto "$SRC/pins.env"          "$IMP_RES/pins.env"
+ditto "$SRC/lib"               "$IMP_RES/lib"
+chmod +x "$IMP_RES/installer-core.sh"
+
+# brand each applet: RS3 icon + identity/version. osacompile makes a droplet (uses droplet.icns)
+# when the script has `on open`, else an applet (applet.icns) — overwrite whichever exists.
+brand_applet() { # <app> <bundle-id> <name>
+  local a="$1" bid="$2" nm="$3" pl="$1/Contents/Info.plist" r="$1/Contents/Resources"
+  [ -f "$r/applet.icns" ]  && cp "$DIST/rs3.icns" "$r/applet.icns"
+  [ -f "$r/droplet.icns" ] && cp "$DIST/rs3.icns" "$r/droplet.icns"
+  /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $bid" "$pl" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string $bid" "$pl"
+  /usr/libexec/PlistBuddy -c "Set :CFBundleName $nm" "$pl" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleName string $nm" "$pl"
+  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$pl" 2>/dev/null || true
+  /usr/libexec/PlistBuddy -c "Add :LSMinimumSystemVersion string $MIN_OS" "$pl" 2>/dev/null || true
+}
+brand_applet "$IMPORT_EMBED"    "$BUNDLE_ID.import"    "Import RaceStudio 3 Data"
+brand_applet "$UNINSTALL_EMBED" "$BUNDLE_ID.uninstall" "Uninstall RaceStudio 3"
+rm -f "$DIST/rs3.icns"
 
 if [ "${SKIP_SIGN:-0}" = 1 ]; then say "SKIP_SIGN=1 — compiled only."; exit 0; fi
 
@@ -159,8 +175,11 @@ if [ "${HARDENED_RUNTIME:-0}" = 1 ]; then
   # Notarization-grade: hardened runtime needs EVERY Mach-O signed individually (the --deep
   # shortcut is rejected by notarytool). Sign all of Wine's binaries first, then the app bundle.
   TS="--timestamp"; [ "${NO_TIMESTAMP:-0}" = 1 ] && TS=""
-  say "Signing the menu-bar helper…"
-  codesign --force --options runtime $TS --sign "$IDENTITY" "$HELPER" || { echo "helper codesign failed"; exit 1; }
+  # Nested .app bundles must be signed before the outer app (the per-file Wine pass below only
+  # touches $RES/wine, not Resources/apps). No special entitlements — they bundle no Mach-O.
+  say "Signing the Import / Uninstall apps…"
+  codesign --force --options runtime $TS --sign "$IDENTITY" "$IMPORT_EMBED"    || { echo "import codesign failed"; exit 1; }
+  codesign --force --options runtime $TS --sign "$IDENTITY" "$UNINSTALL_EMBED" || { echo "uninstall codesign failed"; exit 1; }
   say "Signing nested Wine binaries individually (notarization-grade — slow)…"
   while IFS= read -r f; do
     case "$(file -b "$f" 2>/dev/null)" in
