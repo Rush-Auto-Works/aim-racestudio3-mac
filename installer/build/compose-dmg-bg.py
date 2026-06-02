@@ -9,9 +9,9 @@ The canvas + icon-slot coordinates here MUST match the Finder layout in build-ap
 import sys
 from PIL import Image, ImageDraw, ImageFont
 
-W, H = 640, 400
-LEFT_SLOT = (160, 190)    # center of the app icon
-RIGHT_SLOT = (480, 190)   # center of the Applications alias
+W, H = 640, 510
+LEFT_SLOT = (160, 235)    # center of the app icon
+RIGHT_SLOT = (480, 235)   # center of the Applications alias
 WHITE = (255, 255, 255, 255)
 BLACK = (20, 22, 26, 255)
 GRAY = (130, 136, 144, 255)
@@ -43,7 +43,7 @@ def main():
         logo = Image.open(logo_path).convert("RGBA")
         scale = 240 / logo.width
         logo = logo.resize((240, max(1, int(logo.height * scale))), Image.LANCZOS)
-        img.paste(logo, ((W - logo.width) // 2, 34), logo)
+        img.paste(logo, ((W - logo.width) // 2, 48), logo)
     except Exception:
         d.text((W // 2, 60), "RUSH AUTO WORKS", fill=BLACK, anchor="mm", font=load_font(30, True))
 
@@ -53,10 +53,10 @@ def main():
     d.line([(x0, y), (x1 - 16, y)], fill=ACCENT, width=9)
     d.polygon([(x1, y), (x1 - 22, y - 15), (x1 - 22, y + 15)], fill=ACCENT)
 
-    # caption, below the icon name labels (which sit ~y=265 under 128px icons)
-    d.text((W // 2, 320), "Drag  RaceStudio 3  into  Applications",
+    # caption, below the icon name labels (which sit ~y=310 under 128px icons)
+    d.text((W // 2, 410), "Drag  RaceStudio 3  into  Applications",
            fill=BLACK, anchor="mm", font=load_font(21, True))
-    d.text((W // 2, 352), "then open it from Applications — the first launch sets everything up",
+    d.text((W // 2, 444), "then open it from Applications — the first launch sets everything up",
            fill=GRAY, anchor="mm", font=load_font(13))
 
     img.convert("RGB").save(out_path, "PNG")
