@@ -20,6 +20,7 @@ Re-sign the binary afterwards (this invalidates any existing code signature).
 import re
 import sys
 import struct
+from xml.sax.saxutils import escape
 
 LC_SEGMENT_64 = 0x19
 
@@ -61,7 +62,9 @@ def main():
     off, size = loc
     sec = bytes(data[off:off + size])
 
-    new_name = name.encode("utf-8")
+    # Escape XML metacharacters so a name with & or < keeps the embedded plist well-formed.
+    # Escaping first also makes the idempotency check below compare against the stored (escaped) value.
+    new_name = escape(name).encode("utf-8")
 
     def cur_val(key):
         m = re.search(rb"<key>" + re.escape(key) + rb"</key>\s*<string>([^<]*)</string>", sec)

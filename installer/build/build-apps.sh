@@ -106,7 +106,8 @@ PY="$PYVENV/bin/python"
 ICON_LOGO="$ASSETS/rs3-logo.png"; [ -f "$ICON_LOGO" ] || ICON_LOGO="$ASSETS/logo-square.png"
 # build_icns <badge> <out.icns> — compose a 1024² PNG (optional import/uninstall badge), then icns.
 build_icns() {
-  local badge="$1" out="$2" png="$DIST/icon-$badge.png" iconset="$DIST/icon-$badge.iconset" s
+  local badge="$1" out="$2" s
+  local png="$DIST/icon-$badge.png" iconset="$DIST/icon-$badge.iconset"
   "$PY" "$HERE/compose-icon.py" "$ICON_LOGO" "$png" "$badge" || { echo "compose-icon.py ($badge) failed"; exit 1; }
   rm -rf "$iconset"; mkdir -p "$iconset"   # must NOT be hidden (iconutil rejects dot-dirs)
   for s in 16 32 128 256 512; do
