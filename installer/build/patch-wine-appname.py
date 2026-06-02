@@ -20,6 +20,7 @@ Re-sign the binary afterwards (this invalidates any existing code signature).
 import re
 import sys
 import struct
+from xml.sax.saxutils import escape
 
 LC_SEGMENT_64 = 0x19
 
@@ -61,23 +62,28 @@ def main():
     off, size = loc
     sec = bytes(data[off:off + size])
 
-    new_name = name.encode("utf-8")
-    target = b"<string>" + new_name + b"</string>"
-    # Idempotency: a no-op only if CFBundleName *itself* is already the new name. (Matching the
-    # bare <string> anywhere would false-positive if some other key held that same value.)
-    cur = re.search(rb"<key>CFBundleName</key>\s*<string>([^<]*)</string>", sec)
-    if cur and cur.group(1) == new_name:
+    # Escape XML metacharacters so a name with & or < keeps the embedded plist well-formed.
+    # Escaping first also makes the idempotency check below compare against the stored (escaped) value.
+    new_name = escape(name).encode("utf-8")
+
+    def cur_val(key):
+        m = re.search(rb"<key>" + re.escape(key) + rb"</key>\s*<string>([^<]*)</string>", sec)
+        return m.group(1) if m else None
+
+    # Patch ONLY CFBundleName (drives the macOS menu-bar app name). Do NOT touch CFBundleExecutable:
+    # it doesn't change the Dock/process name (macOS uses the real on-disk loader filename "wine"),
+    # AND a mismatch breaks LaunchServices icon resolution (blank Dock icon). Verified 2026-06-02.
+    keys = [b"CFBundleName"]
+    if all(cur_val(k) == new_name for k in keys):
         print(f"already patched to {name!r}; nothing to do")
         return
 
-    # CFBundleName's value is the unique literal <string>Wine</string>
-    # (NSPrincipalClass is "WineApplication", identifier is "org.winehq.wine").
-    needle = b"<string>Wine</string>"
-    count = sec.count(needle)
-    if count != 1:
-        raise SystemExit(f"expected exactly one {needle!r}, found {count}")
-
-    patched = sec.replace(needle, target)
+    patched = sec
+    for key in keys:
+        pat = re.compile(rb"(<key>" + re.escape(key) + rb"</key>\s*<string>)[^<]*(</string>)")
+        patched, n = pat.subn(rb"\g<1>" + new_name + rb"\g<2>", patched)
+        if n != 1:
+            raise SystemExit(f"expected exactly one {key.decode()} key/value, found {n}")
     # Reclaim the extra bytes by removing the 4-space XML indentation.
     patched = patched.replace(b"\n    ", b"\n")
 
