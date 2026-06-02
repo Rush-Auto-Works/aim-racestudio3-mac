@@ -111,7 +111,7 @@ notarize_staple "$APP" || true
 if [ "${NO_DMG:-0}" = 1 ]; then say "NO_DMG=1 — skipping DMG."; exit 0; fi
 say "Composing DMG background"
 BG="$DIST/.bg.png"
-"$PY" "$HERE/compose-dmg-bg.py" "$ASSETS/logo-wide.png" "$BG"
+"$PY" "$HERE/compose-dmg-bg.py" "$ASSETS/logo-wide-black.png" "$BG"
 
 say "Staging DMG contents"
 STAGE="$DIST/.dmgstage"; rm -rf "$STAGE"; mkdir -p "$STAGE/.background"
@@ -120,35 +120,47 @@ ln -s /Applications "$STAGE/Applications"
 cp "$BG" "$STAGE/.background/bg.png"
 
 RW="$DIST/.rw.dmg"; rm -f "$RW" "$DMG"
+# a stale mount of the same volume name makes `hdiutil create` fail "Resource busy" — detach first
+hdiutil detach "/Volumes/$VOL" -force >/dev/null 2>&1 || true
 hdiutil create -srcfolder "$STAGE" -volname "$VOL" -fs HFS+ -format UDRW -ov "$RW" >/dev/null || { echo "hdiutil create failed"; exit 1; }
 DEV="$(hdiutil attach -readwrite -noverify -noautoopen "$RW" | grep -E '^/dev/' | head -1 | awk '{print $1}')"
 MOUNT="/Volumes/$VOL"
 sleep 1
+# hygiene: drop volume cruft so it never shows (matters for users who enable hidden files)
+rm -rf "$MOUNT/.fseventsd" "$MOUNT/.Trashes" 2>/dev/null || true
 
 # Lay out the Finder window. NOTE: this scripts Finder and may pop a one-time macOS Automation
 # permission prompt ("…wants to control Finder") — approve it. If it fails, the DMG is still
-# functional, just with default icon positions.
+# functional (white background blends, just without fixed icon positions).
 osascript <<OSA || say "Finder layout skipped (automation not permitted) — DMG still works."
 tell application "Finder"
   tell disk "$VOL"
     open
+    delay 1
     set current view of container window to icon view
     set toolbar visible of container window to false
     set statusbar visible of container window to false
-    set the bounds of container window to {200, 120, 840, 563}
+    set sidebar width of container window to 0
+    set the bounds of container window to {220, 140, 860, 563}
     set vo to the icon view options of container window
     set arrangement of vo to not arranged
     set icon size of vo to 128
+    set text size of vo to 12
     set background picture of vo to file ".background:bg.png"
-    set position of item "RaceStudio 3.app" of container window to {160, 215}
-    set position of item "Applications" of container window to {480, 215}
-    update without registering applications
-    delay 1
+    set position of item "RaceStudio 3.app" of container window to {160, 190}
+    set position of item "Applications" of container window to {480, 190}
+    try
+      set position of item ".background" of container window to {999, 999}
+    end try
     close
+    open
+    delay 1
+    update without registering applications
+    delay 2
   end tell
 end tell
 OSA
-sync
+sync; sleep 1
 hdiutil detach "$DEV" >/dev/null 2>&1 || hdiutil detach "$DEV" -force >/dev/null 2>&1 || true
 say "Compressing DMG"
 hdiutil convert "$RW" -format UDZO -imagekey zlib-level=9 -o "$DMG" >/dev/null
