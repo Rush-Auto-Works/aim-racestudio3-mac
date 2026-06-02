@@ -9,23 +9,65 @@ license, no giant virtual machine.
 
 ---
 
-## What you'll need
+## Two ways to install
+
+| | **Option A — Free installer** | **Option B — CrossOver** |
+|---|---|---|
+| Cost | **Free** | ~$74 (14-day free trial) |
+| Effort | Double-click one app | Install CrossOver, then RaceStudio 3 |
+| Looks correct? | **Yes** (uses a modern engine) | Yes (keep it updated) |
+| Best for | Most people | Those who already own CrossOver |
+
+Both run the *real* RaceStudio 3 in a normal Mac window, open your `.xrk` files, and connect
+to AiM devices over WiFi. **Option A is the easy, free path** — start there.
+
+---
+
+## Option A — the free one-click installer (recommended)
+
+No Windows, no Parallels, no CrossOver, nothing to buy.
+
+1. **Download `Install RaceStudio 3.app`** from this repo's
+   [**Releases**](https://github.com/Rush-Auto-Works/aim-racestudio3-mac/releases) page.
+2. **Double-click it.** A friendly window walks you through everything — it downloads the
+   bits it needs and sets up RaceStudio 3 for you. Takes about 10 minutes and needs an
+   internet connection. No Terminal, ever.
+3. When it finishes, click **Launch RaceStudio 3** (or open it later from **Applications**).
+
+That's the whole thing. It puts your data in **Documents → AIM_SPORT** and an app in
+**Applications → RaceStudio 3**, and adds an **Uninstall RaceStudio 3** app next to it.
+
+**A couple of normal prompts you might see:**
+- *"Wine wants to access Documents"* — click **Allow**. (It says *Wine*, the open-source
+  engine doing the work, not RaceStudio 3.) This is how it reaches your data folder.
+- If your **Documents folder syncs to iCloud**, the installer offers to keep your telemetry
+  in a safe local folder instead — iCloud's "Optimize Storage" can otherwise move your
+  database off the Mac and break it. Pick the safe option if unsure.
+
+> **Don't see a release yet?** The notarized app is produced from this repo by
+> `installer/build/build-apps.sh` (needs an Apple Developer ID). Until a release is posted you
+> can build it yourself, or use **Option B** below. Full design notes:
+> [docs/installer-design.md](docs/installer-design.md).
+
+### Bringing data in is just as easy
+
+Drag your old **`AIM_SPORT`** folder (from another PC, a USB stick, a backup, or a Parallels
+shared folder) — or a `.zip` of it, or loose `.xrk` files — onto **`Import RaceStudio 3
+Data.app`**. It merges everything in and **never overwrites** what you already have. There's
+also a folder picker inside the installer. (More options in
+[Bring your sessions over](#bring-your-sessions-configs-and-profiles-over) below.)
+
+---
+
+## Option B — CrossOver (about 10 minutes, no Terminal)
 
 - **A Mac** (any Apple Silicon M-series, or Intel).
-- **CrossOver** — a small app that runs Windows programs on a Mac.
+- **CrossOver** — a small paid app that runs Windows programs on a Mac.
   [Home](https://www.codeweavers.com/crossover) ·
   [Free 14-day trial](https://www.codeweavers.com/crossover/download) ·
   [Buy (~$74)](https://www.codeweavers.com/store)
 - **The RaceStudio 3 installer** — free from AiM:
   [download page](https://www.aim-sportline.com/en/sw-fw-download.htm).
-
-> There are *free* alternatives to CrossOver, but right now they show garbled text and
-> display glitches in RaceStudio 3. CrossOver is the one that looks correct. If you want to
-> try the free route anyway, see [docs/free-wine.md](docs/free-wine.md).
-
----
-
-## Install it (about 10 minutes, no Terminal needed)
 
 1. **Install CrossOver.** If you already have it, **make sure it's updated to the latest
    version** — this matters; older versions make RaceStudio 3 misbehave.
@@ -79,10 +121,13 @@ config, profile, the full track database, and your sessions — in one shot. Det
 
 ## If the text looks garbled or broken
 
-That almost always means **CrossOver is out of date** (or you're using a free Wine build).
-**Update CrossOver to the latest version and relaunch** — that fixes the garbled text and
-broken panels. (If you genuinely can't update, there are manual workarounds in
-[docs/old-crossover-workarounds.md](docs/old-crossover-workarounds.md).)
+That means the **engine underneath is too old**. RaceStudio 3's interface needs a modern
+engine to draw correctly:
+- **Option A (free installer):** it pins a known-good modern engine, so this shouldn't happen.
+  If it does, run the **Uninstall** app and reinstall.
+- **Option B (CrossOver):** **update CrossOver to the latest version and relaunch** — older
+  versions are the usual cause. (If you genuinely can't update, manual workarounds are in
+  [docs/old-crossover-workarounds.md](docs/old-crossover-workarounds.md).)
 
 ---
 
@@ -91,12 +136,13 @@ broken panels. (If you genuinely can't update, there are manual workarounds in
 Everything below is optional background and command-line detail — you don't need it for a
 normal install.
 
-### Why CrossOver, and why "update it" matters
+### Why a "modern engine" matters
 RaceStudio 3's interface is built on Chromium (the engine behind Chrome), which only draws
-correctly on a **modern version of Wine** (the Windows-compatibility technology CrossOver is
-built on). A current CrossOver includes that; old ones don't, which is where the garbled
-text comes from. The free alternatives we tested are stuck on an old Wine and show the same
-glitches — full tested comparison in [docs/free-wine.md](docs/free-wine.md).
+correctly on a **modern version of Wine** (the open-source Windows-compatibility layer; both
+CrossOver and the free installer are built on it). The garbled-text reports all trace back to
+*old* Wine (Wine 8 and earlier); **Wine 10+ renders it cleanly**. That's why the free
+installer (Option A) pins a verified recent Wine, and why a current CrossOver (Option B) works
+while old ones don't. Full tested comparison: [docs/free-wine.md](docs/free-wine.md).
 
 ### Where RaceStudio 3 keeps your data (inside the bottle)
 The "bottle" is just a normal folder on your Mac:
@@ -121,7 +167,19 @@ The "bottle" is just a normal folder on your Mac:
   newer than `--since`. First launch afterward is slow for a minute while RaceStudio 3
   rebuilds config thumbnails — normal, one-time.
 
+### How the free installer (Option A) works
+It's a notarized AppleScript app whose brain is a well-tested bash engine
+(`installer/src/`). It installs a pinned, verified Wine into
+`~/Library/Application Support/RaceStudio3/`, runs AiM's installer silently, then relocates
+your `user/` data out to `~/Documents/AIM_SPORT` and symlinks it back — crash-atomically, so
+an interrupted install never loses data. Build it with `installer/build/build-apps.sh`; the
+engine has a full test suite (`bash installer/test/run-all.sh`, plus an offline real-install
+`installer/test/e2e-local.sh`).
+
 ### More docs
+- [docs/installer-design.md](docs/installer-design.md) — the free installer's design (reviewed).
+- [docs/installer-implementation.md](docs/installer-implementation.md) — build plan + the
+  data-safety state machine.
 - [docs/free-wine.md](docs/free-wine.md) — running it free (no CrossOver), with tested results.
 - [docs/old-crossover-workarounds.md](docs/old-crossover-workarounds.md) — manual fixes for
   old/free Wine (only if you can't use a current CrossOver).
