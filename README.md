@@ -7,6 +7,11 @@ license, no giant virtual machine.
 ![RaceStudio 3 running on a Mac](img/working-config-shift-lights.png)
 *RaceStudio 3 running on an Apple Silicon Mac — the real app, in a normal Mac window.*
 
+> **Independent community project — not affiliated with AiM.** This is built by enthusiasts. It is
+> **not owned, sanctioned, endorsed, or supported by AiM Tech / AiM Sportline**, and has no official
+> relationship with AiM on the software side. "RaceStudio 3" and "AiM" are trademarks of their
+> respective owners, used here only to describe what this project helps you run. Use at your own risk.
+
 ---
 
 ## Install (free, about 10 minutes)
@@ -134,5 +139,5 @@ engine has a full test suite (`bash installer/test/run-all.sh`, plus an offline 
 
 ---
 
-*Community guide, worked out on a 2026 Apple Silicon Mac with RaceStudio 3 v3.83.20. Not
-affiliated with AiM or CodeWeavers. Corrections and PRs welcome.*
+*Independent community project — not affiliated with, owned by, or sanctioned by AiM. Worked out on
+a 2026 Apple Silicon Mac with RaceStudio 3 v3.83.20. Corrections and PRs welcome.*
