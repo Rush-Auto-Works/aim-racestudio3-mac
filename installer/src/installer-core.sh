@@ -302,8 +302,12 @@ fi
 export WINEPREFIX="\$ROOT/prefix" WINEARCH=win64 WINEDEBUG=-all
 export WINEDLLOVERRIDES="mscoree=d;mshtml=d"
 export XDG_CACHE_HOME="\$ROOT/cache" XDG_CONFIG_HOME="\$ROOT/xdg-config" XDG_DATA_HOME="\$ROOT/xdg-data"
-mkdir -p "\$ROOT/logs"
-nohup arch -x86_64 "\$WB" '$RS3_WIN_EXE' >> "\$ROOT/logs/run.log" 2>&1 &
+mkdir -p "\$ROOT/logs" "\$ROOT/bin"
+# Launch Wine through a symlink named "RaceStudio 3" so the macOS menu-bar app name is
+# "RaceStudio 3" instead of "Wine" — winemac.drv names the app after the loader's argv[0].
+WNAME="\$ROOT/bin/RaceStudio 3"
+ln -sf "\$WB" "\$WNAME"
+nohup arch -x86_64 "\$WNAME" '$RS3_WIN_EXE' >> "\$ROOT/logs/run.log" 2>&1 &
 disown
 LAUNCH
   chmod +x "$f"
