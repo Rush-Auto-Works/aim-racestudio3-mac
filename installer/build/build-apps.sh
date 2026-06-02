@@ -36,8 +36,8 @@ VERSION="${RS3_VERSION:-$(sed -nE 's/^RS3_PINNED_VER="(.*)"/\1/p' "$SRC/pins.env
 VERSION="${VERSION:-1.0.0}"
 
 APP="$DIST/RaceStudio 3.app"
-VOL="RaceStudio 3"
-DMG="$DIST/RaceStudio 3.dmg"
+VOL="RaceStudio 3"                       # mounted volume label (stays human-friendly)
+DMG="$DIST/RaceStudio3-${VERSION}.dmg"   # filename carries the RS3 version, e.g. RaceStudio3-3.83.20.dmg
 
 say() { printf '\033[1m==> %s\033[0m\n' "$*"; }
 
