@@ -131,6 +131,9 @@ phase_preflight() {
 
 phase_acquire_installer() {
   ui_progress 2 8 "Getting the RaceStudio 3 installer…"
+  # Already have a usable installer (verified earlier, or one the user picked via the GUI)?
+  local pre; pre="$(ui_recall INSTALLER_EXE || true)"
+  if [ -n "$pre" ] && [ -f "$pre" ] && [ "$DRY_RUN" != 1 ]; then ui_say "Installer ready."; return 0; fi
   local want="$INSTALLER_CACHE/$RS3_PINNED_FILE"
   validate_rs3_asset "$RS3_PINNED_FILE" || die "internal: bad pinned RS3 filename"
 
@@ -200,8 +203,13 @@ phase_make_prefix() {
   [ -n "$WINE_BIN" ] || die "internal: Wine not installed before make-prefix"
 
   RUN_WINE_TIMEOUT="$WINEBOOT_TIMEOUT" run_wine wineboot --init >> "$LOG" 2>&1 || true
-  # postcondition, not $? (wineboot prints benign errors)
-  ledger_verify prefix || die "Couldn't create the Windows environment."
+  wineserver_wait                 # drain async prefix creation before checking (avoids a race)
+  # postcondition, not $? (wineboot prints benign errors); poll briefly in case of slow FS flush.
+  local tries=0
+  until ledger_verify prefix; do
+    tries=$((tries+1)); [ "$tries" -ge 15 ] && die "Couldn't create the Windows environment."
+    sleep 1
+  done
   write_wineserver_pid
   wineserver_kill
   ledger_mark prefix
@@ -367,10 +375,33 @@ do_reinstall() {
 }
 
 do_import() {
-  [ -n "$IMPORT_DIR" ] && [ -d "$IMPORT_DIR" ] || die "Import: folder not found: $IMPORT_DIR"
-  # DATA_DIR must exist (post-install). If not, create it.
+  local p="$IMPORT_DIR"
+  [ -n "$p" ] || die "Import: nothing to import"
   mkdir -p "$DATA_DIR"
-  import_merge "$IMPORT_DIR"
+  case "$p" in
+    *.zip|*.ZIP)
+      [ -f "$p" ] || die "Import: zip not found: $p"
+      local tmp; tmp="$(mktemp -d "${TMPDIR:-/tmp}/rs3import.XXXXXX")"
+      ui_say "Unzipping…"
+      ditto -x -k "$p" "$tmp" 2>/dev/null || unzip -q "$p" -d "$tmp" 2>/dev/null || { rm -rf "$tmp"; die "Import: couldn't unzip $p"; }
+      local u; u="$(find "$tmp" -type d -name user -path '*RaceStudio3*' 2>/dev/null | head -1)"
+      [ -n "$u" ] || u="$tmp"
+      import_merge "$u"; local rc=$?
+      rm -rf "$tmp"
+      [ "$rc" -eq 0 ] || die "Import failed."
+      ;;
+    *.xrk|*.XRK)
+      [ -f "$p" ] || die "Import: file not found: $p"
+      local dest="$DATA_DIR/data/dropped-$(date +%Y%m%d)"
+      mkdir -p "$dest"
+      [ -e "$dest/$(basename "$p")" ] || ditto "$p" "$dest/$(basename "$p")"
+      ui_say "Imported session: $(basename "$p") -> $dest"
+      ;;
+    *)
+      [ -d "$p" ] || die "Import: folder not found: $p"
+      import_merge "$p"
+      ;;
+  esac
 }
 
 do_uninstall() {
@@ -404,6 +435,7 @@ case "$ACTION" in
   reinstall)         do_reinstall ;;
   import)            do_import ;;
   uninstall)         do_uninstall ;;
+  set-config)        ui_persist "${args[1]:?key}" "${args[2]:-}" ;;
   help)              usage ;;
   *) die "unknown action: $ACTION" ;;
 esac
