@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>PayloadContent</key>
+	<array>
+		<dict>
+			<key>PayloadType</key>
+			<string>com.apple.applicationaccess</string>
+			<key>PayloadIdentifier</key>
+			<string>com.rushautoworks.racestudio3.rosetta-awareness.restrictions</string>
+			<key>PayloadUUID</key>
+			<string>D5BAA4F8-D5F3-44D5-8526-A29E1DF5F255</string>
+			<key>PayloadVersion</key>
+			<integer>1</integer>
+			<key>PayloadDisplayName</key>
+			<string>Disable Rosetta usage awareness</string>
+			<key>allowRosettaUsageAwareness</key>
+			<false/>
+		</dict>
+	</array>
+	<key>PayloadType</key>
+	<string>Configuration</string>
+	<key>PayloadIdentifier</key>
+	<string>com.rushautoworks.racestudio3.rosetta-awareness</string>
+	<key>PayloadUUID</key>
+	<string>8A0110B4-FAA6-423F-A4BF-91788194C019</string>
+	<key>PayloadVersion</key>
+	<integer>1</integer>
+	<key>PayloadScope</key>
+	<string>System</string>
+	<key>PayloadDisplayName</key>
+	<string>RaceStudio 3 — stop the "Intel app support is ending" reminder</string>
+	<key>PayloadDescription</key>
+	<string>Turns off the macOS 26.4+ periodic warning shown when launching Intel (Rosetta) apps. Optional; affects all Rosetta apps, not just RaceStudio 3. Remove anytime in System Settings → General → Device Management (or Privacy &amp; Security → Profiles).</string>
+	<key>PayloadOrganization</key>
+	<string>Rush Auto Works</string>
+</dict>
+</plist>
