@@ -3,10 +3,21 @@
 _T_NAME="unit-preflight"
 . "$(dirname "${BASH_SOURCE[0]}")/harness.sh"
 
+# These checks exercise host-specific code; skip the whole file off macOS so the suite stays
+# portable (CI/Linux). exit 77 = SKIP, distinct from pass/fail.
+if [ "$(uname -s)" != "Darwin" ]; then
+  echo "unit-preflight: SKIP (not macOS)"; exit 77
+fi
+
 assert_true "macos_ok" "macos_ok on macOS"
 
-# rosetta should be present (we verified Rosetta this session)
-assert_true "rosetta_present" "rosetta present"
+# Rosetta is only meaningful on Apple Silicon; on Intel rosetta_present() is trivially true and
+# we don't assert it. On arm64 it must be installed for the installer to work.
+if [ "$(uname -m)" = "arm64" ]; then
+  assert_true "rosetta_present" "rosetta present (Apple Silicon)"
+else
+  _ok "rosetta check N/A on Intel"
+fi
 
 # disk_free_gb returns a non-negative integer
 g="$(disk_free_gb "$SANDBOX")"

@@ -127,6 +127,9 @@ notarize_staple() { # <app>
 # Staple the leaves before embedding so the copied-out launcher/uninstaller are independently valid.
 LEAF_OK=1
 for a in "$LAUNCH_APP" "$UNINST_APP"; do notarize_staple "$a" || LEAF_OK=0; done
+if [ "$LEAF_OK" != 1 ] && [ -n "$NOTARY_ARGS" ]; then
+  say "WARNING: a leaf app failed to notarize/staple — the launcher/uninstaller copied into ~/Applications may show a Gatekeeper prompt. Re-run the build to retry."
+fi
 
 # ---- 5. embed the (signed, ideally stapled) leaves into the Installer ----------------------
 say "Embedding Launcher + Uninstaller into the Installer"

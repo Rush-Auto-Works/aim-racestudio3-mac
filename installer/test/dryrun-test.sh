@@ -13,9 +13,17 @@ APPSUP="$SBX/app-support"
 DATA="$SBX/Documents/AIM_SPORT"
 APPS="$SBX/Applications"
 
-# Snapshot the REAL locations so we can prove they are untouched.
+# Snapshot the REAL locations so we can prove the dry-run honored the env overrides and never
+# wrote to a real target (would catch the core accidentally ignoring RS3_DATA_DIR/RS3_APPS_DIR).
 REAL_APPSUP="$HOME/Library/Application Support/RaceStudio3"
-real_before="$( [ -e "$REAL_APPSUP" ] && stat -f %m "$REAL_APPSUP" 2>/dev/null || echo none )"
+REAL_DATA="$HOME/Documents/AIM_SPORT"
+REAL_LAUNCHER="$HOME/Applications/RaceStudio 3.app"
+REAL_CMD="$HOME/Applications/RaceStudio 3.command"
+snap() { [ -e "$1" ] && stat -f %m "$1" 2>/dev/null || echo none; }
+real_before="$(snap "$REAL_APPSUP")"
+data_before="$(snap "$REAL_DATA")"
+launcher_before="$(snap "$REAL_LAUNCHER")"
+cmd_before="$(snap "$REAL_CMD")"
 
 out="$SBX/out.txt"
 RS3_APP_SUPPORT="$APPSUP" RS3_DATA_DIR="$DATA" RS3_APPS_DIR="$APPS" \
@@ -34,9 +42,11 @@ done
 [ ! -d "$APPSUP/prefix" ] && ok "no prefix/ created in dry-run" || bad "prefix/ created in dry-run"
 [ ! -e "$DATA" ]          && ok "no data dir created in dry-run" || bad "data dir created in dry-run"
 
-# Real install location must be untouched
-real_after="$( [ -e "$REAL_APPSUP" ] && stat -f %m "$REAL_APPSUP" 2>/dev/null || echo none )"
-[ "$real_before" = "$real_after" ] && ok "real Application Support untouched" || bad "real Application Support changed!"
+# Real install/data/launcher locations must all be untouched (env overrides were honored).
+[ "$real_before"     = "$(snap "$REAL_APPSUP")" ]   && ok "real Application Support untouched" || bad "real Application Support changed!"
+[ "$data_before"     = "$(snap "$REAL_DATA")" ]     && ok "real ~/Documents/AIM_SPORT untouched" || bad "real data dir changed!"
+[ "$launcher_before" = "$(snap "$REAL_LAUNCHER")" ] && ok "real ~/Applications launcher untouched" || bad "real launcher changed!"
+[ "$cmd_before"      = "$(snap "$REAL_CMD")" ]      && ok "real ~/Applications .command untouched" || bad "real .command changed!"
 
 # No curl/network: dry-run should not have produced any *.partial files anywhere in sandbox
 [ -z "$(find "$SBX" -name '*.partial' 2>/dev/null)" ] && ok "no downloads attempted" || bad "found *.partial (network ran)"
