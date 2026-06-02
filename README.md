@@ -49,10 +49,11 @@ cleanly removing everything later.
   local folder instead — iCloud's "Optimize Storage" can otherwise move your database off the
   Mac and break it. Pick the safe option if unsure.
 
-**To uninstall:** open **Uninstall RaceStudio 3** in `/Applications/AiM` — it stops RaceStudio 3
-and removes everything in `/Applications/AiM` (the app, the engine, and the helpers); your data in
-`~/Documents/AIM_SPORT` is kept unless you choose to remove it. (Manual route, same result: delete
-the `/Applications/AiM` folder and `~/Library/Application Support/RaceStudio3`.)
+**To uninstall:** open **Uninstall RaceStudio 3** in `/Applications/AiM` — it stops RaceStudio 3,
+removes the apps in `/Applications/AiM`, and removes the engine in
+`~/Library/Application Support/RaceStudio3`; your data in `~/Documents/AIM_SPORT` is kept unless you
+choose to remove it. (Manual route, same result: delete the `/Applications/AiM` folder and the
+`~/Library/Application Support/RaceStudio3` engine folder.)
 
 > **Don't see a release yet?** The notarized DMG is produced from this repo by
 > `installer/build/build-apps.sh` (needs an Apple Developer ID). Until a release is posted you

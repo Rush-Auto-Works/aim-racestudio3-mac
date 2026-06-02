@@ -182,13 +182,17 @@ import_merge() {
 # every .xrk found (recursively, preserving relative paths) into DATA_DIR/data/<dir-name>/, never
 # overwriting. Errors if the folder has no .xrk files.
 import_xrk_dir() {
-  local in="${1%/}" dest n=0 f rel
+  local in="${1%/}" dest n=0 f rel rc=0
   dest="$DATA_DIR/data/$(basename "$in")"
   if ! _dir_has_xrk "$in"; then ui_error "no .xrk files found under: $in"; return 1; fi
   while IFS= read -r f; do
     rel="${f#"$in"/}"
-    mkdir -p "$dest/$(dirname "$rel")"
-    if [ ! -e "$dest/$rel" ]; then ditto "$f" "$dest/$rel" && n=$((n+1)); fi
+    mkdir -p "$dest/$(dirname "$rel")" || { ui_error "import failed creating $(dirname "$rel")"; rc=1; break; }
+    if [ ! -e "$dest/$rel" ]; then
+      ditto "$f" "$dest/$rel" || { ui_error "import failed copying $rel"; rc=1; break; }
+      n=$((n+1))
+    fi
   done < <(find "$in" -type f -iname '*.xrk')
+  [ "$rc" -eq 0 ] || return 1
   ui_say "Imported $n .xrk session file(s) into $dest (nothing overwritten)."
 }
