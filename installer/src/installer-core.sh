@@ -317,11 +317,10 @@ export WINEPREFIX="\$ROOT/prefix" WINEARCH=win64 WINEDEBUG=-all
 export WINEDLLOVERRIDES="mscoree=d;mshtml=d"
 export XDG_CACHE_HOME="\$ROOT/cache" XDG_CONFIG_HOME="\$ROOT/xdg-config" XDG_DATA_HOME="\$ROOT/xdg-data"
 mkdir -p "\$ROOT/logs" "\$ROOT/bin"
-# Launch Wine through a symlink named "RaceStudio 3" so the macOS menu-bar app name is
-# "RaceStudio 3" instead of "Wine" — winemac.drv names the app after the loader's argv[0].
-WNAME="\$ROOT/bin/RaceStudio 3"
-ln -sf "\$WB" "\$WNAME"
-nohup arch -x86_64 "\$WNAME" '$RS3_WIN_EXE' >> "\$ROOT/logs/run.log" 2>&1 &
+# The macOS app-menu name ("RaceStudio 3" vs "Wine") comes from the CFBundleName in each Wine
+# unix-loader's embedded __info_plist, which build-apps.sh patches at build time
+# (patch-wine-appname.py) — NOT from argv[0], which winemac.drv ignores. So just run Wine directly.
+nohup arch -x86_64 "\$WB" '$RS3_WIN_EXE' >> "\$ROOT/logs/run.log" 2>&1 &
 disown
 LAUNCH
   chmod +x "$f"
@@ -429,7 +428,8 @@ do_uninstall() {
     "$INSTALL_ROOT/bin/uninstall.sh" "$@"
   else
     wineserver_kill 2>/dev/null || true
-    rm -rf "$INSTALL_ROOT" "$LAUNCHER_APP" "$APPS_DIR/RaceStudio 3.command" 2>/dev/null || true
+    rm -rf "$INSTALL_ROOT" "$LAUNCHER_APP" "$IMPORT_APP" "$UNINSTALL_APP" "$APPS_DIR/RaceStudio 3.command" 2>/dev/null || true
+    rmdir "$APPS_DIR" 2>/dev/null || true
     ui_say "Removed RaceStudio 3 (data in $DATA_DIR kept)."
   fi
 }
@@ -456,7 +456,7 @@ case "$ACTION" in
   import)            do_import ;;
   uninstall)         do_uninstall "${args[@]:1}" ;;
   set-config)        ui_persist "${args[1]:?key}" "${args[2]:-}" ;;
-  is-installed)      if ledger_verify installed; then echo RS3_INSTALLED; else echo RS3_ABSENT; fi ;;
+  is-installed)      if ledger_verify installed && [ -x "$INSTALL_ROOT/bin/launch.sh" ]; then echo RS3_INSTALLED; else echo RS3_ABSENT; fi ;;
   help)              usage ;;
   *) die "unknown action: $ACTION" ;;
 esac

@@ -6,6 +6,8 @@ import sys
 from PIL import Image, ImageDraw
 
 S = 1024
+if len(sys.argv) != 3:
+    raise SystemExit(f"Usage: {sys.argv[0]} <rs3-logo.png> <out.png>")
 logo_path, out_path = sys.argv[1], sys.argv[2]
 
 img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
@@ -14,7 +16,12 @@ d = ImageDraw.Draw(img)
 d.rounded_rectangle([24, 24, S - 24, S - 24], radius=200, fill=(255, 255, 255, 255))
 d.rounded_rectangle([24, 24, S - 24, S - 24], radius=200, outline=(214, 218, 224, 255), width=6)
 
-logo = Image.open(logo_path).convert("RGBA")
+try:
+    logo = Image.open(logo_path).convert("RGBA")
+except (OSError, ValueError) as exc:
+    raise SystemExit(f"failed to load logo '{logo_path}': {exc}")
+if logo.width == 0 or logo.height == 0:
+    raise SystemExit(f"logo '{logo_path}' has zero dimensions: {logo.width}x{logo.height}")
 bbox = logo.getbbox()                      # trim transparent margins so it sits centered + sized right
 if bbox:
     logo = logo.crop(bbox)

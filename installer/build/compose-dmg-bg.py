@@ -34,18 +34,21 @@ def load_font(size, bold=False):
 
 
 def main():
+    if len(sys.argv) != 3:
+        raise SystemExit(f"Usage: {sys.argv[0]} <black-logo.png> <out.png>")
     logo_path, out_path = sys.argv[1], sys.argv[2]
     img = Image.new("RGBA", (W, H), WHITE)
     d = ImageDraw.Draw(img)
 
-    # black logo, ~240px wide, centered near the top
+    # black logo, ~240px wide, centered near the top. A missing/unreadable logo is a hard
+    # failure — silently shipping fallback text would let a broken branded DMG reach release.
     try:
         logo = Image.open(logo_path).convert("RGBA")
-        scale = 240 / logo.width
-        logo = logo.resize((240, max(1, int(logo.height * scale))), Image.LANCZOS)
-        img.paste(logo, ((W - logo.width) // 2, 48), logo)
-    except Exception:
-        d.text((W // 2, 60), "RUSH AUTO WORKS", fill=BLACK, anchor="mm", font=load_font(30, True))
+    except (OSError, ValueError) as exc:
+        raise SystemExit(f"failed to load DMG logo '{logo_path}': {exc}")
+    scale = 240 / logo.width
+    logo = logo.resize((240, max(1, int(logo.height * scale))), Image.LANCZOS)
+    img.paste(logo, ((W - logo.width) // 2, 48), logo)
 
     # orange arrow between the two icon slots
     y = LEFT_SLOT[1]

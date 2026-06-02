@@ -97,11 +97,11 @@ PY="$PYVENV/bin/python"
 # Rush square logo as a fallback so the build still works without it.
 ICON_LOGO="$ASSETS/rs3-logo.png"; [ -f "$ICON_LOGO" ] || ICON_LOGO="$ASSETS/logo-square.png"
 ICON_PNG="$DIST/icon-src.png"
-"$PY" "$HERE/compose-icon.py" "$ICON_LOGO" "$ICON_PNG"
+"$PY" "$HERE/compose-icon.py" "$ICON_LOGO" "$ICON_PNG" || { echo "compose-icon.py failed"; exit 1; }
 ICONSET="$DIST/rs3.iconset"; rm -rf "$ICONSET"; mkdir -p "$ICONSET"   # must NOT be hidden (iconutil rejects dot-dirs)
 for s in 16 32 128 256 512; do
-  sips -z "$s" "$s"           "$ICON_PNG" --out "$ICONSET/icon_${s}x${s}.png"      >/dev/null
-  sips -z $((s*2)) $((s*2))   "$ICON_PNG" --out "$ICONSET/icon_${s}x${s}@2x.png"   >/dev/null
+  sips -z "$s" "$s"           "$ICON_PNG" --out "$ICONSET/icon_${s}x${s}.png"      >/dev/null || { echo "sips resize ${s} failed"; exit 1; }
+  sips -z $((s*2)) $((s*2))   "$ICON_PNG" --out "$ICONSET/icon_${s}x${s}@2x.png"   >/dev/null || { echo "sips resize ${s}@2x failed"; exit 1; }
 done
 iconutil -c icns "$ICONSET" -o "$DIST/rs3.icns" || { echo "iconutil failed"; exit 1; }
 # osacompile made a DROPLET (because of `on open`), so it uses droplet.icns — overwrite BOTH.
@@ -201,17 +201,19 @@ notarize_staple() { # <path>
     xcrun stapler staple "$t" && say "stapled $(basename "$t")"
   else echo "notarytool failed for $t"; [ "${t##*.}" = "app" ] && rm -f "$submitpath"; return 1; fi
 }
-notarize_staple "$APP" || true
+# rc 2 = no notarytool credentials configured (fine — signed-only build); any other nonzero is
+# a real upload/staple failure that must fail the build (this is the release artifact path).
+notarize_staple "$APP" || { rc=$?; [ "$rc" -eq 2 ] || { echo "app notarization failed (rc=$rc)"; exit "$rc"; }; }
 
 # ---- 6. branded drag-to-Applications DMG ----------------------------------------------------
 if [ "${NO_DMG:-0}" = 1 ]; then say "NO_DMG=1 — skipping DMG."; exit 0; fi
 say "Composing DMG background"
 BG="$DIST/.bg.png"
-"$PY" "$HERE/compose-dmg-bg.py" "$ASSETS/logo-wide-black.png" "$BG"
+"$PY" "$HERE/compose-dmg-bg.py" "$ASSETS/logo-wide-black.png" "$BG" || { echo "compose-dmg-bg.py failed"; exit 1; }
 
 say "Staging DMG contents"
 STAGE="$DIST/.dmgstage"; rm -rf "$STAGE"; mkdir -p "$STAGE/.background"
-ditto "$APP" "$STAGE/RaceStudio 3.app"
+ditto "$APP" "$STAGE/RaceStudio 3.app" || { echo "staging ditto failed"; exit 1; }
 ln -s /Applications "$STAGE/Applications"
 cp "$BG" "$STAGE/.background/bg.png"
 
@@ -262,7 +264,7 @@ rm -f "$RW" "$BG"; rm -rf "$STAGE"
 
 # sign + (optionally) notarize the DMG itself so it's stapled for offline Gatekeeper
 codesign --force --sign "$IDENTITY" $TS "$DMG" 2>/dev/null && say "DMG signed"
-notarize_staple "$DMG" || true
+notarize_staple "$DMG" || { rc=$?; [ "$rc" -eq 2 ] || { echo "DMG notarization failed (rc=$rc)"; exit "$rc"; }; }
 
 say "Built: $DMG"
 if [ -z "$NOTARY_ARGS" ]; then cat <<EOF
