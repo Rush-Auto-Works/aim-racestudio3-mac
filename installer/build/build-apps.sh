@@ -1,170 +1,171 @@
 #!/bin/bash
-# build-apps.sh — compile the AppleScript front-ends into .app bundles, embed the tested engine,
-# codesign with Developer ID (hardened runtime), and notarize+staple if credentials are present.
+# build-apps.sh — build the single "RaceStudio 3.app" (install-on-first-run + launcher + import
+# droplet), give it a Rush-branded icon, codesign (hardened runtime), notarize+staple if creds
+# are present, then wrap it in a drag-to-Applications DMG with a Rush logo + arrow background.
 #
-# Output: installer/dist/
-#   Install RaceStudio 3.app    (the distributable; embeds core + the signed Launcher/Uninstaller)
-#   Import RaceStudio 3 Data.app (drag-and-drop migration droplet; embeds core)
-#   RaceStudio 3.app            (launcher — also embedded inside the installer)
-#   Uninstall RaceStudio 3.app  (also embedded inside the installer)
-#   Install RaceStudio 3.zip    (zipped installer, for distribution / notarization)
+# Output (installer/dist/):
+#   RaceStudio 3.app      the app (drag to /Applications)
+#   RaceStudio 3.dmg      the branded, drag-to-Applications disk image (what you distribute)
 #
-# Codesigning is unattended (uses the Developer ID identity in your keychain). Notarization needs
-# an app-specific password; if no notarytool credential is found, the script codesigns and prints
-# the exact commands to finish notarization yourself.
+# Codesigning is unattended once the keychain is authorized (first codesign pops a one-time
+# "use this key" dialog — click Always Allow, or pre-authorize with security set-key-partition-list).
+# Notarization needs an app-specific password; without it the script signs + builds the DMG and
+# prints the exact notarytool commands.
 #
 # Usage:
-#   bash installer/build/build-apps.sh                 # codesign; notarize if creds available
-#   NOTARY_PROFILE=rush-notary bash …/build-apps.sh    # use a stored `notarytool` keychain profile
-#   SKIP_SIGN=1 bash …/build-apps.sh                   # just compile (for quick GUI iteration)
+#   bash installer/build/build-apps.sh                  # sign + DMG; notarize if creds
+#   NOTARY_PROFILE=rush-notary bash …/build-apps.sh     # also notarize + staple (app and DMG)
+#   SKIP_SIGN=1 bash …/build-apps.sh                    # compile only (no sign, no DMG)
+#   NO_TIMESTAMP=1 …                                    # local sign without the TSA (NOT notarizable)
+#   NO_DMG=1 …                                          # skip the DMG step
 
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC="$HERE/../src"
 DIST="$HERE/../dist"
+ASSETS="$HERE/assets"
 
 IDENTITY="${CODESIGN_IDENTITY:-Developer ID Application: Samuel Reed (HYBSCYDCMB)}"
 TEAMID="HYBSCYDCMB"
-BUNDLE_BASE="com.rushautoworks.racestudio3"
+BUNDLE_ID="com.rushautoworks.racestudio3"
 MIN_OS="12.0"
 VERSION="1.0.0"
 
-INSTALL_APP="$DIST/Install RaceStudio 3.app"
-LAUNCH_APP="$DIST/RaceStudio 3.app"
-UNINST_APP="$DIST/Uninstall RaceStudio 3.app"
-IMPORT_APP="$DIST/Import RaceStudio 3 Data.app"
+APP="$DIST/RaceStudio 3.app"
+VOL="RaceStudio 3"
+DMG="$DIST/RaceStudio 3.dmg"
 
 say() { printf '\033[1m==> %s\033[0m\n' "$*"; }
 
-# ---- 0. clean + compile --------------------------------------------------------------------
-say "Compiling applets into $DIST"
+# ---- 0. compile -----------------------------------------------------------------------------
+say "Compiling RaceStudio3.applescript -> $APP"
 rm -rf "$DIST"; mkdir -p "$DIST"
-osacompile -o "$INSTALL_APP" "$SRC/Installer.applescript"   || { echo "osacompile Installer failed"; exit 1; }
-osacompile -o "$LAUNCH_APP"  "$SRC/Launcher.applescript"    || { echo "osacompile Launcher failed"; exit 1; }
-osacompile -o "$UNINST_APP"  "$SRC/Uninstaller.applescript" || { echo "osacompile Uninstaller failed"; exit 1; }
-osacompile -o "$IMPORT_APP"  "$SRC/Import.applescript"      || { echo "osacompile Import failed"; exit 1; }
+osacompile -o "$APP" "$SRC/RaceStudio3.applescript" || { echo "osacompile failed"; exit 1; }
 
-# ---- 1. embed the tested engine into the apps that run it ----------------------------------
-embed_core() { # <app>
-  local res="$1/Contents/Resources"
-  mkdir -p "$res/lib"
-  ditto "$SRC/installer-core.sh" "$res/installer-core.sh"
-  ditto "$SRC/pins.env"          "$res/pins.env"
-  ditto "$SRC/lib"               "$res/lib"
-  chmod +x "$res/installer-core.sh"
-}
-say "Embedding engine into Installer + Import"
-embed_core "$INSTALL_APP"
-embed_core "$IMPORT_APP"
+# ---- 1. embed the tested engine -------------------------------------------------------------
+say "Embedding engine"
+RES="$APP/Contents/Resources"
+mkdir -p "$RES/lib"
+ditto "$SRC/installer-core.sh" "$RES/installer-core.sh"
+ditto "$SRC/pins.env"          "$RES/pins.env"
+ditto "$SRC/lib"               "$RES/lib"
+chmod +x "$RES/installer-core.sh"
 
-# ---- 2. set bundle metadata ----------------------------------------------------------------
-plist() { # <app> <bundle-id-suffix> <name>
-  local pl="$1/Contents/Info.plist"
-  /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $BUNDLE_BASE.$2" "$pl" 2>/dev/null \
-    || /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string $BUNDLE_BASE.$2" "$pl"
-  /usr/libexec/PlistBuddy -c "Set :CFBundleName $3" "$pl" 2>/dev/null \
-    || /usr/libexec/PlistBuddy -c "Add :CFBundleName string $3" "$pl"
-  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$pl" 2>/dev/null \
-    || /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $VERSION" "$pl"
-  /usr/libexec/PlistBuddy -c "Set :LSMinimumSystemVersion $MIN_OS" "$pl" 2>/dev/null \
-    || /usr/libexec/PlistBuddy -c "Add :LSMinimumSystemVersion string $MIN_OS" "$pl"
-}
-plist "$INSTALL_APP" installer  "Install RaceStudio 3"
-plist "$LAUNCH_APP"  launcher   "RaceStudio 3"
-plist "$UNINST_APP"  uninstaller "Uninstall RaceStudio 3"
-plist "$IMPORT_APP"  import     "Import RaceStudio 3 Data"
+# ---- 2. icon (dark rounded square + Rush logo) ----------------------------------------------
+say "Building app icon"
+PYVENV="${PYVENV:-/tmp/rs3-build-venv}"
+if [ ! -x "$PYVENV/bin/python" ]; then python3 -m venv "$PYVENV" && "$PYVENV/bin/python" -m pip install -q Pillow; fi
+PY="$PYVENV/bin/python"
+ICON_PNG="$DIST/icon-src.png"
+"$PY" "$HERE/compose-icon.py" "$ASSETS/logo-square.png" "$ICON_PNG"
+ICONSET="$DIST/rs3.iconset"; rm -rf "$ICONSET"; mkdir -p "$ICONSET"   # must NOT be hidden (iconutil rejects dot-dirs)
+for s in 16 32 128 256 512; do
+  sips -z "$s" "$s"           "$ICON_PNG" --out "$ICONSET/icon_${s}x${s}.png"      >/dev/null
+  sips -z $((s*2)) $((s*2))   "$ICON_PNG" --out "$ICONSET/icon_${s}x${s}@2x.png"   >/dev/null
+done
+iconutil -c icns "$ICONSET" -o "$RES/applet.icns" || { echo "iconutil failed"; exit 1; }
+rm -rf "$ICONSET" "$ICON_PNG"
 
-if [ "${SKIP_SIGN:-0}" = 1 ]; then say "SKIP_SIGN=1 — compiled only, not signed."; exit 0; fi
+# ---- 3. Info.plist --------------------------------------------------------------------------
+PL="$APP/Contents/Info.plist"
+pset() { /usr/libexec/PlistBuddy -c "Set :$1 $2" "$PL" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :$1 $3 $2" "$PL"; }
+pset CFBundleIdentifier "$BUNDLE_ID" string
+pset CFBundleName "RaceStudio 3" string
+pset CFBundleShortVersionString "$VERSION" string
+pset LSMinimumSystemVersion "$MIN_OS" string
+pset CFBundleIconFile "applet" string
 
-# ---- 3. codesign (hardened runtime). Sign leaves first, then embed into the Installer, then
-#         sign the Installer WITHOUT --deep so the nested signatures/staples stay intact. -------
-# --timestamp is REQUIRED for notarization but contacts Apple's TSA (can be slow/blocked on some
-# networks). NO_TIMESTAMP=1 signs without it for fast LOCAL verification only — a no-timestamp
-# build CANNOT be notarized; the real release build must run with the timestamp (default).
-TS_FLAG="--timestamp"; [ "${NO_TIMESTAMP:-0}" = 1 ] && TS_FLAG=""
-sign() { # <app>
-  # shellcheck disable=SC2086
-  codesign --force --options runtime $TS_FLAG --sign "$IDENTITY" "$1" \
-    || { echo "codesign failed for $1"; exit 1; }
-}
-# NOTE (one-time): the FIRST codesign with your Developer ID key pops a keychain dialog
-# ("codesign wants to use a key…") — click "Always Allow". To pre-authorize non-interactively
-# (e.g. for CI), run once:
-#   security unlock-keychain ~/Library/Keychains/login.keychain-db
-#   security set-key-partition-list -S apple-tool:,apple:,codesign: -s \
-#       -k "<login password>" ~/Library/Keychains/login.keychain-db
-# Until authorized, codesign will BLOCK waiting for that dialog.
+if [ "${SKIP_SIGN:-0}" = 1 ]; then say "SKIP_SIGN=1 — compiled only."; exit 0; fi
+
+# ---- 4. codesign ----------------------------------------------------------------------------
+# NOTE (one-time): the first codesign with your Developer ID key pops a keychain dialog — click
+# "Always Allow". Headless pre-auth: security unlock-keychain + set-key-partition-list
+#   -S apple-tool:,apple:,codesign: -s -k "<pw>" ~/Library/Keychains/login.keychain-db
 have_identity() { security find-identity -v -p codesigning 2>/dev/null | grep -q "$TEAMID"; }
-if ! have_identity; then
-  say "No Developer ID identity ($TEAMID) in keychain — skipping signing. Apps are compiled in $DIST."
-  exit 0
-fi
+if ! have_identity; then say "No Developer ID ($TEAMID) in keychain — compiled only in $DIST."; exit 0; fi
+TS="--timestamp"; [ "${NO_TIMESTAMP:-0}" = 1 ] && TS=""
+say "Codesigning (hardened runtime)"
+# shellcheck disable=SC2086
+codesign --force --options runtime $TS --sign "$IDENTITY" "$APP" || { echo "codesign failed"; exit 1; }
+codesign --verify --deep --strict "$APP" && say "signature verifies"
 
-say "Codesigning leaves (Launcher, Uninstaller, Import)"
-sign "$LAUNCH_APP"; sign "$UNINST_APP"; sign "$IMPORT_APP"
-
-# ---- 4. notarize helper (only if creds available) ------------------------------------------
+# ---- 5. notarize + staple (if creds) --------------------------------------------------------
 NOTARY_ARGS=""
-if [ -n "${NOTARY_PROFILE:-}" ]; then
-  NOTARY_ARGS="--keychain-profile $NOTARY_PROFILE"
+if [ -n "${NOTARY_PROFILE:-}" ]; then NOTARY_ARGS="--keychain-profile $NOTARY_PROFILE"
 elif [ -n "${NOTARY_APPLE_ID:-}" ] && [ -n "${NOTARY_PASSWORD:-}" ]; then
-  NOTARY_ARGS="--apple-id $NOTARY_APPLE_ID --password $NOTARY_PASSWORD --team-id $TEAMID"
-fi
-notarize_staple() { # <app>
+  NOTARY_ARGS="--apple-id $NOTARY_APPLE_ID --password $NOTARY_PASSWORD --team-id $TEAMID"; fi
+notarize_staple() { # <path>
   [ -n "$NOTARY_ARGS" ] || return 2
-  local app="$1" zip="$1.notarize.zip"
-  say "Notarizing $(basename "$app") (this waits for Apple)…"
-  ditto -c -k --keepParent "$app" "$zip"
+  local t="$1" zip="$1.notarize.zip"
+  say "Notarizing $(basename "$t") (waits for Apple)…"
+  if [ "${t##*.}" = "app" ]; then ditto -c -k --keepParent "$t" "$zip"; else cp "$t" "$zip"; fi
   # shellcheck disable=SC2086
   if xcrun notarytool submit "$zip" $NOTARY_ARGS --wait; then
-    xcrun stapler staple "$app" && say "stapled $(basename "$app")"
-  else
-    echo "notarytool failed for $app"; rm -f "$zip"; return 1
-  fi
-  rm -f "$zip"
+    [ "${t##*.}" = "app" ] && rm -f "$zip"
+    xcrun stapler staple "$t" && say "stapled $(basename "$t")"
+  else echo "notarytool failed for $t"; rm -f "$zip"; return 1; fi
 }
+notarize_staple "$APP" || true
 
-# Staple the leaves before embedding so the copied-out launcher/uninstaller/import are independently valid.
-LEAF_OK=1
-for a in "$LAUNCH_APP" "$UNINST_APP" "$IMPORT_APP"; do notarize_staple "$a" || LEAF_OK=0; done
-if [ "$LEAF_OK" != 1 ] && [ -n "$NOTARY_ARGS" ]; then
-  say "WARNING: a leaf app failed to notarize/staple — the launcher/uninstaller copied into ~/Applications may show a Gatekeeper prompt. Re-run the build to retry."
-fi
+# ---- 6. branded drag-to-Applications DMG ----------------------------------------------------
+if [ "${NO_DMG:-0}" = 1 ]; then say "NO_DMG=1 — skipping DMG."; exit 0; fi
+say "Composing DMG background"
+BG="$DIST/.bg.png"
+"$PY" "$HERE/compose-dmg-bg.py" "$ASSETS/logo-wide.png" "$BG"
 
-# ---- 5. embed the (signed, ideally stapled) leaves into the Installer ----------------------
-say "Embedding Launcher + Uninstaller + Import into the Installer"
-APPSDIR="$INSTALL_APP/Contents/Resources/apps"
-mkdir -p "$APPSDIR"
-ditto "$LAUNCH_APP" "$APPSDIR/RaceStudio 3.app"
-ditto "$UNINST_APP" "$APPSDIR/Uninstall RaceStudio 3.app"
-ditto "$IMPORT_APP" "$APPSDIR/Import RaceStudio 3 Data.app"
+say "Staging DMG contents"
+STAGE="$DIST/.dmgstage"; rm -rf "$STAGE"; mkdir -p "$STAGE/.background"
+ditto "$APP" "$STAGE/RaceStudio 3.app"
+ln -s /Applications "$STAGE/Applications"
+cp "$BG" "$STAGE/.background/bg.png"
 
-# Sign the Installer LAST, no --deep (seals the nested apps by their existing signatures).
-say "Codesigning the Installer (sealing nested apps)"
-sign "$INSTALL_APP"
+RW="$DIST/.rw.dmg"; rm -f "$RW" "$DMG"
+hdiutil create -srcfolder "$STAGE" -volname "$VOL" -fs HFS+ -format UDRW -ov "$RW" >/dev/null || { echo "hdiutil create failed"; exit 1; }
+DEV="$(hdiutil attach -readwrite -noverify -noautoopen "$RW" | grep -E '^/dev/' | head -1 | awk '{print $1}')"
+MOUNT="/Volumes/$VOL"
+sleep 1
 
-# ---- 6. notarize the distributables --------------------------------------------------------
-if [ -n "$NOTARY_ARGS" ]; then
-  notarize_staple "$INSTALL_APP"
-  say "Done. Notarized + stapled apps are in $DIST."
-else
-  cat <<EOF
+# Lay out the Finder window. NOTE: this scripts Finder and may pop a one-time macOS Automation
+# permission prompt ("…wants to control Finder") — approve it. If it fails, the DMG is still
+# functional, just with default icon positions.
+osascript <<OSA || say "Finder layout skipped (automation not permitted) — DMG still works."
+tell application "Finder"
+  tell disk "$VOL"
+    open
+    set current view of container window to icon view
+    set toolbar visible of container window to false
+    set statusbar visible of container window to false
+    set the bounds of container window to {200, 120, 840, 563}
+    set vo to the icon view options of container window
+    set arrangement of vo to not arranged
+    set icon size of vo to 128
+    set background picture of vo to file ".background:bg.png"
+    set position of item "RaceStudio 3.app" of container window to {160, 215}
+    set position of item "Applications" of container window to {480, 215}
+    update without registering applications
+    delay 1
+    close
+  end tell
+end tell
+OSA
+sync
+hdiutil detach "$DEV" >/dev/null 2>&1 || hdiutil detach "$DEV" -force >/dev/null 2>&1 || true
+say "Compressing DMG"
+hdiutil convert "$RW" -format UDZO -imagekey zlib-level=9 -o "$DMG" >/dev/null
+rm -f "$RW" "$BG"; rm -rf "$STAGE"
 
-$(say "Codesigned, NOT notarized — no notarytool credential found.")
-To finish (one-time): create an app-specific password at https://appleid.apple.com (Sign-In &
-Security → App-Specific Passwords), then store it and notarize:
+# sign + (optionally) notarize the DMG itself so it's stapled for offline Gatekeeper
+codesign --force --sign "$IDENTITY" $TS "$DMG" 2>/dev/null && say "DMG signed"
+notarize_staple "$DMG" || true
 
-  xcrun notarytool store-credentials rush-notary \\
-      --apple-id "<your Apple ID email>" --team-id $TEAMID --password "<app-specific-password>"
+say "Built: $DMG"
+if [ -z "$NOTARY_ARGS" ]; then cat <<EOF
 
+$(say "Signed but NOT notarized — no notarytool credential found.")
+Create an app-specific password at https://appleid.apple.com, then:
+  xcrun notarytool store-credentials rush-notary --apple-id "<you>" --team-id $TEAMID --password "<app-specific>"
   NOTARY_PROFILE=rush-notary bash installer/build/build-apps.sh
-
-That re-runs this script and notarizes + staples every .app. After stapling, the apps double-click
-with no Gatekeeper prompt.
+That notarizes + staples the app AND the DMG (no Gatekeeper prompt on download).
 EOF
 fi
-
-# zip the installer for distribution
-ditto -c -k --keepParent "$INSTALL_APP" "$DIST/Install RaceStudio 3.zip"
-say "Built: $DIST"
 ls -1 "$DIST"

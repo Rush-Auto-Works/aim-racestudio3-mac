@@ -11,10 +11,10 @@ license, no giant virtual machine.
 
 ## Two ways to install
 
-| | **Option A — Free installer** | **Option B — CrossOver** |
+| | **Option A — Free app** | **Option B — CrossOver** |
 |---|---|---|
 | Cost | **Free** | ~$74 (14-day free trial) |
-| Effort | Double-click one app | Install CrossOver, then RaceStudio 3 |
+| Effort | Drag to Applications, open once | Install CrossOver, then RaceStudio 3 |
 | Looks correct? | **Yes** (uses a modern engine) | Yes (keep it updated) |
 | Best for | Most people | Those who already own CrossOver |
 
@@ -23,41 +23,43 @@ to AiM devices over WiFi. **Option A is the easy, free path** — start there.
 
 ---
 
-## Option A — the free one-click installer (recommended)
+## Option A — the free app (recommended)
 
-No Windows, no Parallels, no CrossOver, nothing to buy.
+No Windows, no Parallels, no CrossOver, nothing to buy. It's a normal Mac app you drag to
+Applications; the first time you open it, it sets itself up.
 
-1. **Download `Install RaceStudio 3.app`** from this repo's
-   [**Releases**](https://github.com/Rush-Auto-Works/aim-racestudio3-mac/releases) page.
-2. **Double-click it.** A friendly window walks you through everything — it downloads the
-   bits it needs and sets up RaceStudio 3 for you. Takes about 10 minutes and needs an
-   internet connection. No Terminal, ever.
-3. When it finishes, click **Launch RaceStudio 3** (or open it later from the **`AiM`** folder in
-   your **`~/Applications`** — that's *Applications* in your Home folder, i.e. Finder →
-   **Go → Home → Applications → AiM**, not the main `/Applications`).
+1. **Download `RaceStudio 3.dmg`** from this repo's
+   [**Releases**](https://github.com/Rush-Auto-Works/aim-racestudio3-mac/releases) page and open it.
+2. **Drag `RaceStudio 3` onto the Applications folder** (the disk image shows an arrow — just
+   like installing any Mac app).
+3. **Open RaceStudio 3** from Applications. The **first launch** sets everything up — it
+   downloads the bits it needs and configures RaceStudio 3 for you (about 10 minutes, needs
+   internet, no Terminal ever). Every launch after that just opens the app.
 
-That's the whole thing. It puts your data in **`~/Documents/AIM_SPORT`** and groups three apps in
-**`~/Applications/AiM`**: **RaceStudio 3**, **Import RaceStudio 3 Data**, and **Uninstall
-RaceStudio 3**.
+That's it. Your data lives in **`~/Documents/AIM_SPORT`**; the engine lives quietly in
+`~/Library/Application Support/RaceStudio3`.
 
-**A couple of normal prompts you might see:**
+**A couple of normal prompts you might see on first launch:**
 - *"Wine wants to access Documents"* — click **Allow**. (It says *Wine*, the open-source
   engine doing the work, not RaceStudio 3.) This is how it reaches your data folder.
-- If your **Documents folder syncs to iCloud**, the installer offers to keep your telemetry
-  in a safe local folder instead — iCloud's "Optimize Storage" can otherwise move your
-  database off the Mac and break it. Pick the safe option if unsure.
+- If your **Documents folder syncs to iCloud**, it offers to keep your telemetry in a safe
+  local folder instead — iCloud's "Optimize Storage" can otherwise move your database off the
+  Mac and break it. Pick the safe option if unsure.
 
-> **Don't see a release yet?** The notarized app is produced from this repo by
+**To uninstall:** drag **RaceStudio 3** to the Trash. Your data in `~/Documents/AIM_SPORT` is
+kept; to reclaim the engine's disk space too, also delete
+`~/Library/Application Support/RaceStudio3`.
+
+> **Don't see a release yet?** The notarized DMG is produced from this repo by
 > `installer/build/build-apps.sh` (needs an Apple Developer ID). Until a release is posted you
 > can build it yourself, or use **Option B** below. Full design notes:
 > [docs/installer-design.md](docs/installer-design.md).
 
 ### Bringing data in is just as easy
 
-Drag your old **`AIM_SPORT`** folder (from another PC, a USB stick, a backup, or a Parallels
-shared folder) — or a `.zip` of it, or loose `.xrk` files — onto **`Import RaceStudio 3
-Data.app`**. It merges everything in and **never overwrites** what you already have. There's
-also a folder picker inside the installer. (More options in
+**Drag your old `AIM_SPORT` folder** (from another PC, a USB stick, a backup, or a Parallels
+shared folder) — or a `.zip` of it, or loose `.xrk` files — **straight onto the RaceStudio 3
+app**. It merges everything in and **never overwrites** what you already have. (More options in
 [Bring your sessions over](#bring-your-sessions-configs-and-profiles-over) below.)
 
 ---
