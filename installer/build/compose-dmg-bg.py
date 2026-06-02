@@ -9,7 +9,7 @@ The canvas + icon-slot coordinates here MUST match the Finder layout in build-ap
 import sys
 from PIL import Image, ImageDraw, ImageFont
 
-W, H = 640, 510
+W, H = 640, 520
 LEFT_SLOT = (160, 235)    # center of the app icon
 RIGHT_SLOT = (480, 235)   # center of the Applications alias
 WHITE = (255, 255, 255, 255)

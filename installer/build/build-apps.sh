@@ -80,6 +80,9 @@ pset CFBundleName "RaceStudio 3" string
 pset CFBundleShortVersionString "$VERSION" string
 pset LSMinimumSystemVersion "$MIN_OS" string
 pset CFBundleIconFile "applet" string
+# osacompile droplets set CFBundleIconName=droplet, which OVERRIDES CFBundleIconFile and forces the
+# generic system droplet icon. Remove it so our applet.icns (the RS3 icon) is used.
+/usr/libexec/PlistBuddy -c "Delete :CFBundleIconName" "$PL" 2>/dev/null || true
 
 if [ "${SKIP_SIGN:-0}" = 1 ]; then say "SKIP_SIGN=1 — compiled only."; exit 0; fi
 
@@ -146,7 +149,7 @@ tell application "Finder"
     set current view of container window to icon view
     set toolbar visible of container window to false
     set statusbar visible of container window to false
-    set the bounds of container window to {220, 140, 860, 696}
+    set the bounds of container window to {220, 140, 860, 706}
     set vo to the icon view options of container window
     set arrangement of vo to not arranged
     set icon size of vo to 128
