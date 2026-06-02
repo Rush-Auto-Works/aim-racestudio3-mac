@@ -59,7 +59,7 @@ def main():
     # caption, below the icon name labels (which sit ~y=310 under 128px icons)
     d.text((W // 2, 410), "Drag the  AiM  folder  into  Applications",
            fill=BLACK, anchor="mm", font=load_font(21, True))
-    d.text((W // 2, 444), "then open RaceStudio 3 from Applications ▸ AiM — the first launch sets everything up",
+    d.text((W // 2, 444), "then open RaceStudio 3 from Applications > AiM. The first launch sets everything up.",
            fill=GRAY, anchor="mm", font=load_font(13))
 
     img.convert("RGB").save(out_path, "PNG")
