@@ -15,32 +15,26 @@ property barScale : 1000
 on run
 	set coreScript to corePath()
 	if isInstalled(coreScript) then
-		showLauncher(coreScript)
+		openApp()
 	else
 		doFirstRunSetup(coreScript)
 	end if
 end run
 
--- A true menu bar can't work here (while RaceStudio 3 runs, Wine owns the menu bar), so the
--- options live in a small launcher dialog. Default = Open, so Return launches instantly.
-on showLauncher(coreScript)
-	set b to button returned of (display dialog "RaceStudio 3" & return & return & "Open the app, import data from another computer, or uninstall." buttons {"Uninstall…", "Import Data…", "Open RaceStudio 3"} default button "Open RaceStudio 3" with title "RaceStudio 3" with icon note)
-	if b is "Open RaceStudio 3" then
-		launchRS3()
-	else if b is "Import Data…" then
-		set f to choose folder with prompt "Choose your AIM_SPORT folder, a RaceStudio3 “user” folder, or a folder of .xrk files to import:"
-		if importOne(coreScript, POSIX path of f) then
-			display dialog "Import complete — merged into your data folder. Nothing existing was overwritten." buttons {"OK"} default button 1 with title "Import RaceStudio 3 Data" with icon note
-		end if
-	else if b is "Uninstall…" then
-		set u to button returned of (display dialog "To uninstall RaceStudio 3:" & return & return & "• Drag “RaceStudio 3” from your Applications folder to the Trash." & return & return & "Your telemetry in ~/Documents/AIM_SPORT is kept. To also remove the Windows environment, delete this folder:" & return & "~/Library/Application Support/RaceStudio3" buttons {"Reveal App in Finder", "OK"} default button "OK" with title "Uninstall RaceStudio 3" with icon caution)
-		if u is "Reveal App in Finder" then
-			try
-				do shell script "open -R " & quoted form of (POSIX path of (path to me))
-			end try
-		end if
-	end if
-end showLauncher
+-- Open the app: launch RaceStudio 3 directly AND the menu-bar helper (Import / Uninstall / Open),
+-- which stays in the menu bar while you use RS3 (Wine owns the main menu bar, so the helper lives
+-- in the status-bar area on the right).
+on openApp()
+	launchRS3()
+	launchHelper()
+end openApp
+
+on launchHelper()
+	set h to (POSIX path of (path to me)) & "Contents/Helpers/RaceStudio 3 Helper.app"
+	try
+		do shell script "open -g " & quoted form of h
+	end try
+end launchHelper
 
 -- Drag-and-drop import. If not set up yet, set up first, then import the dropped items.
 on open theItems
@@ -70,8 +64,8 @@ on doFirstRunSetup(coreScript)
 	end repeat
 	set progress completed steps to barScale
 
-	set b to button returned of (display dialog "RaceStudio 3 is ready! 🎉" & return & return & "• It's in your Applications folder for next time." & return & "• Connect AiM devices over Wi-Fi (USB isn't supported under Wine)." & return & "• If macOS asks “Wine wants to access Documents”, click Allow." buttons {"Done", "Open RaceStudio 3"} default button "Open RaceStudio 3" with title "All set" with icon note)
-	if b is "Open RaceStudio 3" then launchRS3()
+	set b to button returned of (display dialog "RaceStudio 3 is ready! 🎉" & return & return & "• It's in your Applications folder for next time." & return & "• A small “RS3” menu appears at the top-right for Import / Uninstall." & return & "• Connect AiM devices over Wi-Fi (USB isn't supported under Wine)." & return & "• If macOS asks “Wine wants to access Documents”, click Allow." buttons {"Done", "Open RaceStudio 3"} default button "Open RaceStudio 3" with title "All set" with icon note)
+	if b is "Open RaceStudio 3" then openApp()
 end doFirstRunSetup
 
 -- Launch RS3 by exec'ing the Wine bundled INSIDE this app, so macOS resolves Wine's main bundle

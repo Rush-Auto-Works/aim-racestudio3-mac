@@ -109,6 +109,27 @@ pset CFBundleIconFile "applet" string
 # generic system droplet icon. Remove it so our applet.icns (the RS3 icon) is used.
 /usr/libexec/PlistBuddy -c "Delete :CFBundleIconName" "$PL" 2>/dev/null || true
 
+# ---- 3b. menu-bar helper (Swift agent) ------------------------------------------------------
+# A tiny status-bar app launched alongside RS3 (Import / Uninstall / Open), since Wine owns the
+# main menu bar while RaceStudio 3 runs. Lives inside the app; self-locates the parent bundle.
+say "Building menu-bar helper (swiftc)"
+HELPER="$APP/Contents/Helpers/RaceStudio 3 Helper.app"
+mkdir -p "$HELPER/Contents/MacOS"
+swiftc -O -framework Cocoa -o "$HELPER/Contents/MacOS/RS3Helper" "$SRC/RS3Helper.swift" || { echo "swiftc failed"; exit 1; }
+cat > "$HELPER/Contents/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+	<key>CFBundleExecutable</key><string>RS3Helper</string>
+	<key>CFBundleIdentifier</key><string>$BUNDLE_ID.helper</string>
+	<key>CFBundleName</key><string>RaceStudio 3 Helper</string>
+	<key>CFBundlePackageType</key><string>APPL</string>
+	<key>CFBundleShortVersionString</key><string>$VERSION</string>
+	<key>LSMinimumSystemVersion</key><string>$MIN_OS</string>
+	<key>LSUIElement</key><true/>
+</dict></plist>
+PLIST
+
 if [ "${SKIP_SIGN:-0}" = 1 ]; then say "SKIP_SIGN=1 — compiled only."; exit 0; fi
 
 # ---- 4. codesign ----------------------------------------------------------------------------
@@ -126,6 +147,8 @@ if [ "${HARDENED_RUNTIME:-0}" = 1 ]; then
   # Notarization-grade: hardened runtime needs EVERY Mach-O signed individually (the --deep
   # shortcut is rejected by notarytool). Sign all of Wine's binaries first, then the app bundle.
   TS="--timestamp"; [ "${NO_TIMESTAMP:-0}" = 1 ] && TS=""
+  say "Signing the menu-bar helper…"
+  codesign --force --options runtime $TS --sign "$IDENTITY" "$HELPER" || { echo "helper codesign failed"; exit 1; }
   say "Signing nested Wine binaries individually (notarization-grade — slow)…"
   while IFS= read -r f; do
     case "$(file -b "$f" 2>/dev/null)" in
