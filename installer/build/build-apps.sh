@@ -56,15 +56,21 @@ say "Building app icon"
 PYVENV="${PYVENV:-/tmp/rs3-build-venv}"
 if [ ! -x "$PYVENV/bin/python" ]; then python3 -m venv "$PYVENV" && "$PYVENV/bin/python" -m pip install -q Pillow; fi
 PY="$PYVENV/bin/python"
+# Icon source: the RaceStudio 3 wordmark (sourced from a local RS3 install, gitignored), else the
+# Rush square logo as a fallback so the build still works without it.
+ICON_LOGO="$ASSETS/rs3-logo.png"; [ -f "$ICON_LOGO" ] || ICON_LOGO="$ASSETS/logo-square.png"
 ICON_PNG="$DIST/icon-src.png"
-"$PY" "$HERE/compose-icon.py" "$ASSETS/logo-square.png" "$ICON_PNG"
+"$PY" "$HERE/compose-icon.py" "$ICON_LOGO" "$ICON_PNG"
 ICONSET="$DIST/rs3.iconset"; rm -rf "$ICONSET"; mkdir -p "$ICONSET"   # must NOT be hidden (iconutil rejects dot-dirs)
 for s in 16 32 128 256 512; do
   sips -z "$s" "$s"           "$ICON_PNG" --out "$ICONSET/icon_${s}x${s}.png"      >/dev/null
   sips -z $((s*2)) $((s*2))   "$ICON_PNG" --out "$ICONSET/icon_${s}x${s}@2x.png"   >/dev/null
 done
-iconutil -c icns "$ICONSET" -o "$RES/applet.icns" || { echo "iconutil failed"; exit 1; }
-rm -rf "$ICONSET" "$ICON_PNG"
+iconutil -c icns "$ICONSET" -o "$DIST/rs3.icns" || { echo "iconutil failed"; exit 1; }
+# osacompile made a DROPLET (because of `on open`), so it uses droplet.icns — overwrite BOTH.
+cp "$DIST/rs3.icns" "$RES/applet.icns"
+[ -f "$RES/droplet.icns" ] && cp "$DIST/rs3.icns" "$RES/droplet.icns"
+rm -rf "$ICONSET" "$ICON_PNG" "$DIST/rs3.icns"
 
 # ---- 3. Info.plist --------------------------------------------------------------------------
 PL="$APP/Contents/Info.plist"
@@ -140,23 +146,21 @@ tell application "Finder"
     set current view of container window to icon view
     set toolbar visible of container window to false
     set statusbar visible of container window to false
-    set sidebar width of container window to 0
-    set the bounds of container window to {220, 140, 860, 563}
+    set the bounds of container window to {220, 140, 860, 696}
     set vo to the icon view options of container window
     set arrangement of vo to not arranged
     set icon size of vo to 128
     set text size of vo to 12
     set background picture of vo to file ".background:bg.png"
-    set position of item "RaceStudio 3.app" of container window to {160, 190}
-    set position of item "Applications" of container window to {480, 190}
+    set position of item "RaceStudio 3.app" of container window to {160, 235}
+    set position of item "Applications" of container window to {480, 235}
     try
-      set position of item ".background" of container window to {999, 999}
+      set position of item ".background" of container window to {1100, 1100}
     end try
-    close
-    open
-    delay 1
     update without registering applications
     delay 2
+    close
+    delay 1
   end tell
 end tell
 OSA
