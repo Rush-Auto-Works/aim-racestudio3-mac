@@ -4,8 +4,9 @@
 --   • Later launches: just opens RaceStudio 3.
 --   • Drop an AIM_SPORT folder / .zip / .xrk onto the app to import data (never overwrites).
 -- The Wine engine + Windows prefix live in ~/Library/Application Support/RaceStudio3 (outside the
--- signed app, as required), your data in ~/Documents/AIM_SPORT. Uninstall: drag this app to the
--- Trash (and optionally delete that Application Support folder).
+-- signed app, as required), your data in ~/Documents/AIM_SPORT. Import / Uninstall are standalone
+-- apps placed in ~/Applications/AiM on first run (see Contents/Resources/apps, copied out by the
+-- make-launcher phase). Uninstall: run "Uninstall RaceStudio 3", then drag this app to the Trash.
 
 property phaseList : {"preflight", "acquire-installer", "download-wine", "make-prefix", "silent-install", "relocate-data", "make-launcher", "done"}
 property phaseLabel : {"Checking your Mac", "Downloading RaceStudio 3 (~345 MB — a few minutes)", "Preparing the engine", "Setting up the Windows environment", "Installing RaceStudio 3 (several minutes)", "Securing your data folder", "Finishing setup", "Almost done"}
@@ -21,20 +22,12 @@ on run
 	end if
 end run
 
--- Open the app: launch RaceStudio 3 directly AND the menu-bar helper (Import / Uninstall / Open),
--- which stays in the menu bar while you use RS3 (Wine owns the main menu bar, so the helper lives
--- in the status-bar area on the right).
+-- Open the app: launch RaceStudio 3. Import / Uninstall are standalone apps in ~/Applications/AiM
+-- (Wine owns the macOS menu bar while RS3 runs, and that menu can't host custom items, so the
+-- controls live as their own apps — reachable from Finder, Spotlight, and Launchpad).
 on openApp()
 	launchRS3()
-	launchHelper()
 end openApp
-
-on launchHelper()
-	set h to (POSIX path of (path to me)) & "Contents/Helpers/RaceStudio 3 Helper.app"
-	try
-		do shell script "open -g " & quoted form of h
-	end try
-end launchHelper
 
 -- Drag-and-drop import. If not set up yet, set up first, then import the dropped items.
 on open theItems
@@ -64,7 +57,7 @@ on doFirstRunSetup(coreScript)
 	end repeat
 	set progress completed steps to barScale
 
-	set b to button returned of (display dialog "RaceStudio 3 is ready! 🎉" & return & return & "• It's in your Applications folder for next time." & return & "• A small “RS3” menu appears at the top-right for Import / Uninstall." & return & "• Connect AiM devices over Wi-Fi (USB isn't supported under Wine)." & return & "• If macOS asks “Wine wants to access Documents”, click Allow." buttons {"Done", "Open RaceStudio 3"} default button "Open RaceStudio 3" with title "All set" with icon note)
+	set b to button returned of (display dialog "RaceStudio 3 is ready! 🎉" & return & return & "• It's in your Applications folder for next time." & return & "• “Import RaceStudio 3 Data” and “Uninstall RaceStudio 3” are in Applications ▸ AiM." & return & "• Connect AiM devices over Wi-Fi (USB isn't supported under Wine)." & return & "• If macOS asks “Wine wants to access Documents”, click Allow." buttons {"Done", "Open RaceStudio 3"} default button "Open RaceStudio 3" with title "All set" with icon note)
 	if b is "Open RaceStudio 3" then openApp()
 end doFirstRunSetup
 
@@ -88,6 +81,11 @@ end launchRS3
 on wineBin()
 	return (POSIX path of (path to me)) & "Contents/Resources/wine/bin/wine"
 end wineBin
+
+-- a standalone helper app bundled inside this app (copied out to ~/Applications/AiM on first run)
+on embeddedApp(name)
+	return (POSIX path of (path to me)) & "Contents/Resources/apps/" & name
+end embeddedApp
 
 on isInstalled(coreScript)
 	try
@@ -134,7 +132,11 @@ on runCoreAsync(coreScript, ph, tmo, stepIndex, total)
 	set base to do shell script "mktemp /tmp/rs3phase.XXXXXX"
 	set outF to base & ".out"
 	set rcF to base & ".rc"
-	set cmd to "( RS3_SINGLE_APP=1 RS3_WINE_BIN=" & quoted form of wineBin() & " UI_MODE=applet " & quoted form of coreScript & " " & ph & " >" & quoted form of outF & " 2>&1; echo $? >" & quoted form of rcF & " ) </dev/null >/dev/null 2>&1 &"
+	-- Tell make-launcher where the bundled Import/Uninstall apps are, so it copies them into
+	-- ~/Applications/AiM. (LAUNCHER_APP_SRC is intentionally unset — this single app IS the launcher.)
+	set srcEnv to "IMPORT_APP_SRC=" & quoted form of embeddedApp("Import RaceStudio 3 Data.app") & ¬
+		" UNINSTALL_APP_SRC=" & quoted form of embeddedApp("Uninstall RaceStudio 3.app") & " "
+	set cmd to "( " & srcEnv & "RS3_SINGLE_APP=1 RS3_WINE_BIN=" & quoted form of wineBin() & " UI_MODE=applet " & quoted form of coreScript & " " & ph & " >" & quoted form of outF & " 2>&1; echo $? >" & quoted form of rcF & " ) </dev/null >/dev/null 2>&1 &"
 	do shell script cmd
 
 	set baseUnits to ((stepIndex - 1) / total) * barScale
