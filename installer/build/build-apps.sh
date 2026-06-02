@@ -124,19 +124,20 @@ notarize_staple() { # <app>
   rm -f "$zip"
 }
 
-# Staple the leaves before embedding so the copied-out launcher/uninstaller are independently valid.
+# Staple the leaves before embedding so the copied-out launcher/uninstaller/import are independently valid.
 LEAF_OK=1
-for a in "$LAUNCH_APP" "$UNINST_APP"; do notarize_staple "$a" || LEAF_OK=0; done
+for a in "$LAUNCH_APP" "$UNINST_APP" "$IMPORT_APP"; do notarize_staple "$a" || LEAF_OK=0; done
 if [ "$LEAF_OK" != 1 ] && [ -n "$NOTARY_ARGS" ]; then
   say "WARNING: a leaf app failed to notarize/staple — the launcher/uninstaller copied into ~/Applications may show a Gatekeeper prompt. Re-run the build to retry."
 fi
 
 # ---- 5. embed the (signed, ideally stapled) leaves into the Installer ----------------------
-say "Embedding Launcher + Uninstaller into the Installer"
+say "Embedding Launcher + Uninstaller + Import into the Installer"
 APPSDIR="$INSTALL_APP/Contents/Resources/apps"
 mkdir -p "$APPSDIR"
 ditto "$LAUNCH_APP" "$APPSDIR/RaceStudio 3.app"
 ditto "$UNINST_APP" "$APPSDIR/Uninstall RaceStudio 3.app"
+ditto "$IMPORT_APP" "$APPSDIR/Import RaceStudio 3 Data.app"
 
 # Sign the Installer LAST, no --deep (seals the nested apps by their existing signatures).
 say "Codesigning the Installer (sealing nested apps)"
@@ -145,7 +146,6 @@ sign "$INSTALL_APP"
 # ---- 6. notarize the distributables --------------------------------------------------------
 if [ -n "$NOTARY_ARGS" ]; then
   notarize_staple "$INSTALL_APP"
-  notarize_staple "$IMPORT_APP"
   say "Done. Notarized + stapled apps are in $DIST."
 else
   cat <<EOF

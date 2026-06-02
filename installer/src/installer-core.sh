@@ -29,6 +29,7 @@ for m in ui net wine ledger data preflight; do . "$HERE/lib/$m.sh"; done
 [ -n "${RS3_APPS_DIR:-}" ] && APPS_DIR="$RS3_APPS_DIR"
 LAUNCHER_APP="$APPS_DIR/RaceStudio 3.app"
 UNINSTALL_APP="$APPS_DIR/Uninstall RaceStudio 3.app"
+IMPORT_APP="$APPS_DIR/Import RaceStudio 3 Data.app"
 INSTALL_ROOT="$APP_SUPPORT"
 WINE_ROOT="$INSTALL_ROOT/wine"
 PREFIX="$INSTALL_ROOT/prefix"
@@ -276,6 +277,9 @@ phase_make_launcher() {
   if [ -n "${UNINSTALL_APP_SRC:-}" ] && [ -d "$UNINSTALL_APP_SRC" ]; then
     rm -rf "$UNINSTALL_APP"; ditto "$UNINSTALL_APP_SRC" "$UNINSTALL_APP"
   fi
+  if [ -n "${IMPORT_APP_SRC:-}" ] && [ -d "$IMPORT_APP_SRC" ]; then
+    rm -rf "$IMPORT_APP"; ditto "$IMPORT_APP_SRC" "$IMPORT_APP"
+  fi
   # Standalone fallback (no applet): a .command that calls launch.sh.
   if [ -z "${LAUNCHER_APP_SRC:-}" ] && [ ! -d "$LAUNCHER_APP" ]; then
     local cmd="$APPS_DIR/RaceStudio 3.command"
@@ -321,16 +325,18 @@ write_uninstall_script() {
 ROOT="$INSTALL_ROOT"
 LAUNCH_APP="$LAUNCHER_APP"
 UNINST_APP="$UNINSTALL_APP"
+IMPORT_APP="$IMPORT_APP"
 APPS="$APPS_DIR"
 DATA="$DATA_DIR"
 REMOVE_DATA=0; [ "\${1:-}" = "--remove-data" ] && REMOVE_DATA=1
 # stop any Wine first
 WS="\$(find "\$ROOT/wine" -type f -name wineserver -path '*/bin/*' 2>/dev/null | head -1)"
 [ -n "\$WS" ] && WINEPREFIX="\$ROOT/prefix" "\$WS" -k 2>/dev/null || true
-rm -rf "\$ROOT" "\$LAUNCH_APP" "\$APPS/RaceStudio 3.command" 2>/dev/null || true
+rm -rf "\$ROOT" "\$LAUNCH_APP" "\$IMPORT_APP" "\$APPS/RaceStudio 3.command" 2>/dev/null || true
 [ "\$REMOVE_DATA" = 1 ] && rm -rf "\$DATA" 2>/dev/null || true
-# delete the uninstaller app last, detached (it can't delete itself mid-run)
-( sleep 2; rm -rf "\$UNINST_APP" ) >/dev/null 2>&1 &
+# delete the uninstaller app last, detached (it can't delete itself mid-run); then remove the
+# AiM folder if it's now empty.
+( sleep 2; rm -rf "\$UNINST_APP"; rmdir "\$APPS" 2>/dev/null ) >/dev/null 2>&1 &
 echo "Removed RaceStudio 3.\${REMOVE_DATA:+ (data removed)}"
 UNINST
   chmod +x "$f"
@@ -339,7 +345,7 @@ UNINST
 phase_done() {
   ui_progress 8 8 "Done."
   ui_say "RaceStudio 3 is installed."
-  ui_say "  • App:    $LAUNCHER_APP"
+  ui_say "  • Apps:   $APPS_DIR  (RaceStudio 3, Import, Uninstall)"
   ui_say "  • Engine: $INSTALL_ROOT"
   ui_say "  • Data:   $DATA_DIR"
   ui_say "Connect AiM devices over WiFi (USB isn't supported under Wine)."
