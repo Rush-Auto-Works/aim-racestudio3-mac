@@ -27,8 +27,9 @@ ok(){ P=$((P+1)); echo "  ok   $1"; }
 bad(){ F=$((F+1)); echo "  FAIL $1" >&2; }
 
 echo "e2e sandbox: $SBX"
-[ -f "$WINE_TARBALL" ] || { echo "missing $WINE_TARBALL — skipping e2e"; exit 0; }
-[ -f "$RS3_EXE" ]      || { echo "missing $RS3_EXE — skipping e2e"; exit 0; }
+# exit 77 = SKIP (distinct from a passing run) so "didn't run" never looks like success.
+[ -f "$WINE_TARBALL" ] || { echo "SKIP: missing $WINE_TARBALL"; exit 77; }
+[ -f "$RS3_EXE" ]      || { echo "SKIP: missing $RS3_EXE"; exit 77; }
 
 APPSUP="$SBX/app-support"
 DATA="$SBX/Documents/AIM_SPORT"
@@ -84,7 +85,7 @@ echo "==> no ~/.wine created by the run"
 
 echo "==> data-preservation on reinstall: drop a user file, reinstall engine, confirm data kept"
 printf 'my-lap\n' > "$DATA/keep.xrk"
-RS3_ASSUME_YES=1 core --reinstall >/dev/null 2>&1 || true
+if RS3_ASSUME_YES=1 core --reinstall >/dev/null 2>&1; then ok "--reinstall succeeded"; else bad "--reinstall failed"; fi
 [ -f "$DATA/keep.xrk" ] && ok "reinstall kept user data" || bad "reinstall LOST user data"
 
 echo "e2e-local: $P passed, $F failed   (sandbox: $SBX, KEEP=$KEEP)"

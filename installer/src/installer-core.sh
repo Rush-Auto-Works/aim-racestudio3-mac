@@ -326,7 +326,7 @@ WS="\$(find "\$ROOT/wine" -type f -name wineserver -path '*/bin/*' 2>/dev/null |
 rm -rf "\$ROOT" "\$LAUNCH_APP" "\$APPS/RaceStudio 3.command" 2>/dev/null || true
 [ "\$REMOVE_DATA" = 1 ] && rm -rf "\$DATA" 2>/dev/null || true
 # delete the uninstaller app last, detached (it can't delete itself mid-run)
-( /bin/sh -c 'sleep 2; rm -rf "\$0"' "\$UNINST_APP" >/dev/null 2>&1 & ) 2>/dev/null || true
+( sleep 2; rm -rf "\$UNINST_APP" ) >/dev/null 2>&1 &
 echo "Removed RaceStudio 3.\${REMOVE_DATA:+ (data removed)}"
 UNINST
   chmod +x "$f"
@@ -434,7 +434,7 @@ case "$ACTION" in
   repair)            do_repair ;;
   reinstall)         do_reinstall ;;
   import)            do_import ;;
-  uninstall)         do_uninstall ;;
+  uninstall)         do_uninstall "${args[@]:1}" ;;
   set-config)        ui_persist "${args[1]:?key}" "${args[2]:-}" ;;
   help)              usage ;;
   *) die "unknown action: $ACTION" ;;
