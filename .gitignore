@@ -1,6 +1,5 @@
 .DS_Store
 installer/dist/
 *.notarize.zip
-installer/build/assets/rs3-logo.png
 .serena/
 __pycache__/
