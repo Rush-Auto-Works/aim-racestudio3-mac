@@ -1,4 +1,4 @@
--- Uninstall RaceStudio 3 — a standalone app (installed into ~/Applications/AiM). Stops RaceStudio
+-- Uninstall RaceStudio 3 — a standalone app (installed into /Applications/AiM). Stops RaceStudio
 -- 3, then removes its engine, the Windows environment, and the AiM helper apps. Your telemetry in
 -- ~/Documents/AIM_SPORT is kept unless you ask to remove it too. It runs the self-contained
 -- uninstaller the installer generated at ~/Library/Application Support/RaceStudio3/bin/uninstall.sh

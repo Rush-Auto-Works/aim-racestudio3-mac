@@ -1,4 +1,4 @@
--- Import RaceStudio 3 Data — a standalone app (installed into ~/Applications/AiM). Brings your
+-- Import RaceStudio 3 Data — a standalone app (installed into /Applications/AiM). Brings your
 -- telemetry in: choose a folder, or drop an AIM_SPORT folder, a RaceStudio3 "user" folder, a
 -- .zip of either, or loose .xrk files onto it. Everything is MERGED into your RaceStudio 3 data
 -- folder and nothing you already have is overwritten. The install engine (installer-core.sh) is

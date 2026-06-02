@@ -38,7 +38,7 @@ Applications; the first time you open it, it sets itself up.
 
 That's it. Your data lives in **`~/Documents/AIM_SPORT`**; the engine lives quietly in
 `~/Library/Application Support/RaceStudio3`. First launch also puts two small helper apps in
-**`~/Applications/AiM`** — **Import RaceStudio 3 Data** and **Uninstall RaceStudio 3** — for
+**`/Applications/AiM`** — **Import RaceStudio 3 Data** and **Uninstall RaceStudio 3** — for
 bringing data in and cleanly removing everything later.
 
 **A couple of normal prompts you might see on first launch:**
@@ -48,10 +48,10 @@ bringing data in and cleanly removing everything later.
   local folder instead — iCloud's "Optimize Storage" can otherwise move your database off the
   Mac and break it. Pick the safe option if unsure.
 
-**To uninstall:** open **Uninstall RaceStudio 3** in `~/Applications/AiM` — it stops the engine
+**To uninstall:** open **Uninstall RaceStudio 3** in `/Applications/AiM` — it stops the engine
 and removes the engine, the helper apps, and the launcher; your data in `~/Documents/AIM_SPORT`
 is kept. Then drag **RaceStudio 3** from Applications to the Trash. (Manual route, same result:
-trash `RaceStudio 3.app`, then delete the `~/Applications/AiM` folder and
+trash `RaceStudio 3.app`, then delete the `/Applications/AiM` folder and
 `~/Library/Application Support/RaceStudio3`.)
 
 > **Don't see a release yet?** The notarized DMG is produced from this repo by

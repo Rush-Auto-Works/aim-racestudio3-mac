@@ -27,6 +27,12 @@ for m in ui net wine ledger data preflight; do . "$HERE/lib/$m.sh"; done
 # ---- overridable locations (env overrides let the dry-run test sandbox everything) ----------
 [ -n "${RS3_APP_SUPPORT:-}" ] && APP_SUPPORT="$RS3_APP_SUPPORT"
 [ -n "${RS3_APPS_DIR:-}" ] && APPS_DIR="$RS3_APPS_DIR"
+# Default (pins.env) is /Applications/AiM. If that system folder isn't writable (non-admin account)
+# and doesn't already exist, fall back to the always-writable per-user ~/Applications. No side
+# effects — make_launcher creates the dir later. Tests/dry-run set RS3_APPS_DIR, which wins.
+if [ -z "${RS3_APPS_DIR:-}" ] && [ "$APPS_DIR" = "/Applications/AiM" ] && [ ! -d "$APPS_DIR" ] && [ ! -w "/Applications" ]; then
+  APPS_DIR="$HOME/Applications/AiM"
+fi
 LAUNCHER_APP="$APPS_DIR/RaceStudio 3.app"
 UNINSTALL_APP="$APPS_DIR/Uninstall RaceStudio 3.app"
 IMPORT_APP="$APPS_DIR/Import RaceStudio 3 Data.app"
