@@ -1,155 +1,132 @@
-# RaceStudio 3 on a Mac (Apple Silicon) — no Parallels, no Windows
+# RaceStudio 3 on a Mac — no Windows, no Parallels
 
-Run AiM's **RaceStudio 3** telemetry software natively-ish on an Apple Silicon Mac
-(M1/M2/M3/M4/M5) using **CrossOver**, and bulk-import your existing sessions, configs,
-and profiles from a Windows/Parallels install.
+Run AiM's **RaceStudio 3** on your Mac in its own window: open your `.xrk` sessions, your
+device configs and profiles, and connect to your AiM logger or dash over WiFi. No Windows
+license, no giant virtual machine.
 
-No Windows license, no 60 GB virtual machine. Just RaceStudio 3 in a window.
-
-![RaceStudio 3 running on macOS via CrossOver](img/working-config-shift-lights.png)
-*RaceStudio 3 (v3.83.20) running on an Apple Silicon Mac under a current CrossOver — clean text, full UI.*
-
-> **TL;DR:** On a **current CrossOver (v24+, ideally v26+)** the official AiM installer
-> *just works*. Make a Windows 10 bottle, run the installer, click through. Done.
-> Everything below the "Easy path" is optional (data import) or only needed on old Wine.
+![RaceStudio 3 running on a Mac](img/working-config-shift-lights.png)
+*RaceStudio 3 running on an Apple Silicon Mac — the real app, in a normal Mac window.*
 
 ---
 
-## What you get
+## What you'll need
 
-- RaceStudio 3 (the full Windows app) running in its own window on macOS
-- Opening/analyzing your `.xrk` data, your device configs, your profiles
-- Connecting to AiM devices **over WiFi** (network works; USB cable passthrough does not)
-- ~1 GB on disk instead of a ~60 GB Windows VM
+- **A Mac** (any Apple Silicon M-series, or Intel).
+- **CrossOver** — a small app that runs Windows programs on a Mac.
+  [Home](https://www.codeweavers.com/crossover) ·
+  [Free 14-day trial](https://www.codeweavers.com/crossover/download) ·
+  [Buy (~$74)](https://www.codeweavers.com/store)
+- **The RaceStudio 3 installer** — free from AiM:
+  [download page](https://www.aim-sportline.com/en/sw-fw-download.htm).
 
-## What you need
-
-| Thing | Notes |
-|-------|-------|
-| Apple Silicon Mac | Tested on M5 Max, macOS 26. Intel Macs work too (no Rosetta needed). |
-| **CrossOver** — [home](https://www.codeweavers.com/crossover) · [download / free trial](https://www.codeweavers.com/crossover/download) · [buy](https://www.codeweavers.com/store) | Paid (~$74), 14-day free trial. Use a **current** version. This is the easy path. Free Wine alternatives in [docs/free-wine.md](docs/free-wine.md). |
-| RaceStudio 3 installer | Free from AiM: <https://www.aim-sportline.com/en/sw-fw-download.htm> |
-
-### Why CrossOver and not free Wine?
-RaceStudio 3 is a **Chromium (CEF) + native** app, and its text/UI renders cleanly only on
-a **modern Wine** (≈ Wine 10+). A current CrossOver ships exactly that, paired with good
-graphics. The free options we tested either use an **old Wine base** (Apple's Game Porting
-Toolkit is Wine 7.7 → garbled text, even with great graphics) or are awkward to install —
-so free Wine is fine for **offline `.xrk` analysis** but glitchy for daily UI use. Full
-tested comparison and the no-CrossOver routes are in [docs/free-wine.md](docs/free-wine.md).
+> There are *free* alternatives to CrossOver, but right now they show garbled text and
+> display glitches in RaceStudio 3. CrossOver is the one that looks correct. If you want to
+> try the free route anyway, see [docs/free-wine.md](docs/free-wine.md).
 
 ---
 
-## Easy path (current CrossOver) — 5 steps
+## Install it (about 10 minutes, no Terminal needed)
 
-1. **Install CrossOver** ([download / free trial](https://www.codeweavers.com/crossover/download)).
-   If you already have it, **make sure it's up to date** — a current version is what makes
-   the installer and UI rendering "just work"; older Wine builds don't.
-2. **Download** the RaceStudio 3 installer (`RaceStudio3-64_*.exe`) from AiM (link above).
-3. **Make a bottle:** open CrossOver → **+ Install** → choose **"unlisted application"** →
-   select the installer → when asked, create a **new Windows 10 bottle** (name it
-   `RaceStudio3`).
-4. **Run the installer**, click **Next → Install → Finish** like on Windows.
-5. **Launch RaceStudio 3** from CrossOver. That's it.
+1. **Install CrossOver.** If you already have it, **make sure it's updated to the latest
+   version** — this matters; older versions make RaceStudio 3 misbehave.
+2. **Download the RaceStudio 3 installer** from AiM (link above). It lands in your
+   Downloads folder.
+3. **Open CrossOver**, click **Install**, and pick the RaceStudio 3 installer you just
+   downloaded. When it offers to, let it create a **new Windows 10 space** (CrossOver calls
+   these "bottles") — name it `RaceStudio3`.
+4. **Click through the RaceStudio 3 setup** exactly like on Windows: **Next → Install →
+   Finish**.
+5. **Launch RaceStudio 3** from CrossOver. That's it — it opens in its own window.
 
-> Prefer the command line? `scripts/install-crossover.sh` does steps 3–4 headlessly.
-
-RaceStudio 3 installs to `C:\AIM_SPORT\RaceStudio3\` inside the bottle and the main
-executable is `64\AiMRS3-64-ReleaseU.exe`.
-
-### Make it double-clickable
-CrossOver auto-creates an app launcher in `~/Applications/CrossOver/…`. You can also
-drop a tiny launcher on your Desktop — see `scripts/make-launcher.sh`.
+CrossOver puts a normal app icon in your Applications for next time. Done.
 
 ---
 
-## Bringing your data over (sessions, configs, profiles) — in bulk
+## Bring your sessions, configs, and profiles over
 
-You can always use RaceStudio 3's built-in **Import/Export**, but to move *everything*
-at once it's faster to copy the files directly into the bottle.
+Three ways, easiest first:
 
-### Where RaceStudio 3 keeps things
+### 1. Let an AI assistant do it
+Open **[LLM-PROMPT.md](LLM-PROMPT.md)**, copy the whole thing, and paste it into an AI
+assistant on your Mac (Claude, ChatGPT, etc.). It will find your old data — wherever it is,
+including inside a Parallels Windows setup — and copy it into RaceStudio 3 for you.
 
-| Data | Windows location | Bottle location (inside CrossOver) |
-|------|------------------|-------------------------------------|
-| Configs (`.zconfig`), profiles, **database**, tracks, settings | `C:\AIM_SPORT\RaceStudio3\user\` | `…/Bottles/RaceStudio3/drive_c/AIM_SPORT/RaceStudio3/user/` |
-| Logged sessions (`.xrk`) | wherever your "data" folder points (often `…\user\data` or a separate drive like `E:\data`) | `…/AIM_SPORT/RaceStudio3/user/data/` |
+### 2. Use RaceStudio 3's built-in Import
+Inside RaceStudio 3 use its **Import / Export** buttons (same as on Windows). Good for a
+handful of sessions or configs.
 
-The bottle's `drive_c` is a normal Mac folder:
+> **Finding your Mac files in RaceStudio 3's Open/Import window:** RaceStudio 3 thinks it's
+> on Windows, so your Mac folders aren't under "Documents." In the file window, go to
+> **This PC → `Z:` → Users → your-name**. That's your real Mac home — so your Desktop,
+> Documents, and Downloads are right there under `Z:\Users\your-name\`.
+
+### 3. Copy everything at once (needs Terminal)
+If you're comfortable in Terminal and your old data is in a Parallels Windows VM, the
+script **`scripts/port-data-from-parallels.sh`** copies your *entire* history — every
+config, profile, the full track database, and your sessions — in one shot. Details in
+[For the curious / technical](#for-the-curious--technical) below.
+
+---
+
+## Connecting your AiM device
+
+- **Over WiFi: works great.** Join your device's WiFi network from macOS System Settings
+  (Wi-Fi), then connect inside RaceStudio 3 just like on Windows.
+- **By USB cable: not supported.** The cable connection doesn't work through CrossOver. Use
+  WiFi, or pull data off the device's SD card / export.
+
+---
+
+## If the text looks garbled or broken
+
+That almost always means **CrossOver is out of date** (or you're using a free Wine build).
+**Update CrossOver to the latest version and relaunch** — that fixes the garbled text and
+broken panels. (If you genuinely can't update, there are manual workarounds in
+[docs/old-crossover-workarounds.md](docs/old-crossover-workarounds.md).)
+
+---
+
+## For the curious / technical
+
+Everything below is optional background and command-line detail — you don't need it for a
+normal install.
+
+### Why CrossOver, and why "update it" matters
+RaceStudio 3's interface is built on Chromium (the engine behind Chrome), which only draws
+correctly on a **modern version of Wine** (the Windows-compatibility technology CrossOver is
+built on). A current CrossOver includes that; old ones don't, which is where the garbled
+text comes from. The free alternatives we tested are stuck on an old Wine and show the same
+glitches — full tested comparison in [docs/free-wine.md](docs/free-wine.md).
+
+### Where RaceStudio 3 keeps your data (inside the bottle)
+The "bottle" is just a normal folder on your Mac:
 `~/Library/Application Support/CrossOver/Bottles/RaceStudio3/drive_c/`
 
-### Option A — copy from a Parallels (or other) Windows VM, automatically
+| Data | Inside the bottle |
+|------|-------------------|
+| Configs, profiles, track **database**, settings | `…/drive_c/AIM_SPORT/RaceStudio3/user/` |
+| Logged sessions (`.xrk`) | `…/drive_c/AIM_SPORT/RaceStudio3/user/data/` |
 
-`scripts/port-data-from-parallels.sh` does the whole thing: it talks to your **running**
-Parallels VM, finds the RaceStudio 3 `user\` folder and your recent `.xrk` sessions,
-copies them out through a Parallels shared folder, and drops them into the bottle.
+(RaceStudio 3 installs to `C:\AIM_SPORT\RaceStudio3\`; the app itself is
+`64\AiMRS3-64-ReleaseU.exe`.)
 
-```bash
-# close RaceStudio 3 in the bottle first, then:
-./scripts/port-data-from-parallels.sh --vm "Win11" --bottle "RaceStudio3" --since 2025-01-01
-```
+### Command-line helpers (`scripts/`)
+- `install-crossover.sh` — create the bottle and run the installer from Terminal.
+- `make-launcher.sh` — drop a double-clickable launcher in `~/Applications`.
+- `port-data-from-parallels.sh` — bulk-copy your data out of a **running** Parallels VM:
+  ```bash
+  ./scripts/port-data-from-parallels.sh --vm "Win11" --bottle "RaceStudio3" --since 2025-01-01
+  ```
+  It copies the whole `user/` folder (configs + profiles + database) plus every session
+  newer than `--since`. First launch afterward is slow for a minute while RaceStudio 3
+  rebuilds config thumbnails — normal, one-time.
 
-It copies the **entire `user/` tree** (configs + profiles + the big track database) and
-every session newer than `--since`. First launch after this will be slow for a minute
-while RaceStudio 3 regenerates config preview thumbnails — that's a one-time cost.
-
-> **Tip:** the `data.lnk` shortcut Windows uses to redirect the data folder to another
-> drive won't resolve in the bottle — the script replaces it with a real `data/` folder
-> so RaceStudio 3 finds your sessions.
-
-### Option B — you already have the files on your Mac
-
-If your `.xrk` files / configs are already on the Mac (Dropbox, a copied folder, etc.),
-just copy them into the bottle locations in the table above, or use RaceStudio 3's
-**Import** inside the app.
-
-### Novice tip: finding your Mac files in RaceStudio 3's file picker
-Inside RaceStudio 3 (a "Windows" app), your Mac folders aren't under "Documents" where
-you'd expect. In any **Open/Import** dialog, navigate to:
-
-```
-This PC  →  Z:  →  Users  →  <your-mac-username>
-```
-
-`Z:` is mapped to your whole Mac (`/`), so
-`Z:\Users\<your-name>\Desktop`, `…\Documents`, `…\Downloads` are your real Mac folders.
-(If `Z:` isn't there, type `\\Mac\Home\` or `Z:\Users\<your-name>\` into the path bar.)
+### More docs
+- [docs/free-wine.md](docs/free-wine.md) — running it free (no CrossOver), with tested results.
+- [docs/old-crossover-workarounds.md](docs/old-crossover-workarounds.md) — manual fixes for
+  old/free Wine (only if you can't use a current CrossOver).
 
 ---
 
-## Connecting to your AiM device
-
-- **WiFi: works.** Join the device's WiFi network in macOS System Settings, then connect
-  in RaceStudio 3 over the network like normal. Wine passes TCP/IP straight to the Mac.
-- **USB cable: does not work** reliably (Wine can't pass AiM's USB device through). Use
-  WiFi, or pull data via SD/export.
-
----
-
-## Troubleshooting / old or free Wine
-
-On an **old Wine (8 or older)** — an out-of-date CrossOver, or a free build like Apple's
-Game Porting Toolkit — the official installer crashes and the UI renders with garbled
-text. There's a full set of workarounds (install .NET 4.8, a `cxwine` shim for CrossOver's
-wrapper, Win7-mode to skip a hanging theme action, extracting the app tree manually
-because the MSI's file-copy hangs) documented in
-**[docs/old-crossover-workarounds.md](docs/old-crossover-workarounds.md)** — useful if you
-*must* use an older or free Wine.
-
-**The real fix is a modern Wine.** Every one of those hacks disappears on Wine 10+ — i.e.
-a current CrossOver.
-
----
-
-## Want an AI to do this for you?
-
-Paste **[LLM-PROMPT.md](LLM-PROMPT.md)** into Claude Code / ChatGPT / any capable coding
-assistant on your Mac and it will walk through the install and data import for your
-specific setup.
-
----
-
-## Credits / status
-
-Worked out on a 2026 Apple Silicon Mac with a current CrossOver, RaceStudio 3 v3.83.20.
-Community contribution, not affiliated with AiM or CodeWeavers. PRs welcome.
+*Community guide, worked out on a 2026 Apple Silicon Mac with RaceStudio 3 v3.83.20. Not
+affiliated with AiM or CodeWeavers. Corrections and PRs welcome.*
