@@ -104,18 +104,25 @@ PY="$PYVENV/bin/python"
 # Icon source: the RaceStudio 3 wordmark (sourced from a local RS3 install, gitignored), else the
 # Rush square logo as a fallback so the build still works without it.
 ICON_LOGO="$ASSETS/rs3-logo.png"; [ -f "$ICON_LOGO" ] || ICON_LOGO="$ASSETS/logo-square.png"
-ICON_PNG="$DIST/icon-src.png"
-"$PY" "$HERE/compose-icon.py" "$ICON_LOGO" "$ICON_PNG" || { echo "compose-icon.py failed"; exit 1; }
-ICONSET="$DIST/rs3.iconset"; rm -rf "$ICONSET"; mkdir -p "$ICONSET"   # must NOT be hidden (iconutil rejects dot-dirs)
-for s in 16 32 128 256 512; do
-  sips -z "$s" "$s"           "$ICON_PNG" --out "$ICONSET/icon_${s}x${s}.png"      >/dev/null || { echo "sips resize ${s} failed"; exit 1; }
-  sips -z $((s*2)) $((s*2))   "$ICON_PNG" --out "$ICONSET/icon_${s}x${s}@2x.png"   >/dev/null || { echo "sips resize ${s}@2x failed"; exit 1; }
-done
-iconutil -c icns "$ICONSET" -o "$DIST/rs3.icns" || { echo "iconutil failed"; exit 1; }
+# build_icns <badge> <out.icns> — compose a 1024² PNG (optional import/uninstall badge), then icns.
+build_icns() {
+  local badge="$1" out="$2" png="$DIST/icon-$badge.png" iconset="$DIST/icon-$badge.iconset" s
+  "$PY" "$HERE/compose-icon.py" "$ICON_LOGO" "$png" "$badge" || { echo "compose-icon.py ($badge) failed"; exit 1; }
+  rm -rf "$iconset"; mkdir -p "$iconset"   # must NOT be hidden (iconutil rejects dot-dirs)
+  for s in 16 32 128 256 512; do
+    sips -z "$s" "$s"         "$png" --out "$iconset/icon_${s}x${s}.png"    >/dev/null || { echo "sips $badge ${s} failed"; exit 1; }
+    sips -z $((s*2)) $((s*2)) "$png" --out "$iconset/icon_${s}x${s}@2x.png" >/dev/null || { echo "sips $badge ${s}@2x failed"; exit 1; }
+  done
+  iconutil -c icns "$iconset" -o "$out" || { echo "iconutil $badge failed"; exit 1; }
+  rm -rf "$iconset" "$png"
+}
+build_icns none      "$DIST/rs3.icns"            # main app: plain RS3 logo
+build_icns import    "$DIST/rs3-import.icns"     # Import: + orange file-into-RS3 badge (bottom-left)
+build_icns uninstall "$DIST/rs3-uninstall.icns"  # Uninstall: + red trash-can badge (bottom-left)
 # osacompile made a DROPLET (because of `on open`), so it uses droplet.icns — overwrite BOTH.
 cp "$DIST/rs3.icns" "$RES/applet.icns"
 [ -f "$RES/droplet.icns" ] && cp "$DIST/rs3.icns" "$RES/droplet.icns"
-rm -rf "$ICONSET" "$ICON_PNG"   # keep $DIST/rs3.icns — the Import/Uninstall applets reuse it (removed after 3b)
+# keep $DIST/rs3*.icns — the Import/Uninstall applets reuse them (removed after 3b)
 
 # ---- 3. Info.plist --------------------------------------------------------------------------
 PL="$APP/Contents/Info.plist"
@@ -152,18 +159,21 @@ chmod +x "$IMP_RES/installer-core.sh"
 
 # brand each applet: RS3 icon + identity/version. osacompile makes a droplet (uses droplet.icns)
 # when the script has `on open`, else an applet (applet.icns) — overwrite whichever exists.
-brand_applet() { # <app> <bundle-id> <name>
-  local a="$1" bid="$2" nm="$3" pl="$1/Contents/Info.plist" r="$1/Contents/Resources"
-  [ -f "$r/applet.icns" ]  && cp "$DIST/rs3.icns" "$r/applet.icns"
-  [ -f "$r/droplet.icns" ] && cp "$DIST/rs3.icns" "$r/droplet.icns"
+brand_applet() { # <app> <bundle-id> <name> <icns>
+  local a="$1" bid="$2" nm="$3" icns="$4" pl="$1/Contents/Info.plist" r="$1/Contents/Resources"
+  [ -f "$r/applet.icns" ]  && cp "$icns" "$r/applet.icns"
+  [ -f "$r/droplet.icns" ] && cp "$icns" "$r/droplet.icns"
   /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $bid" "$pl" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string $bid" "$pl"
   /usr/libexec/PlistBuddy -c "Set :CFBundleName $nm" "$pl" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleName string $nm" "$pl"
   /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$pl" 2>/dev/null || true
   /usr/libexec/PlistBuddy -c "Add :LSMinimumSystemVersion string $MIN_OS" "$pl" 2>/dev/null || true
+  # osacompile sets CFBundleIconName=applet/droplet, which OVERRIDES CFBundleIconFile and points at a
+  # non-existent asset-catalog icon -> blank icon. Remove it so our overwritten .icns is used.
+  /usr/libexec/PlistBuddy -c "Delete :CFBundleIconName" "$pl" 2>/dev/null || true
 }
-brand_applet "$IMPORT_APP_BUILT"    "$BUNDLE_ID.import"    "Import RaceStudio 3 Data"
-brand_applet "$UNINSTALL_APP_BUILT" "$BUNDLE_ID.uninstall" "Uninstall RaceStudio 3"
-rm -f "$DIST/rs3.icns"
+brand_applet "$IMPORT_APP_BUILT"    "$BUNDLE_ID.import"    "Import RaceStudio 3 Data" "$DIST/rs3-import.icns"
+brand_applet "$UNINSTALL_APP_BUILT" "$BUNDLE_ID.uninstall" "Uninstall RaceStudio 3"   "$DIST/rs3-uninstall.icns"
+rm -f "$DIST/rs3.icns" "$DIST/rs3-import.icns" "$DIST/rs3-uninstall.icns"
 
 if [ "${SKIP_SIGN:-0}" = 1 ]; then say "SKIP_SIGN=1 — compiled only."; exit 0; fi
 
