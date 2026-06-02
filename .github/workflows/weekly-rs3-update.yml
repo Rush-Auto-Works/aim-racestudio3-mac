@@ -1,0 +1,56 @@
+name: weekly-rs3-update
+
+# Weekly check of AiM's RaceStudio 3 download page. If a newer release exists, bump pins.env on
+# main, tag v<version> (matching the embedded RaceStudio 3 version), and trigger the DMG
+# build+notarize+publish — fully automatic, no human input.
+#
+# Runs the cheap check on Ubicloud; the actual DMG build runs on the macOS release-dmg workflow,
+# which we dispatch on the new tag's ref so its release-publish step (gated on refs/tags/*) fires.
+# A GITHUB_TOKEN-pushed tag does NOT auto-trigger release-dmg (GitHub loop-prevention), so the
+# explicit dispatch below is the single build.
+
+on:
+  schedule:
+    - cron: "0 12 * * 1"   # Mondays 12:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write   # commit pins.env bump + push tag
+  actions: write    # dispatch release-dmg.yml
+
+concurrency:
+  group: rs3-update
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubicloud-standard-2
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check AiM for a newer RaceStudio 3 (updates pins.env if found)
+        id: check
+        run: bash installer/build/check-rs3-update.sh --apply
+
+      - name: Bump pins, tag, and trigger the release build
+        if: steps.check.outputs.updated == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.check.outputs.tag }}
+          VERSION: ${{ steps.check.outputs.version }}
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists — re-dispatching release build only."
+            gh workflow run release-dmg.yml --ref "$TAG"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add installer/src/pins.env
+          git commit -m "chore(pins): bump RaceStudio 3 to $VERSION (auto)"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+          git tag -a "$TAG" -m "RaceStudio 3 $VERSION (auto)"
+          git push origin "$TAG"
+          gh workflow run release-dmg.yml --ref "$TAG"
+          echo "Bumped to $VERSION, tagged $TAG, dispatched release-dmg."

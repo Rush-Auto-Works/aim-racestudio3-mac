@@ -29,7 +29,10 @@ IDENTITY="${CODESIGN_IDENTITY:-Developer ID Application: Samuel Reed (HYBSCYDCMB
 TEAMID="HYBSCYDCMB"
 BUNDLE_ID="com.rushautoworks.racestudio3"
 MIN_OS="12.0"
-VERSION="1.0.0"
+# Version stamped into the app/DMG = the embedded RaceStudio 3 version (from pins.env), so the
+# bundle version matches the release tag. Override with RS3_VERSION if ever needed.
+VERSION="${RS3_VERSION:-$(sed -nE 's/^RS3_PINNED_VER="(.*)"/\1/p' "$SRC/pins.env")}"
+VERSION="${VERSION:-1.0.0}"
 
 APP="$DIST/RaceStudio 3.app"
 VOL="RaceStudio 3"
