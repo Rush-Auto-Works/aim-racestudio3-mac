@@ -17,8 +17,8 @@ APPS="$SBX/Applications"
 # wrote to a real target (would catch the core accidentally ignoring RS3_DATA_DIR/RS3_APPS_DIR).
 REAL_APPSUP="$HOME/Library/Application Support/RaceStudio3"
 REAL_DATA="$HOME/Documents/AIM_SPORT"
-REAL_LAUNCHER="$HOME/Applications/RaceStudio 3.app"
-REAL_CMD="$HOME/Applications/RaceStudio 3.command"
+REAL_LAUNCHER="$HOME/Applications/AiM/RaceStudio 3.app"
+REAL_CMD="$HOME/Applications/AiM/RaceStudio 3.command"
 snap() { [ -e "$1" ] && stat -f %m "$1" 2>/dev/null || echo none; }
 real_before="$(snap "$REAL_APPSUP")"
 data_before="$(snap "$REAL_DATA")"

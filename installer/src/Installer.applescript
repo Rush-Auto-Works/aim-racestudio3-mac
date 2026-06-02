@@ -12,7 +12,7 @@ on run
 	set coreScript to corePath()
 
 	-- Welcome
-	set b to button returned of (display dialog "This installs RaceStudio 3 on your Mac using free software — no Windows, no Parallels." & return & return & "• Takes about 10 minutes and needs an internet connection." & return & "• Your files go in your Documents folder; an app appears in Applications." & return & "• Connect AiM devices over Wi-Fi (USB isn't supported)." buttons {"Quit", "Install"} default button "Install" with title "Install RaceStudio 3" with icon note)
+	set b to button returned of (display dialog "This installs RaceStudio 3 on your Mac using free software — no Windows, no Parallels." & return & return & "• Takes about 10 minutes and needs an internet connection." & return & "• Your files go in your Documents folder; the apps go in Applications → AiM." & return & "• Connect AiM devices over Wi-Fi (USB isn't supported)." buttons {"Quit", "Install"} default button "Install" with title "Install RaceStudio 3" with icon note)
 	if b is "Quit" then return
 
 	set total to count of phaseList
@@ -26,10 +26,10 @@ on run
 	set progress completed steps to barScale
 
 	-- Done
-	set b to button returned of (display dialog "RaceStudio 3 is installed! 🎉" & return & return & "• Open it from Applications → “RaceStudio 3”." & return & "• Connect AiM devices over Wi-Fi (USB isn't supported under Wine)." & return & "• If macOS asks “Wine wants to access Documents”, click Allow." buttons {"Done", "Launch RaceStudio 3"} default button "Launch RaceStudio 3" with title "All set" with icon note)
+	set b to button returned of (display dialog "RaceStudio 3 is installed! 🎉" & return & return & "• Find it in Applications → “AiM” → “RaceStudio 3” (with Import and Uninstall alongside)." & return & "• Connect AiM devices over Wi-Fi (USB isn't supported under Wine)." & return & "• If macOS asks “Wine wants to access Documents”, click Allow." buttons {"Done", "Launch RaceStudio 3"} default button "Launch RaceStudio 3" with title "All set" with icon note)
 	if b is "Launch RaceStudio 3" then
 		try
-			do shell script "open " & quoted form of ((POSIX path of (path to applications folder from user domain)) & "RaceStudio 3.app")
+			do shell script "open " & quoted form of ((POSIX path of (path to applications folder from user domain)) & "AiM/RaceStudio 3.app")
 		end try
 	end if
 end run
@@ -59,7 +59,7 @@ on runCoreAsync(coreScript, ph, tmo, stepIndex, total)
 	set extraEnv to ""
 	if ph is "make-launcher" then
 		set appsRes to POSIX path of ((path to me as text) & "Contents:Resources:apps:")
-		set extraEnv to "LAUNCHER_APP_SRC=" & quoted form of (appsRes & "RaceStudio 3.app") & " UNINSTALL_APP_SRC=" & quoted form of (appsRes & "Uninstall RaceStudio 3.app") & " "
+		set extraEnv to "LAUNCHER_APP_SRC=" & quoted form of (appsRes & "RaceStudio 3.app") & " UNINSTALL_APP_SRC=" & quoted form of (appsRes & "Uninstall RaceStudio 3.app") & " IMPORT_APP_SRC=" & quoted form of (appsRes & "Import RaceStudio 3 Data.app") & " "
 	end if
 	set base to do shell script "mktemp /tmp/rs3phase.XXXXXX"
 	set outF to base & ".out"
