@@ -17,6 +17,7 @@ Usage: patch-wine-appname.py <path-to-unix-loader> [app-name]
 Default app name: "RaceStudio 3". Idempotent: re-running is a no-op if already set.
 Re-sign the binary afterwards (this invalidates any existing code signature).
 """
+import re
 import sys
 import struct
 
@@ -62,7 +63,10 @@ def main():
 
     new_name = name.encode("utf-8")
     target = b"<string>" + new_name + b"</string>"
-    if target in sec:
+    # Idempotency: a no-op only if CFBundleName *itself* is already the new name. (Matching the
+    # bare <string> anywhere would false-positive if some other key held that same value.)
+    cur = re.search(rb"<key>CFBundleName</key>\s*<string>([^<]*)</string>", sec)
+    if cur and cur.group(1) == new_name:
         print(f"already patched to {name!r}; nothing to do")
         return
 
