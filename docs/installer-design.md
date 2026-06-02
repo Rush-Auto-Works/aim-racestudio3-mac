@@ -84,12 +84,13 @@ bundles call). `~/Applications` is `mkdir -p`'d (it doesn't exist by default).
    `set -e` around Wine — it returns nonzero for diagnostics); use a **watchdog** (background
    process + timed `kill`; macOS has no `timeout`).
 6. **Silent install:** `wine "<installer>" /exenoui /qn` under the watchdog, then
-   **`wineserver -k` (kill all Wine processes for our prefix)** so nothing holds the prefix
-   open before relocation. Initial success = main exe exists + silent-install returned OK
-   (Start-Menu shortcut is diagnostic only, never the gate). The **live exe smoke-test happens
-   AFTER relocation** (step 7), under the watchdog for a few seconds, then `wineserver -k`
-   again — never launch RS3 while we're about to move its data. On timeout/failure → clear
-   dialog pointing at the log + the troubleshooting doc.
+   **`WINEPREFIX=… wineserver -k`** so nothing holds the prefix open before relocation.
+   **Success = STRUCTURAL only: main exe exists + valid Mach-O/PE header
+   (`file "$EXE" | grep -q 'PE32+ executable'`) + silent-install returned OK.** Do NOT launch
+   RS3 to "test" it (CEF takes 10-30 s under Rosetta → false-fail, and a killed mid-init RS3 can
+   write corrupt config into the soon-to-be-symlinked data). Start-Menu shortcut is diagnostic
+   only. A `--smoke-test` flag can opt into a ≥60 s manual-QA launch. On failure → clear dialog
+   pointing at the log + the troubleshooting doc.
 7. **User-data location (the dangerous step — see Data Safety):** resolve `~/Documents/AIM_SPORT`
    collisions safely, relocate atomically, symlink, verify round-trip.
 8. **Create** `~/Applications/RaceStudio 3.app` (native launcher) + `Uninstall RaceStudio 3.app`.
@@ -189,7 +190,8 @@ installed it) is system-shared and left alone, and that minor Wine caches under
 ## Known limitations to state in the UI/README
 - **USB device connection does not work** (Wine USB passthrough); WiFi does. Say so in the
   Done dialog and README.
-- First launch needs a one-time **right-click → Open** (Gatekeeper, unsigned).
+- The notarized `.app` double-clicks with **no Gatekeeper prompt** (codesigned + stapled). Only
+  the source-available `.command` fallback needs the one-time right-click → Open.
 - iCloud "Optimize Storage" + a Wine-written database don't mix; we warn and offer an
   alternative location.
 

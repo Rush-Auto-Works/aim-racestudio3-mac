@@ -125,6 +125,25 @@ ledger data.symlinked; ledger data.ok
 - **iCloud**: `preflight` only *warns* and *offers* `~/AIM_SPORT` (non-synced) if it detects
   Desktop-&-Documents sync; default keep-existing. Detection never drives a destructive action.
 
+**Round-4 residual guards (all five reviewers APPROVED the state machine; implement these ~10
+lines to make it bulletproof — none change the design):**
+- **Stale-symlink-target guard:** on resume ladder, before adopting `SRC`-is-symlink or
+  `SRC.tmplink`, assert `readlink` target == the **current** `DST` (DATA_DIR can change between
+  runs if the user accepts iCloud relocation on a retry). If it points elsewhere, `rm` it and
+  fall through — never bind RS3 to a stale data dir.
+- **`SRC.gone` hygiene:** `rm -rf "$SRC.gone"` defensively *before* `mv "$SRC" "$SRC.gone"`
+  (so a leftover from a prior run can't make `mv` nest inside it), and again on the
+  `SRC`-is-already-symlink done-branch (clean up the post-rename-crash leftover).
+- **Per-file atomic copy:** in the MERGE, copy each file to a temp name and atomic-`mv` into
+  place (per-file commit) so a crash mid-`ditto` can't leave a truncated file that copy-if-absent
+  then skips forever. (Only affects disposable defaults for migrating users — their telemetry is
+  never the copy source — but matters for the clean-install case.)
+- **Verifier = per-file presence WITH expected size** (`stat -f %z`), not `du(DST) >= du(SRC)`
+  (which is trivially true in the migrating case). Allow a zero-byte destination when the source
+  file is zero-byte. Per-file presence is the load-bearing gate.
+- **Interrupt tests must specifically exercise** the stale-`.tmplink`-wrong-DST and
+  mid-`ditto`-then-resume cases (scenario 3), per the skeptic.
+
 ## Launcher app (`~/Applications/RaceStudio 3.app`)
 osacompile applet (or a `.app` wrapping `launcher.sh`) that:
 - Resolves absolute paths (CWD is not its dir).
@@ -142,11 +161,18 @@ osacompile applet (or a `.app` wrapping `launcher.sh`) that:
   refuse mutate, offer Launch/Cancel. Lockfile `$APP_SUPPORT/state/.lock` around mutating steps.
 
 ## Build & packaging (`build/build-apps.sh`)
-- `osacompile` both applets; copy `installer-core.sh` + `lib/` + `pins.env` into
-  `…app/Contents/Resources/`; `chmod +x` the scripts; set a basic `Info.plist`
-  (CFBundleName, identifier, min macOS).
-- Optional: drop an icon. Do NOT claim notarization. Zip for distribution.
-- README: download → **right-click → Open → Open** (one-time), then the app runs.
+- `osacompile` the applets (Install / Uninstall / Import droplet); copy `installer-core.sh` +
+  `lib/` + `pins.env` into `…app/Contents/Resources/`; `chmod +x`; set `Info.plist`
+  (CFBundleName, identifier, `LSMinimumSystemVersion`). If an applet uses
+  `tell application "System Events"`, add the `com.apple.security.automation.apple-events`
+  entitlement.
+- **Codesign + notarize + staple** every `.app` (we have a Developer ID — design §Deliverable,
+  resolution 11): `codesign --deep --force --options runtime --timestamp --sign "Developer ID
+  Application: … (TEAMID)"` → zip → `xcrun notarytool submit … --wait` → `xcrun stapler staple`.
+  The stapled `.app` then **double-clicks with no Gatekeeper prompt** — no "right-click → Open".
+- Keep an unsigned `.command` in the repo as a **source-available fallback only** (not the
+  primary path; document its one-time right-click→Open there, not for the notarized `.app`).
+- README/Done dialog: just "double-click to install" for the notarized app.
 
 ## Testing (must pass — design §Test plan)
 - `test/dryrun-test.sh`: `installer-core.sh --dry-run` makes **no** network calls and **no**
