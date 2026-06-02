@@ -84,9 +84,13 @@ rm -rf "$RES/wine/share/wine/gecko" "$RES/wine/share/wine/mono" 2>/dev/null || t
 # what the bold top-left app menu reads, since the GUI process runs unbundled. Must run BEFORE
 # signing (it edits the Mach-O, invalidating any signature — the sign pass below re-signs it).
 say "Rebranding Wine app menu -> RaceStudio 3"
+patched=0
 while IFS= read -r loader; do
   python3 "$HERE/patch-wine-appname.py" "$loader" "RaceStudio 3" || { echo "appname patch failed for $loader"; exit 1; }
+  patched=$((patched+1))
 done < <(find "$RES/wine/lib/wine" -type f -name wine -path '*-unix/wine')
+# fail fast: zero loaders means the Wine layout changed and the menu would still read "Wine".
+[ "$patched" -gt 0 ] || { echo "no Wine unix loaders found to rebrand (looked for *-unix/wine under $RES/wine/lib/wine)"; exit 1; }
 
 # ---- 2. icon (dark rounded square + Rush logo) ----------------------------------------------
 say "Building app icon"
@@ -171,6 +175,8 @@ if ! have_identity; then say "No Developer ID ($TEAMID) in keychain — compiled
 # which we add in the notarization pass (HARDENED_RUNTIME=1). Timestamp only with hardened runtime
 # (per-file TSA calls across all of Wine are slow + only needed for notarization).
 ENT="$HERE/wine.entitlements.plist"
+TS=""   # timestamp flag; only set under hardened runtime (below). Must be defined for the DMG
+        # signing step in the default --deep path too, else `set -u` aborts with TS: unbound.
 if [ "${HARDENED_RUNTIME:-0}" = 1 ]; then
   # Notarization-grade: hardened runtime needs EVERY Mach-O signed individually (the --deep
   # shortcut is rejected by notarytool). Sign all of Wine's binaries first, then the app bundle.
