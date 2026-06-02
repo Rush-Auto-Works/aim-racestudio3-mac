@@ -32,10 +32,12 @@ No Windows, no Parallels, no CrossOver, nothing to buy.
 2. **Double-click it.** A friendly window walks you through everything — it downloads the
    bits it needs and sets up RaceStudio 3 for you. Takes about 10 minutes and needs an
    internet connection. No Terminal, ever.
-3. When it finishes, click **Launch RaceStudio 3** (or open it later from **Applications**).
+3. When it finishes, click **Launch RaceStudio 3** (or open it later from your
+   **`~/Applications`** folder — that's *Applications* in your Home folder, i.e. Finder →
+   **Go → Home → Applications**, not the main `/Applications`).
 
-That's the whole thing. It puts your data in **Documents → AIM_SPORT** and an app in
-**Applications → RaceStudio 3**, and adds an **Uninstall RaceStudio 3** app next to it.
+That's the whole thing. It puts your data in **`~/Documents/AIM_SPORT`** and an app in
+**`~/Applications` → RaceStudio 3**, and adds an **Uninstall RaceStudio 3** app next to it.
 
 **A couple of normal prompts you might see:**
 - *"Wine wants to access Documents"* — click **Allow**. (It says *Wine*, the open-source
