@@ -281,7 +281,8 @@ phase_make_launcher() {
     rm -rf "$IMPORT_APP"; ditto "$IMPORT_APP_SRC" "$IMPORT_APP"
   fi
   # Standalone fallback (no applet): a .command that calls launch.sh.
-  if [ -z "${LAUNCHER_APP_SRC:-}" ] && [ ! -d "$LAUNCHER_APP" ]; then
+  # Skipped in single-app mode (the RaceStudio 3.app IS the launcher).
+  if [ "${RS3_SINGLE_APP:-0}" != 1 ] && [ -z "${LAUNCHER_APP_SRC:-}" ] && [ ! -d "$LAUNCHER_APP" ]; then
     local cmd="$APPS_DIR/RaceStudio 3.command"
     printf '#!/bin/bash\nexec "%s/bin/launch.sh"\n' "$INSTALL_ROOT" > "$cmd"
     chmod +x "$cmd"
@@ -446,6 +447,7 @@ case "$ACTION" in
   import)            do_import ;;
   uninstall)         do_uninstall "${args[@]:1}" ;;
   set-config)        ui_persist "${args[1]:?key}" "${args[2]:-}" ;;
+  is-installed)      if ledger_verify installed && [ -f "$INSTALL_ROOT/bin/launch.sh" ]; then echo RS3_INSTALLED; else echo RS3_ABSENT; fi ;;
   help)              usage ;;
   *) die "unknown action: $ACTION" ;;
 esac
