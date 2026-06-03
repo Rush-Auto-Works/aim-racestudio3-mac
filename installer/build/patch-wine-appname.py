@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Rename Wine's macOS app-menu title by patching the loader's embedded Info.plist.
+"""Patch Wine's macOS loader Info.plist: app-menu title AND Local Network usage.
 
 winemac.drv runs unbundled (the GUI process image is lib/wine/<arch>-unix/wine),
 so macOS/CFBundle takes the app's CFBundleName from the Mach-O __TEXT,__info_plist
@@ -7,11 +7,19 @@ section embedded in that loader — NOT from our outer RaceStudio 3.app/Info.pli
 Stock Wine ships CFBundleName="Wine", which is why the bold app menu (top-left)
 reads "Wine". We patch that string to the desired name.
 
-The __info_plist section is a fixed-size Mach-O section, so we cannot grow it.
-We keep the byte count identical by stripping the plist's 4-space indentation
-(insignificant XML whitespace) to make room for the longer name, then pad back to
-the original section size with trailing newlines (ignored by CFBundle, which stops
-parsing at </plist>).
+That SAME loader is the process that opens RS3's device-discovery UDP socket, so on
+macOS 15+/26 it is the executable TCC evaluates for the Local Network privacy grant.
+TCC keys on the accessing executable's embedded Info.plist + code signature; without
+an NSLocalNetworkUsageDescription bound to THIS binary, macOS denies the access
+silently — no prompt, no entry under Settings > Privacy > Local Network — and AiM
+devices never appear in RS3 (cf. claude-code#27828, same root cause for a bare
+Mach-O). The outer app bundle's plist string doesn't help: the applet isn't the
+process opening the socket. So we inject the usage string here and re-sign.
+
+The __info_plist section is a fixed-size Mach-O section, so we cannot grow it. We
+reclaim room by collapsing the plist's insignificant inter-tag whitespace, then pad
+back to the original section size with trailing newlines (ignored by CFBundle, which
+stops parsing at </plist>).
 
 Usage: patch-wine-appname.py <path-to-unix-loader> [app-name]
 Default app name: "RaceStudio 3". Idempotent: re-running is a no-op if already set.
@@ -23,6 +31,11 @@ import struct
 from xml.sax.saxutils import escape
 
 LC_SEGMENT_64 = 0x19
+
+# Why this binary and not the outer .app: the unix loader is the process that opens
+# the discovery UDP socket, so it is the executable TCC attributes Local Network to.
+LOCALNET_KEY = b"NSLocalNetworkUsageDescription"
+LOCALNET_MSG = b"Connects to your AiM logger or dash over Wi-Fi."
 
 
 def find_info_plist_section(data: bytes):
@@ -73,32 +86,45 @@ def main():
     # Patch ONLY CFBundleName (drives the macOS menu-bar app name). Do NOT touch CFBundleExecutable:
     # it doesn't change the Dock/process name (macOS uses the real on-disk loader filename "wine"),
     # AND a mismatch breaks LaunchServices icon resolution (blank Dock icon). Verified 2026-06-02.
-    keys = [b"CFBundleName"]
-    if all(cur_val(k) == new_name for k in keys):
-        print(f"already patched to {name!r}; nothing to do")
+    has_localnet = cur_val(LOCALNET_KEY) == LOCALNET_MSG
+    if cur_val(b"CFBundleName") == new_name and has_localnet:
+        print(f"already patched ({name!r} + Local Network usage); nothing to do")
         return
 
-    patched = sec
-    for key in keys:
-        pat = re.compile(rb"(<key>" + re.escape(key) + rb"</key>\s*<string>)[^<]*(</string>)")
-        patched, n = pat.subn(rb"\g<1>" + new_name + rb"\g<2>", patched)
+    # 1) CFBundleName -> the desired app-menu name.
+    pat = re.compile(rb"(<key>CFBundleName</key>\s*<string>)[^<]*(</string>)")
+    patched, n = pat.subn(rb"\g<1>" + new_name + rb"\g<2>", sec)
+    if n != 1:
+        raise SystemExit(f"expected exactly one CFBundleName key/value, found {n}")
+
+    # 2) Inject NSLocalNetworkUsageDescription before </dict> if absent, so the unix
+    #    loader (the process that opens the discovery socket) declares the capability.
+    if not has_localnet:
+        entry = (b"<key>" + LOCALNET_KEY + b"</key><string>"
+                 + escape(LOCALNET_MSG.decode()).encode() + b"</string>")
+        patched, n = re.subn(rb"</dict>", entry + b"</dict>", patched, count=1)
         if n != 1:
-            raise SystemExit(f"expected exactly one {key.decode()} key/value, found {n}")
-    # Reclaim the extra bytes by removing the 4-space XML indentation.
-    patched = patched.replace(b"\n    ", b"\n")
+            raise SystemExit("expected exactly one </dict> to insert before")
+
+    # 3) Reclaim bytes: collapse insignificant inter-tag whitespace (the fixed-size
+    #    section can't grow). Safe for plist XML; values keep their inner whitespace
+    #    because that sits between letters, not between '>' and '<'.
+    patched = re.sub(rb">\s+<", b"><", patched)
 
     end = patched.find(b"</plist>")
     if end < 0:
         raise SystemExit("</plist> not found after patch")
     doc = patched[:end + len(b"</plist>")]
     if len(doc) > size:
-        raise SystemExit(f"patched plist {len(doc)}B exceeds section {size}B")
+        raise SystemExit(f"patched plist {len(doc)}B exceeds section {size}B "
+                         f"(shorten LOCALNET_MSG by {len(doc) - size}B)")
     out = doc + b"\n" * (size - len(doc))
     assert len(out) == size
 
     data[off:off + size] = out
     open(path, "wb").write(data)
-    print(f"patched CFBundleName -> {name!r} in {path} ({size}B section preserved)")
+    print(f"patched CFBundleName -> {name!r} + Local Network usage in {path} "
+          f"({len(doc)}/{size}B used)")
 
 
 if __name__ == "__main__":
