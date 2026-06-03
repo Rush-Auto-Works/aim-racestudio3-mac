@@ -1,0 +1,45 @@
+name: tests
+
+# Run the installer engine's bash test suite (installer/test/run-all.sh) plus shell/AppleScript
+# syntax checks on every push to main and every PR.
+#
+# Runs on a GitHub-hosted macOS runner — NOT Ubicloud — by design. The engine is macOS-only and
+# the tests use BSD tooling (`stat -f`, `shasum`) and the dry-run installer, so they must run on
+# macOS. This is the same reason release-dmg.yml can't use the org's Ubicloud (Linux) runners.
+#
+# The PR/push gate stays deterministic (RS3_SKIP_ONLINE=1 skips the network pin-liveness check, so
+# AiM rotating a URL can't redden an unrelated PR). The daily `schedule` run clears the flag: it
+# HEADs the pinned RS3/Wine URLs and fails if a pin is dead or moved — the exact stale-URL 404 that
+# shipped to a customer, which the weekly "is there a newer version?" check can't catch.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 13 * * *"   # daily 13:17 UTC — exercises the live pin-liveness check
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: macos-14
+    env:
+      # Deterministic on PR/push; live network pin check only on the scheduled run.
+      RS3_SKIP_ONLINE: ${{ github.event_name == 'schedule' && '0' || '1' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax-check shell + compile the applet
+        run: |
+          for f in installer/src/installer-core.sh installer/src/lib/*.sh; do bash -n "$f"; done
+          osacompile -o "$RUNNER_TEMP/applet-check.scpt" installer/src/RaceStudio3.applescript
+
+      - name: Run test suite
+        run: bash installer/test/run-all.sh

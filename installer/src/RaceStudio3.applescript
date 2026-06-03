@@ -11,7 +11,7 @@
 property phaseList : {"preflight", "acquire-installer", "download-wine", "make-prefix", "silent-install", "relocate-data", "make-launcher", "done"}
 property phaseLabel : {"Checking your Mac", "Downloading RaceStudio 3 (~345 MB — a few minutes)", "Preparing the engine", "Setting up the Windows environment", "Installing RaceStudio 3 (several minutes)", "Securing your data folder", "Finishing setup", "Almost done"}
 property phaseTimeout : {180, 2700, 2100, 420, 1500, 900, 180, 90}
-property barScale : 1000
+property barScale : 100 -- bar runs 0..100 so the subtitle can read "<n>% complete"
 
 on run
 	set coreScript to corePath()
@@ -51,11 +51,13 @@ on doFirstRunSetup(coreScript)
 
 	set total to count of phaseList
 	set progress total steps to barScale
+	set progress additional description to "0% complete"
 	repeat with i from 1 to total
 		set progress description to "Step " & i & " of " & total & ": " & (item i of phaseLabel) & "…"
 		runPhase(coreScript, item i of phaseList, item i of phaseTimeout, i, total)
 	end repeat
 	set progress completed steps to barScale
+	set progress additional description to "100% complete"
 
 	set b to button returned of (display dialog "RaceStudio 3 is ready! 🎉" & return & return & "• It's in your Applications folder for next time." & return & "• “Import RaceStudio 3 Data” and “Uninstall RaceStudio 3” are in Applications ▸ AiM." & return & "• Connect AiM devices over Wi-Fi (USB isn't supported under Wine)." & return & "• If macOS asks “Wine wants to access Documents”, click Allow." buttons {"Done", "Open RaceStudio 3"} default button "Open RaceStudio 3" with title "All set" with icon note)
 	if b is "Open RaceStudio 3" then openApp()
@@ -141,7 +143,9 @@ on runCoreAsync(coreScript, ph, tmo, stepIndex, total)
 		if waited ≥ tmo then exit repeat
 		if creep < 0.92 then set creep to creep + 0.03
 		try
-			set progress completed steps to (round (baseUnits + sliceUnits * creep))
+			set cs to (round (baseUnits + sliceUnits * creep))
+			set progress completed steps to cs
+			set progress additional description to (cs as string) & "% complete"
 		end try
 		delay 1
 		set waited to waited + 1
@@ -156,7 +160,9 @@ on runCoreAsync(coreScript, ph, tmo, stepIndex, total)
 		set rc to (do shell script "cat " & quoted form of rcF) as integer
 	end try
 	try
-		set progress completed steps to (round (baseUnits + sliceUnits))
+		set cs to (round (baseUnits + sliceUnits))
+		set progress completed steps to cs
+		set progress additional description to (cs as string) & "% complete"
 	end try
 	do shell script "rm -f " & quoted form of outF & " " & quoted form of rcF & " " & quoted form of base
 	return out & return & "RC:" & rc
