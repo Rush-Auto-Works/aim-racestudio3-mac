@@ -27,6 +27,20 @@ validate_rs3_asset() {  # <s> : RaceStudio3-64_38320_..._145224.exe
   printf '%s' "$1" | grep -Eq '^RaceStudio3-64_[0-9]+(_[0-9]+){3,}\.exe$'
 }
 
+# rs3_url_from_page <page_url> <filename> -> prints the page's live href for <filename>.
+# The hardcoded RS3_PINNED_URL path can go stale even when the file itself is unchanged:
+# AiM moves the installer between server directories without renaming it. We scrape the
+# download page for the SAME filename and return its current URL. Exact-filename only —
+# the caller still verifies against the pinned size+sha, so a different version can't slip in.
+rs3_url_from_page() {  # <page_url> <filename>
+  local page="$1" file="$2" html esc
+  validate_rs3_asset "$file" || return 1     # filename is safe to embed in the regex below
+  https_guard "$page" || return 1
+  html="$(curl -fsSL --proto '=https' --max-time 60 "$page" 2>/dev/null)" || return 1
+  esc="$(printf '%s' "$file" | sed 's/\./\\./g')"   # only '.' is regex-special in the asset name
+  printf '%s' "$html" | grep -oE "https://[^\"' ]*${esc}" | head -1
+}
+
 # file_size <path> -> bytes (BSD stat)
 file_size() { stat -f %z "$1" 2>/dev/null || echo 0; }
 

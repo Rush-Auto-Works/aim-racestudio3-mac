@@ -159,7 +159,19 @@ phase_acquire_installer() {
     ui_persist INSTALLER_EXE "$want"; return 0
   fi
 
-  # Fallback 1: a matching file already in ~/Downloads (size match preferred).
+  # Fallback 1: the pinned URL path can go stale even when the file is unchanged — AiM moves the
+  # installer between directories without renaming it (this exact 404 hit a customer). Re-resolve
+  # the live URL for the SAME filename off the download page and retry. Still size+sha verified,
+  # so a different build can't sneak in.
+  local real_url; real_url="$(rs3_url_from_page "$RS3_DOWNLOAD_PAGE" "$RS3_PINNED_FILE" 2>/dev/null || true)"
+  if [ -n "$real_url" ] && [ "$real_url" != "$RS3_PINNED_URL" ]; then
+    ui_say "Pinned link was stale; using AiM's current link."
+    if download_verified "$real_url" "$want" "$RS3_PINNED_SIZE" "$RS3_PINNED_SHA256" "$RS3_DOWNLOAD_TIMEOUT"; then
+      ui_persist INSTALLER_EXE "$want"; return 0
+    fi
+  fi
+
+  # Fallback 2: a matching file already in ~/Downloads (size match preferred).
   local d
   for d in "$HOME/Downloads"/RaceStudio3-64_*.exe; do
     [ -e "$d" ] || continue
@@ -170,7 +182,7 @@ phase_acquire_installer() {
     fi
   done
 
-  # Fallback 2: ask the user to download it from AiM, then re-detect.
+  # Fallback 3: ask the user to download it from AiM, then re-detect.
   if [ "$UI_MODE" = applet ]; then
     printf 'NEEDS_INSTALLER\n'; exit "$SIG_NEEDS"
   fi
