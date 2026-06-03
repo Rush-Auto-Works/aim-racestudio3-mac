@@ -33,4 +33,36 @@ assert_false "download_verified http://nope.invalid/a \"$DL/dest4\" $SZ \"\" 3" 
 assert_eq "$(printf '%s' "$WINE_PINNED_SHA256" | wc -c | tr -d ' ')" "64" "pinned wine sha is 64 hex chars"
 assert_eq "$(printf '%s' "$RS3_PINNED_SHA256" | wc -c | tr -d ' ')" "64" "pinned rs3 sha is 64 hex chars"
 
+# 6. rs3_url_from_html (the stale-URL self-heal parser). A page that lists several versions, with
+#    the pinned file served from a DIFFERENT directory than RS3_PINNED_URL (the exact prod bug).
+PAGE_HTML='<html><body>
+ <a href="https://www.aim-sportline.com/aim-software-betas/Software/Applications/WebUpdater/release/RaceStudio3-64_38320_000000_000000_20260528_145224.exe">latest</a>
+ <a href="https://www.aim-sportline.com/aim-software-betas/Software/Applications/WebUpdater/release/RaceStudio3-64_38312_000000_000000_20260521_151606.exe">older</a>
+ <a href="../pdf/racestudio3-docs-en-latest.pdf">docs</a>
+</body></html>'
+
+# exact pinned filename resolves to its real URL even though it isn't the one in pins.env's path.
+assert_eq "$(rs3_url_from_html "$PAGE_HTML" "$RS3_PINNED_FILE")" \
+  "https://www.aim-sportline.com/aim-software-betas/Software/Applications/WebUpdater/release/$RS3_PINNED_FILE" \
+  "parser resolves pinned file to its live (moved) URL"
+
+# the resolved URL must end in exactly the pinned filename (no other version picked up).
+assert_eq "$(rs3_url_from_html "$PAGE_HTML" "$RS3_PINNED_FILE" | sed 's#.*/##')" "$RS3_PINNED_FILE" \
+  "parser never returns a different version"
+
+# a filename not on the page -> empty + nonzero (caller then falls through to manual download).
+assert_eq "$(rs3_url_from_html "$PAGE_HTML" "RaceStudio3-64_99999_000000_000000_20260101_000000.exe")" "" \
+  "parser returns empty for a file not on the page"
+
+# command-injection / bogus filename is rejected by the validate_rs3_asset guard before regex use.
+assert_false "rs3_url_from_html \"\$PAGE_HTML\" 'evil; rm -rf /.exe'" "parser rejects unsafe filename"
+assert_false "rs3_url_from_html \"\$PAGE_HTML\" 'RaceStudio3.exe'"   "parser rejects non-matching asset name"
+
+# the network wrapper refuses a non-HTTPS page before fetching.
+assert_false "rs3_url_from_page 'http://nope.invalid/page.html' \"\$RS3_PINNED_FILE\"" "scrape refuses non-HTTPS page"
+
+# 7. the pin's own URL must end in the pinned filename (cheap guard against a name/URL mismatch).
+assert_eq "$(printf '%s' "$RS3_PINNED_URL" | sed 's#.*/##')" "$RS3_PINNED_FILE" "pinned URL ends in pinned filename"
+assert_true "https_guard \"\$RS3_PINNED_URL\"" "pinned URL is https"
+
 finish
