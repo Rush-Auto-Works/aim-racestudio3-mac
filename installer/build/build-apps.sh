@@ -133,6 +133,11 @@ pset CFBundleName "RaceStudio 3" string
 pset CFBundleShortVersionString "$VERSION" string
 pset LSMinimumSystemVersion "$MIN_OS" string
 pset CFBundleIconFile "applet" string
+# macOS 15+/26 gates local-network access (LAN discovery, UDP broadcast, mDNS) behind a TCC grant.
+# RS3 talks to AiM loggers/dashes over Wi-Fi, so the bundle MUST declare this usage string or macOS
+# denies the access silently — no prompt, no entry under Settings ▸ Privacy ▸ Local Network — and
+# the device never appears in RS3. Only the main app needs it (Import/Uninstall don't network).
+pset NSLocalNetworkUsageDescription "RaceStudio 3 connects to your AiM logger or dash over Wi-Fi on your local network." string
 # osacompile droplets set CFBundleIconName=droplet, which OVERRIDES CFBundleIconFile and forces the
 # generic system droplet icon. Remove it so our applet.icns (the RS3 icon) is used.
 /usr/libexec/PlistBuddy -c "Delete :CFBundleIconName" "$PL" 2>/dev/null || true
