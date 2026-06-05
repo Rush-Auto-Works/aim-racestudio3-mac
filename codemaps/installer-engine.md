@@ -14,6 +14,7 @@ Actions: `run` (all 8 phases) · `<phase>` (one phase, applet calls these) · `r
 Flags: `--dry-run` (no net/writes outside sandbox) · `--latest` · `--smoke-test` · `--repair` · `--reinstall` · `--import`.
 
 Phases: `phase_preflight acquire_installer download_wine make_prefix silent_install relocate_data make_launcher done`.
+`make_prefix` also calls `apply_macdrv_keys` (wine.sh) post-`wineboot` to set the native keyboard-feel reg keys (Cmd→Ctrl, left Opt→Alt) — best-effort, new prefixes only.
 `write_launch_script` / `write_uninstall_script` generate `$INSTALL_ROOT/bin/{launch,uninstall}.sh`.
 Actions: `run_all do_repair do_reinstall do_import do_uninstall`.
 
@@ -30,7 +31,7 @@ RS3_SINGLE_APP UI_MODE LAUNCHER_APP_SRC IMPORT_APP_SRC UNINSTALL_APP_SRC`.
 | `net.sh` | `https_guard` `validate_version` `validate_wine_asset` `file_size` `download_verified` | HTTPS-only downloads with size+sha256 verification. |
 | `preflight.sh` | `macos_ok` `is_apple_silicon` `rosetta_present` `rosetta_install_cli` `enough_disk` `icloud_documents_synced` | Environment checks. |
 | `ui.sh` | `ui_say/progress/warn/error/persist/recall/choice/confirm` | Dual CLI/applet UX; applet path emits `NEEDS_*` sentinels + rc. |
-| `wine.sh` | `watchdog` `find_wine_binary` `wineserver_path/kill/wait` `run_wine` `wine_env_export` | Wine invocation wrappers (timeouts, prefix env). |
+| `wine.sh` | `watchdog` `find_wine_binary` `wineserver_path/kill/wait` `run_wine` `wine_env_export` `write_macdrv_reg`/`apply_macdrv_keys` | Wine invocation wrappers (timeouts, prefix env) + native keyboard-feel Mac Driver reg keys. |
 
 ## data_relocate_safe state machine (crash-safe, re-entrant)
 
