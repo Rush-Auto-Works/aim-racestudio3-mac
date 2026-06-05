@@ -348,7 +348,7 @@ write_uninstall_script() {
   local f="$INSTALL_ROOT/bin/uninstall.sh"
   cat > "$f" <<UNINST
 #!/bin/bash
-# Removes the engine + launchers. Documents data is kept unless --remove-data is passed.
+# Removes the engine + launchers. Your telemetry in \$DATA is kept unless --remove-data is passed.
 ROOT="$INSTALL_ROOT"
 LAUNCH_APP="$LAUNCHER_APP"
 UNINST_APP="$UNINSTALL_APP"
@@ -361,9 +361,10 @@ WS="\$(find "\$ROOT/wine" -type f -name wineserver -path '*/bin/*' 2>/dev/null |
 [ -n "\$WS" ] && WINEPREFIX="\$ROOT/prefix" "\$WS" -k 2>/dev/null || true
 rm -rf "\$ROOT" "\$LAUNCH_APP" "\$IMPORT_APP" "\$APPS/RaceStudio 3.command" 2>/dev/null || true
 [ "\$REMOVE_DATA" = 1 ] && rm -rf "\$DATA" 2>/dev/null || true
-# delete the uninstaller app last, detached (it can't delete itself mid-run); then remove the
-# AiM folder if it's now empty.
-( sleep 2; rm -rf "\$UNINST_APP"; rmdir "\$APPS" 2>/dev/null ) >/dev/null 2>&1 &
+# delete the uninstaller app last, detached (it can't delete itself mid-run), and take the whole
+# AiM folder with it. rm -rf (not rmdir) so a Finder-dropped .DS_Store / folder Icon can't keep
+# /Applications/AiM alive — the folder is exclusively ours (only our apps + .command ever live here).
+( sleep 2; rm -rf "\$APPS" ) >/dev/null 2>&1 &
 echo "Removed RaceStudio 3.\${REMOVE_DATA:+ (data removed)}"
 UNINST
   chmod +x "$f"
@@ -453,8 +454,7 @@ do_uninstall() {
     "$INSTALL_ROOT/bin/uninstall.sh" "$@"
   else
     wineserver_kill 2>/dev/null || true
-    rm -rf "$INSTALL_ROOT" "$LAUNCHER_APP" "$IMPORT_APP" "$UNINSTALL_APP" "$APPS_DIR/RaceStudio 3.command" 2>/dev/null || true
-    rmdir "$APPS_DIR" 2>/dev/null || true
+    rm -rf "$INSTALL_ROOT" "$APPS_DIR" 2>/dev/null || true   # whole AiM folder, incl .DS_Store/Icon
     ui_say "Removed RaceStudio 3 (data in $DATA_DIR kept)."
   fi
 }
