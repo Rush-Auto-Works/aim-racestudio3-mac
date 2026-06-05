@@ -96,6 +96,18 @@ done < <(find "$RES/wine/lib/wine" -type f -name wine -path '*-unix/wine')
 # fail fast: zero loaders means the Wine layout changed and the menu would still read "Wine".
 [ "$patched" -gt 0 ] || { echo "no Wine unix loaders found to rebrand (looked for *-unix/wine under $RES/wine/lib/wine)"; exit 1; }
 
+# ---- 1d. native Cmd-Q: flip winemac.so's Quit shortcut from ⌘⌥Q to ⌘Q ------------------------
+# winemac.drv hard-codes the menu Quit item to ⌘⌥Q; the only lever is the compiled Cocoa code in
+# lib/wine/<arch>-unix/winemac.so. Strict + fail-loud (a Wine bump that moves the code red-fails
+# here, never ships ⌘⌥Q silently). Same as 1c: must run BEFORE signing — it edits the Mach-O.
+say "Native Cmd-Q: patching winemac.so Quit shortcut -> ⌘Q"
+qpatched=0
+while IFS= read -r so; do
+  python3 "$HERE/patch-wine-cmdq.py" "$so" || { echo "cmd-q patch failed for $so"; exit 1; }
+  qpatched=$((qpatched+1))
+done < <(find "$RES/wine/lib/wine" -type f -name 'winemac.so' -path '*-unix/*')
+[ "$qpatched" -gt 0 ] || { echo "no winemac.so found to patch for Cmd-Q (looked for *-unix/winemac.so under $RES/wine/lib/wine)"; exit 1; }
+
 # ---- 2. icon (dark rounded square + Rush logo) ----------------------------------------------
 say "Building app icon"
 PYVENV="${PYVENV:-/tmp/rs3-build-venv}"
