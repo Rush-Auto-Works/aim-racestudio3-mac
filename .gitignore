@@ -1,5 +1,6 @@
 .DS_Store
 installer/dist/
+installer/bridge/build/
 *.notarize.zip
 .serena/
 __pycache__/
