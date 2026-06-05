@@ -238,6 +238,7 @@ phase_make_prefix() {
     tries=$((tries+1)); [ "$tries" -ge 15 ] && die "Couldn't create the Windows environment."
     sleep 1
   done
+  apply_macdrv_keys               # native keyboard feel (Cmd→Ctrl copy/paste/undo); best-effort
   write_wineserver_pid
   wineserver_kill
   ledger_mark prefix

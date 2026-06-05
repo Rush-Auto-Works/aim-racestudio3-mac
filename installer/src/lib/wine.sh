@@ -88,3 +88,28 @@ run_wine() {
   # arch -x86_64 forces the x86-64 slice (RS3 + this Wine are Intel; Rosetta translates).
   watchdog "$RUN_WINE_TIMEOUT" arch -x86_64 "$WINE_BIN" "$@"
 }
+
+# write_macdrv_reg <out> : emit a REGEDIT4 file that sets the winemac.drv "native keyboard feel"
+# keys under HKCU\Software\Wine\Mac Driver. Mapping BOTH Command keys to Windows Ctrl makes
+# Cmd-C/V/X/A/Z behave the way a Mac user expects inside the Windows app; LeftOptionIsAlt keeps a
+# usable Alt key (Wine warns that mapping both Command keys to Ctrl otherwise leaves no way to send
+# Alt), while the RIGHT Option key is left unmapped so it still types special characters. AppKit
+# owns Cmd-Tab / Cmd-M / the native Cmd-Opt-Q Quit and intercepts them before Wine sees the keys,
+# so those are unaffected. These value names shipped since Wine 4.0 (dev release 3.17). Pure: writes
+# the file and nothing else, so it is unit-testable without a real Wine prefix.
+write_macdrv_reg() {
+  local out="$1"
+  printf 'REGEDIT4\r\n\r\n[HKEY_CURRENT_USER\\Software\\Wine\\Mac Driver]\r\n"LeftCommandIsCtrl"="y"\r\n"RightCommandIsCtrl"="y"\r\n"LeftOptionIsAlt"="y"\r\n' > "$out"
+}
+
+# apply_macdrv_keys : write the native-feel reg file into the prefix and import it with regedit.
+# Best-effort (keyboard feel only, never touches data) — callers don't gate on $?. Requires PREFIX
+# + WINE_BIN to be set, so it runs inside make-prefix after the prefix exists.
+apply_macdrv_keys() {
+  local reg="$PREFIX/drive_c/windows/temp/native-feel.reg"
+  mkdir -p "$(dirname "$reg")" 2>/dev/null || true
+  write_macdrv_reg "$reg"
+  RUN_WINE_TIMEOUT="${WINEBOOT_TIMEOUT:-120}" run_wine regedit /S 'C:\windows\temp\native-feel.reg' \
+    >> "${LOG:-/dev/null}" 2>&1 || true
+  wineserver_wait
+}
