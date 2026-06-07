@@ -62,11 +62,13 @@ func pump(_ from: Int32, _ to: Int32) {
     var buf = [UInt8](repeating: 0, count: 65536)
     while true {
         let n = read(from, &buf, buf.count)
-        if n <= 0 { break }
+        if n < 0 { if errno == EINTR { continue }; break }  // retry on signal, else error
+        if n == 0 { break }                                 // EOF
         var off = 0
         while off < n {
             let w = buf.withUnsafeBytes { write(to, $0.baseAddress!.advanced(by: off), n - off) }
-            if w <= 0 { break }
+            if w < 0 { if errno == EINTR { continue }; break }
+            if w == 0 { break }
             off += w
         }
     }
@@ -132,12 +134,12 @@ func serveUDP() {
 
     let client = ClientBox()
 
-    // dash -> last client
+    // dash -> last client. n >= 0 is a real datagram (0 = valid zero-length); only n < 0 is error.
     DispatchQueue.global().async {
         var rbuf = [UInt8](repeating: 0, count: 65536)
         while true {
             let n = recv(us, &rbuf, rbuf.count, 0)
-            if n <= 0 { continue }
+            if n < 0 { if errno == EINTR { continue }; continue }
             guard var ca = client.get() else { continue }
             _ = withSockaddr(&ca) { sap, slen in
                 rbuf.withUnsafeBytes { sendto(ls, $0.baseAddress, n, 0, sap, slen) }
@@ -154,7 +156,7 @@ func serveUDP() {
                 recvfrom(ls, &buf, buf.count, 0, $0, &caLen)
             }
         }
-        if n <= 0 { continue }
+        if n < 0 { if errno == EINTR { continue }; continue }
         client.set(ca)
         _ = buf.withUnsafeBytes { send(us, $0.baseAddress, n, 0) }
     }

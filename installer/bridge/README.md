@@ -37,16 +37,23 @@ relay is sufficient; no broadcast translation is needed.
 
 | File | Role |
 |------|------|
-| `aim-bridge.swift` | The relay (TCP + UDP, pinned, protocol-agnostic). |
+| `aim-bridge.swift` | The relay (TCP + UDP, pinned, protocol-agnostic; EINTR-safe pump, zero-length-UDP-safe). |
 | `build-bridge.sh`  | `swiftc` → `build/aim-bridge`; `SKIP_SIGN=1` / `HARDENED_RUNTIME=1` / `CODESIGN_IDENTITY`. |
 | `test-bridge.sh`   | Hermetic round-trip test (fake dash + relay + probe, all on loopback, no sudo). |
-| `test/fake_dash.py`, `test/probe_client.py` | Test stand-ins for the dash and for RS3. |
+| `test-bridge-keepalive.sh` | Realistic test against a keepalive-gated dash: sustained transfer survives while keepalives flow; dash's ~1s TCP close is surfaced through the relay when they stop. |
+| `falsify-loopback.sh` | Phase 1.5 gate: proves a Wine guest's loopback traffic escapes the Local Network gate (win32 probe under real Wine + nehelper watch). |
+| `test/fake_dash.py`, `test/probe_client.py` | Stand-ins for the simple round-trip test. |
+| `test/keepalive_dash.py`, `test/ka_sender.py`, `test/ka_client.py` | Realistic keepalive-gated dash + keepalive sender + transfer probe. |
+| `test/loopback_probe.c`, `test/loopback_listener.py` | win32 Winsock probe + native listener for the Phase 1.5 gate. |
+| `test/interpose_rewrite.c` | Phase 2 DYLD-interpose spike — RULED OUT (Rosetta blocks DYLD insert); kept as reproducer. |
 
 ## Build & test
 
 ```bash
-bash installer/bridge/build-bridge.sh     # build (signs ad-hoc by default)
-bash installer/bridge/test-bridge.sh      # hermetic round-trip test
+bash installer/bridge/build-bridge.sh            # build (signs ad-hoc by default)
+bash installer/bridge/test-bridge.sh             # hermetic round-trip test
+bash installer/bridge/test-bridge-keepalive.sh   # realistic keepalive-gated transfer test
+bash installer/bridge/falsify-loopback.sh        # Phase 1.5 gate (needs zig + bundled Wine; run unsandboxed)
 ```
 
 ## Manual test against a real dash (when hardware is available)
