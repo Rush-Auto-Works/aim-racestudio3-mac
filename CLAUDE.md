@@ -50,6 +50,10 @@ This file is constraints, conventions, and hard-won gotchas only.
   Wine unix-loader is x86_64-under-Rosetta. Proven 2026-06-07 via `installer/bridge/test/interpose_rewrite.c`
   (loads into native arm64, never into `arch -x86_64`; independent of signing/hardened-runtime). The
   WiFi redirect (Phase 2) uses a Wine **source patch** instead. See `docs/plans/2026-06-05-wifi-loopback-bridge.md`.
+- **win32 `ws2_32` proxy/hook DLL** (to redirect RS3's sockets without rebuilding Wine): no clean
+  injection — **Wine doesn't implement `AppInit_DLLs`** (its `user32.dll` has no AppInit code at all),
+  and a same-named forwarder `ws2_32.dll` can't reach the builtin (name collision). Verified 2026-06-07
+  via `installer/bridge/test/appinit_probe.c`. The Phase 2 redirect is the Wine **source patch**.
 
 ## Gotchas
 

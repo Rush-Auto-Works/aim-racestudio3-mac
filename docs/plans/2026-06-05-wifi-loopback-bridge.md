@@ -95,11 +95,19 @@ whether it issues `sendto` vs `sendmsg` for UDP — the rewrite must cover the a
   ad-hoc-signed) and of hardened runtime (tested ad-hoc-resigned wine). The Wine unix-loader runs
   x86_64 under Rosetta, so the interpose can never fire. This is the trap the review predicted; do
   not retry DYLD for socket redirect.
-- **Possible lighter alt to a full Wine rebuild (evaluate before committing to from-source):** a
-  win32-side `ws2_32` proxy DLL shipped into the prefix that forwards to the builtin and rewrites
-  addresses. WineHQ warns against overriding `ws2_32`, so treat as secondary to the source patch.
-- Testable without hardware once built: launch RS3 through the rewrite against the realistic fake
-  dash; confirm traffic lands on loopback and the dash flow survives.
+- **ws2_32 proxy DLL — RULED OUT (spike, 2026-06-07).** Needs to inject a hook into an unmodified
+  RS3, but **Wine does not implement `AppInit_DLLs`** (its `user32.dll` has no AppInit code at all;
+  injection marker never appears even with a user32-loading target + `RequireSignedAppInitDLLs=0`).
+  And a same-named forwarder `ws2_32.dll` can't reach the builtin to forward its unmodified exports
+  (name collision). The only remaining proxy routes are fragile per-RS3-version binary patches
+  (IAT-rewrite of `AiMRS3-64.exe`, or binary-patch `ws2_32.dll.so`). Reproducer:
+  `installer/bridge/test/appinit_probe.c`. Do not retry the proxy-DLL path.
+- **CONCLUSION:** the redirect must be the **Wine source patch** (primary, above) — the only robust,
+  reviewable in-Wine option. Both lighter alternatives (DYLD, ws2_32-proxy) are ruled out on
+  hardware. Accept the build-from-source cost.
+- Testable without hardware once built: launch RS3 through the patched Wine against the realistic
+  fake dash (`test-bridge-keepalive.sh` model); confirm traffic lands on loopback and the dash flow
+  survives.
 
 ### Phase 3 — Package as root daemon (with a written security spec)
 Ship the relay as `SMAppService.daemon(plistName:)` inside the app bundle
