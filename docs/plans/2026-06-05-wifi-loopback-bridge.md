@@ -112,10 +112,15 @@ whether it issues `sendto` vs `sendmsg` for UDP — the rewrite must cover the a
   fake dash (`test-bridge-keepalive.sh` model); confirm traffic lands on loopback and the dash flow
   survives.
 
-### Phase 3 — Package as root daemon (with a written security spec)
-Ship the relay as `SMAppService.daemon(plistName:)` inside the app bundle
-(`Contents/Library/LaunchDaemons/`), Developer-ID signed + notarized. One-time **Login Items**
-approval (`SMAppServiceStatusRequiresApproval`).
+### Phase 3 — Package as root daemon (with a written security spec) — DONE (2026-06-07)
+Shipped: `aim-bridge-ctl.swift` (SMAppService status/register/unregister), the LaunchDaemon plist
+`com.rushautoworks.racestudio3.bridge.plist` (`Contents/Library/LaunchDaemons/`, BundleProgram
+→ `Contents/MacOS/aim-bridge`, RunAtLoad+KeepAlive), build-apps.sh step 1f (build+place+sign both
+binaries inside-out, hardened Developer ID). Security spec implemented in `aim-bridge.swift`: when
+root it ignores env and hard-pins `10.0.0.1`:2000/36002 and drops `SO_REUSEADDR` (chose loopback-bind
++ hardcoded-dest over peer validation, per the review's option (a)). Uninstall unregisters
+(`aim-bridge-ctl unregister`, user context) + `launchctl bootout` (root). Covered by `test-pack.sh`,
+`test-bridge-ctl.sh`, `unit-uninstall-daemon.sh`. Original spec below for reference.
 
 **Security spec (write before implementing):**
 - **No env vars in production.** The dev relay reads `DASH_ADDR`/ports from env; the production
@@ -142,7 +147,13 @@ forever. Add this to the plan and to the Uninstall app.
 (the weekly `pins.env` bump path), how they ship in the DMG, how a new-DMG drag updates the
 registered daemon, and how an old/renamed daemon is retired (no lingering duplicates).
 
-### Phase 3.5 — Graceful degradation UX (first-class, not a footnote)
+### Phase 3.5 — Graceful degradation UX — DONE (2026-06-07)
+Implemented in `RaceStudio3.applescript` `ensureBridge()`: on macOS 15+ it registers + checks the
+daemon BEFORE launching RS3; on `requiresApproval` it shows an actionable dialog that deep-links
+`x-apple.systempreferences:com.apple.LoginItems-Settings` and names SD/USB import as the fallback;
+it never blocks launch (control-tool missing/failed → just launches, same as pre-bridge). README
+documents the one-time Login Items step. Original requirements below.
+
 Silent failure is the worst outcome for the non-technical target audience. Required:
 - **Launcher health-check before launching RS3:** is the daemon running and is `127.0.0.1:2000`
   accepting? If not, surface a clear, actionable dialog (deep-link
@@ -154,10 +165,16 @@ Silent failure is the worst outcome for the non-technical target audience. Requi
 - A visible **"WiFi not working?"** path that explains AP-mode + the Login Items toggle and falls
   back to SD/USB import.
 
-### Phase 4 — On-device integration test
-macOS 26 + MXS: confirm `nehelper` stays silent (RS3 only touches loopback) and the dash appears
-in RS3. Download a session AND push a config end-to-end through the bridge. Then correct the
-README and ship.
+### Phase 4 — On-device integration test — THE ONE REMAINING STEP (needs a real dash)
+Everything above is built, unit/integration-tested hermetically, and proven in pieces on this
+Mac (macOS 26.4.1). The only thing left is the real end-to-end with hardware:
+1. Cut a notarized pre-release off this branch (CI builds the patched `ws2_32.dll` + signs the
+   daemon). Install to /Applications; on first launch enable **RaceStudio 3** in Login Items.
+2. MXS dash on WiFi (AP mode). Launch RS3, open Connected Devices.
+3. Confirm: `aim-bridge-ctl status` → `enabled`; `nehelper` stays silent (RS3 only touches
+   loopback); the dash appears; download a session AND push a config end-to-end.
+4. Then the README's WiFi note is confirmed and we ship a real release.
+Watch: `log stream --predicate 'process == "nehelper" OR subsystem == "com.apple.mdns"'`.
 
 ## Key risks / open questions
 1. **Loopback-exemption inference** — load-bearing and Wine-specific; **falsified in Phase 1.5

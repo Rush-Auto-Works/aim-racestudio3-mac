@@ -64,4 +64,12 @@ This file is constraints, conventions, and hard-won gotchas only.
   but in-place update while RS3 runs hits locked-file replacement (no Wine reboot) — untested/unreliable.
   Prefer the pin-bump + rebuild path.
 - **PIL fallback fonts lack glyphs** like `▸` (renders as tofu in the DMG background) — use ASCII.
-- **Tests**: `bash installer/test/run-all.sh` before committing engine changes.
+- **Tests**: `bash installer/test/run-all.sh` before committing engine changes;
+  `bash installer/bridge/run-bridge-tests.sh` before committing WiFi-bridge changes.
+- **WiFi bridge (macOS 15+ Local Network gate)**: RS3 reaches AiM dashes at `10.0.0.1`, which the
+  macOS 15+/26 Local Network gate drops for the Wine guest. Fix = keep RS3 on loopback (a patched
+  `ws2_32.dll` rewrites `10.0.0.0/28`→`127.0.0.1`, built in CI from `installer/bridge/wine-patch/`)
+  + a root `SMAppService` daemon `aim-bridge` that relays loopback↔dash (registered by
+  `aim-bridge-ctl` at launch; one-time Login Items approval). Full design + status:
+  `docs/plans/2026-06-05-wifi-loopback-bridge.md` and `installer/bridge/README.md`. **Phase 4
+  (real-dash end-to-end on macOS 26) is the one remaining unverified step.**

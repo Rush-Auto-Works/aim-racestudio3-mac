@@ -50,8 +50,12 @@ the same `/` if you prefer drive letters.
 <details>
 <summary><b>Connect your AiM logger or dash</b></summary>
 
-- **WiFi: works great.** Join your device's WiFi network in macOS System Settings, then
-  connect inside RaceStudio 3 just like on Windows.
+- **WiFi.** Join your device's WiFi network in macOS System Settings, then connect inside
+  RaceStudio 3 just like on Windows.
+  - **On macOS Sequoia (15) and Tahoe (26):** the first time you connect, macOS asks you to
+    allow **RaceStudio 3** in System Settings ▸ General ▸ Login Items & Extensions ("Allow in
+    the Background"). Turn it on — it's a one‑time step that lets RaceStudio 3 reach your device
+    over the local network. (Newer macOS blocks that access until you do.)
 - **USB cable: not supported.** It doesn't work through Wine. Use WiFi, or pull data off the
   device's SD card.
 
