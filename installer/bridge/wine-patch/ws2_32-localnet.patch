@@ -1,0 +1,77 @@
+--- a/dlls/ws2_32/socket.c
++++ b/dlls/ws2_32/socket.c
+@@ -27,6 +27,9 @@
+  */
+ 
+ #include "ws2_32_private.h"
++
++static const struct sockaddr *aim_loopback_redirect( const struct sockaddr *addr, int len,
++                                                     struct sockaddr_in *tmp );
+ 
+ #define FILE_USE_FILE_POINTER_POSITION ((LONGLONG)-2)
+ 
+@@ -1141,10 +1144,12 @@
+     HANDLE event = NULL;
+     void *cvalue = NULL;
+     NTSTATUS status;
++    struct sockaddr_in aim_tmp;
+ 
+     TRACE( "socket %#Ix, buffers %p, buffer_count %lu, flags %#lx, addr %p, "
+            "addr_len %d, overlapped %p, completion %p\n",
+            s, buffers, buffer_count, flags, addr, addr_len, overlapped, completion );
++    addr = aim_loopback_redirect( addr, addr_len, &aim_tmp );
+ 
+     if (!is_valid_socket( s ))
+     {
+@@ -1367,14 +1372,39 @@
+ /***********************************************************************
+  *      connect   (ws2_32.4)
+  */
++/* AiM WiFi loopback redirect (macOS Local Network gate workaround).
++ * The AP-mode AiM dash is 10.0.0.0/28, which the macOS 15+/26 Local Network privacy gate
++ * silently drops for the Wine guest. Redirect those sockets to 127.0.0.1, where the notarized
++ * root aim-bridge daemon relays to the real dash. Only 10.0.0.0/28 is touched; all other
++ * traffic is unaffected. See aim-racestudio3-mac installer/bridge/. */
++static const struct sockaddr *aim_loopback_redirect( const struct sockaddr *addr, int len,
++                                                     struct sockaddr_in *tmp )
++{
++    if (addr && len >= (int)sizeof(*tmp) && addr->sa_family == AF_INET)
++    {
++        const unsigned char *b = (const unsigned char *)&((const struct sockaddr_in *)addr)->sin_addr;
++        if (b[0] == 10 && b[1] == 0 && b[2] == 0 && b[3] <= 15) /* 10.0.0.0/28 */
++        {
++            unsigned char *d = (unsigned char *)&tmp->sin_addr;
++            *tmp = *(const struct sockaddr_in *)addr;
++            d[0] = 127; d[1] = 0; d[2] = 0; d[3] = 1; /* 127.0.0.1 */
++            FIXME( "AiM: redirecting %s to 127.0.0.1\n", debugstr_sockaddr(addr) );
++            return (const struct sockaddr *)tmp;
++        }
++    }
++    return addr;
++}
++
+ int WINAPI connect( SOCKET s, const struct sockaddr *addr, int len )
+ {
+     struct afd_connect_params *params;
+     IO_STATUS_BLOCK io;
+     HANDLE sync_event;
+     NTSTATUS status;
++    struct sockaddr_in aim_tmp;
+ 
+     TRACE( "socket %#Ix, addr %s, len %d\n", s, debugstr_sockaddr(addr), len );
++    addr = aim_loopback_redirect( addr, len, &aim_tmp );
+ 
+     if (!(sync_event = get_sync_event())) return -1;
+ 
+@@ -1425,9 +1455,11 @@
+     struct afd_connect_params *params;
+     void *cvalue = NULL;
+     NTSTATUS status;
++    struct sockaddr_in aim_tmp;
+ 
+     TRACE( "socket %#Ix, ptr %p %s, length %d, send_buffer %p, send_len %lu, overlapped %p\n",
+            s, name, debugstr_sockaddr(name), namelen, send_buffer, send_len, overlapped );
++    name = aim_loopback_redirect( name, namelen, &aim_tmp );
+ 
+     if (!overlapped)
+     {

@@ -65,6 +65,14 @@ Then verify with the existing harness: run `aim-bridge` + the keepalive dash on 
 launch `loopback_probe.exe 10.0.0.1 ...` under the patched Wine, confirm bytes land on the
 `127.0.0.1` listener (the rewrite fired) and the keepalive-gated transfer survives.
 
+## Status: PROVEN (2026-06-07)
+
+Built the patched `ws2_32.dll` (PE x86-64) from wine-11.9 source, swapped it into the prebuilt
+Gcenx staging bundle, and ran `loopback_probe.exe 10.0.0.1 ...` under the patched Wine with a
+native listener on `127.0.0.1`: both TCP and UDP arrived (`GOT TCP:WS2PATCH` / `GOT UDP:WS2PATCH`).
+So the rewrite fires for `connect()` and `sendto()`, and a vanilla-built DLL is ABI-compatible
+with the staging bundle. Reproduce with `build-ws2_32.sh`.
+
 ## CI integration — OPEN DECISION
 
 `release-dmg.yml` currently downloads the prebuilt Gcenx tarball. Two ways to ship the patch:
