@@ -4,7 +4,7 @@
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$HERE" || exit 2
 
-TESTS=(unit-validators.sh unit-net.sh unit-ledger.sh unit-preflight.sh unit-data.sh unit-launcher.sh unit-wine.sh unit-pins-online.sh dryrun-test.sh)
+TESTS=(unit-validators.sh unit-net.sh unit-ledger.sh unit-preflight.sh unit-data.sh unit-launcher.sh unit-wine.sh unit-patch-cmdq.sh unit-pins-online.sh dryrun-test.sh)
 fail=0; skip=0
 for t in "${TESTS[@]}"; do
   echo "=============================================================="

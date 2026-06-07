@@ -34,9 +34,12 @@ This file is constraints, conventions, and hard-won gotchas only.
 - **NSStatusItem menu-bar helper** (removed): invisible under Bartender / Tahoe. Abandoned.
 - **Custom items in Wine's macOS app menu**: `winemac.drv` builds it in compiled Cocoa with no
   config hook; would require rebuilding Wine from source. Not worth it.
-- **Cmd-Q to quit RS3**: winemac sends `WM_QUERYENDSESSION`, which RS3 ignores → no reliable quit.
-  Reliable kill is `wineserver -k`. Intercepting Cmd-Q needs an Accessibility/Input-Monitoring grant
-  (parked at the user's request). The Uninstall app + a future `Quit` app use `wineserver -k`.
+- **Cmd-Q to quit RS3**: the native app-menu Quit (`terminate:`) **does reliably quit RS3** — verified
+  on device 2026-06-07 (⌘⌥Q quit a running RS3). The old "RS3 ignores `WM_QUERYENDSESSION`" worry
+  applies to *forwarding a keystroke into the app*, NOT the AppKit menu item, which terminates the Wine
+  process directly. We bind it to the Mac-standard ⌘Q by binary-patching winemac.so's Quit modifier
+  mask (`patch-wine-cmdq.py`, build step 1d) — no Accessibility grant needed (the menu owns ⌘Q; no
+  global keystroke intercept). `wineserver -k` is still the hard kill used by the Uninstall app.
 - **Trusting `lsappinfo`/`localizedName`** for the menu name (filename-derived, not the menu title).
 - **Patching `CFBundleExecutable` to fix the Dock name** ("wine"): doesn't work — macOS derives the
   Dock/process name from the real on-disk loader filename, not the plist. Worse, a `CFBundleExecutable`
