@@ -55,5 +55,15 @@ python3 "$PATCHER" "$FIX0" >/dev/null 2>&1 && bad "should fail when no Quit site
 FIX2="$SBX/two.bin"; mkfix "$FIX2" 2
 python3 "$PATCHER" "$FIX2" >/dev/null 2>&1 && bad "should fail when Quit site ambiguous" || ok "fails loudly with two Quit sites"
 
+# --- fail-loud: mixed state (one unpatched + one already-patched = total 2) ---
+FIXM="$SBX/mixed.bin"
+python3 - "$FIXM" <<'PY'
+import sys
+un  = bytes.fromhex("BA00001800") + bytes.fromhex("4889C7") + bytes.fromhex("488B35")
+pat = bytes.fromhex("BA00001000") + bytes.fromhex("4889C7") + bytes.fromhex("488B35")
+open(sys.argv[1], "wb").write(b"\xcf\xfa\xed\xfe" + b"\x00" * 40 + un + b"\x90" * 16 + pat + b"\x90" * 16)
+PY
+python3 "$PATCHER" "$FIXM" >/dev/null 2>&1 && bad "should fail on mixed patched+unpatched" || ok "fails loudly on mixed state (total 2)"
+
 echo "unit-patch-cmdq: $P passed, $F failed"
 [ "$F" -eq 0 ]

@@ -61,15 +61,18 @@ def main():
     n_un = count(data, QUIT_UNPATCHED)
     n_done = count(data, QUIT_PATCHED)
 
-    if n_un == 0 and n_done >= 1:
-        print(f"Cmd-Q already patched in {path}; nothing to do")
-        return
-    if n_un != 1:
+    # Invariant: exactly ONE Quit site, patched or not. Anything else (zero, or multiple in any
+    # mix) means the codegen drifted — fail loud rather than guess which site to touch.
+    total = n_un + n_done
+    if total != 1:
         raise SystemExit(
-            f"expected exactly one ⌘⌥Q Quit site in {path}, found {n_un} "
-            f"(patched={n_done}). Wine codegen may have changed on a version bump — "
+            f"expected exactly one Quit site in {path}, found unpatched={n_un}, patched={n_done}. "
+            f"Wine codegen may have changed on a version bump — "
             f"re-derive the byte pattern from a fresh disassembly before shipping."
         )
+    if n_done == 1:
+        print(f"Cmd-Q already patched in {path}; nothing to do")
+        return
 
     i = data.find(QUIT_UNPATCHED)
     assert data[i + MASK_BYTE_OFF] == 0x18, "matched run does not hold the expected 0x18 mask byte"
