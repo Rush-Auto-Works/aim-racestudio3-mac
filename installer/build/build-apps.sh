@@ -135,6 +135,19 @@ if [ "$X64_SWAPPED" != 1 ]; then
   say "  (no patched ws2_32.dll — WiFi redirect not applied; dev build only)"
 fi
 
+# ---- 1f. aim-bridge root daemon + SMAppService control tool ---------------------------------
+# The 1e redirect sends RS3's dash traffic to 127.0.0.1; this root daemon (registered at first
+# launch via SMAppService -> the user enables it once in Login Items) relays loopback <-> the
+# real dash, exempt from the Local Network gate because it runs as root. The launcher
+# (RaceStudio3.applescript) calls aim-bridge-ctl to register/health-check it on macOS 15+.
+say "Building aim-bridge daemon + control tool"
+SKIP_SIGN=1 bash "$HERE/../bridge/build-bridge.sh" >/dev/null || { echo "bridge build failed"; exit 1; }
+mkdir -p "$APP/Contents/Library/LaunchDaemons"
+cp "$HERE/../bridge/build/aim-bridge"     "$APP/Contents/MacOS/aim-bridge"
+cp "$HERE/../bridge/build/aim-bridge-ctl" "$APP/Contents/MacOS/aim-bridge-ctl"
+cp "$HERE/../bridge/com.rushautoworks.racestudio3.bridge.plist" "$APP/Contents/Library/LaunchDaemons/"
+chmod +x "$APP/Contents/MacOS/aim-bridge" "$APP/Contents/MacOS/aim-bridge-ctl"
+
 # ---- 2. icon (dark rounded square + Rush logo) ----------------------------------------------
 say "Building app icon"
 PYVENV="${PYVENV:-/tmp/rs3-build-venv}"
@@ -245,6 +258,13 @@ if [ "${HARDENED_RUNTIME:-0}" = 1 ]; then
                 say "  warn: could not sign $f" ;;
     esac
   done < <(find "$RES/wine" -type f)
+  # Sign the bridge daemon + control tool (inside-out: before the app bundle). Plain hardened
+  # Developer ID — no special entitlements (a socket relay + an SMAppService client).
+  say "Signing aim-bridge daemon + control tool…"
+  # shellcheck disable=SC2086
+  codesign --force --options runtime $TS --sign "$IDENTITY" "$APP/Contents/MacOS/aim-bridge"     || { echo "aim-bridge codesign failed"; exit 1; }
+  # shellcheck disable=SC2086
+  codesign --force --options runtime $TS --sign "$IDENTITY" "$APP/Contents/MacOS/aim-bridge-ctl" || { echo "aim-bridge-ctl codesign failed"; exit 1; }
   say "Signing the app bundle…"
   # shellcheck disable=SC2086
   codesign --force --options runtime $TS --entitlements "$ENT" --sign "$IDENTITY" "$APP" || { echo "codesign failed"; exit 1; }

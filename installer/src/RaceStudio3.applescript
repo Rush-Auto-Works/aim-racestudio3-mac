@@ -66,6 +66,7 @@ end doFirstRunSetup
 -- Launch RS3 by exec'ing the Wine bundled INSIDE this app, so macOS resolves Wine's main bundle
 -- to RaceStudio 3.app and the menu bar reads "RaceStudio 3" (not "Wine"). Runs detached.
 on launchRS3()
+	ensureBridge()
 	set wb to wineBin()
 	set root to (POSIX path of (path to application support folder from user domain)) & "RaceStudio3"
 	set sh to "export WINEPREFIX=" & quoted form of (root & "/prefix") & " WINEARCH=win64 WINEDEBUG=-all; " & ¬
@@ -83,6 +84,35 @@ end launchRS3
 on wineBin()
 	return (POSIX path of (path to me)) & "Contents/Resources/wine/bin/wine"
 end wineBin
+
+-- Ensure the root aim-bridge daemon is registered + running before RS3 scans for devices.
+-- Only on macOS 15+ (where the Local Network gate blocks the Wine guest); older macOS reaches
+-- AiM devices natively. Best-effort: never block RS3 from launching, and on first run guide the
+-- user to enable it (one-time Login Items toggle). If they skip it, Wi-Fi just won't find devices
+-- and SD/USB import remains available — same as before the bridge existed.
+on ensureBridge()
+	try
+		set vmajor to (do shell script "sw_vers -productVersion | cut -d. -f1") as integer
+	on error
+		return
+	end try
+	if vmajor < 15 then return
+	set ctlBin to (POSIX path of (path to me)) & "Contents/MacOS/aim-bridge-ctl"
+	set brStatus to ""
+	try
+		set brStatus to do shell script quoted form of ctlBin & " register 2>/dev/null"
+	on error
+		return -- control tool missing/failed: don't nag, just launch RS3
+	end try
+	if brStatus is "requiresApproval" then
+		set b to button returned of (display dialog "One quick step to connect AiM devices over Wi-Fi on this version of macOS:" & return & return & "Turn on “RaceStudio 3” under System Settings ▸ General ▸ Login Items & Extensions (Allow in the Background). macOS otherwise blocks Wi-Fi device discovery for RaceStudio 3." & return & return & "You can also import data from an SD card or USB instead." buttons {"Open Login Items", "Later"} default button "Open Login Items" with title "Allow Wi-Fi access" with icon caution)
+		if b is "Open Login Items" then
+			try
+				do shell script "open 'x-apple.systempreferences:com.apple.LoginItems-Settings'"
+			end try
+		end if
+	end if
+end ensureBridge
 
 on isInstalled(coreScript)
 	try

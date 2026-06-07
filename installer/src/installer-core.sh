@@ -360,6 +360,10 @@ REMOVE_DATA=0; [ "\${1:-}" = "--remove-data" ] && REMOVE_DATA=1
 # stop any Wine first
 WS="\$(find "\$ROOT/wine" -type f -name wineserver -path '*/bin/*' 2>/dev/null | head -1)"
 [ -n "\$WS" ] && WINEPREFIX="\$ROOT/prefix" "\$WS" -k 2>/dev/null || true
+# stop the root aim-bridge LaunchDaemon (WiFi loopback relay). The Uninstall app also calls
+# aim-bridge-ctl unregister in the user context to clear the SMAppService record; this bootout
+# is the root-side belt-and-suspenders so nothing is left bound to loopback after removal.
+launchctl bootout system/com.rushautoworks.racestudio3.bridge 2>/dev/null || true
 rm -rf "\$ROOT" "\$LAUNCH_APP" "\$IMPORT_APP" "\$APPS/RaceStudio 3.command" 2>/dev/null || true
 [ "\$REMOVE_DATA" = 1 ] && rm -rf "\$DATA" 2>/dev/null || true
 # delete the uninstaller app last, detached (it can't delete itself mid-run), and take the whole
