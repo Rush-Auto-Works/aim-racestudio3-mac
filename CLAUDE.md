@@ -45,6 +45,11 @@ This file is constraints, conventions, and hard-won gotchas only.
   Dock/process name from the real on-disk loader filename, not the plist. Worse, a `CFBundleExecutable`
   that doesn't match the actual binary breaks LaunchServices icon resolution → blank Dock icon.
   `patch-wine-appname.py` patches `CFBundleName` only. Verified 2026-06-02. Dock "wine" is accepted (like Cmd-Q).
+- **`DYLD_INSERT_LIBRARIES` to interpose Wine's sockets** (for the WiFi loopback redirect): doesn't
+  fire — DYLD insert is **not honored for Rosetta-translated x86_64 processes** (macOS 26.4.1), and the
+  Wine unix-loader is x86_64-under-Rosetta. Proven 2026-06-07 via `installer/bridge/test/interpose_rewrite.c`
+  (loads into native arm64, never into `arch -x86_64`; independent of signing/hardened-runtime). The
+  WiFi redirect (Phase 2) uses a Wine **source patch** instead. See `docs/plans/2026-06-05-wifi-loopback-bridge.md`.
 
 ## Gotchas
 
