@@ -33,9 +33,17 @@ already have. Works from a USB stick, a backup, or a Parallels shared folder.
 thing, and paste it into Claude or ChatGPT on your Mac. It'll find your old data wherever it
 is — including inside a Parallels Windows setup — and copy it in.
 
-**Or use RaceStudio 3's own Import/Export** buttons, same as on Windows. Note: RS3 thinks it's
-on Windows, so to find your Mac files in its Open window, go to **This PC → `Z:` → Users →
-your-name** — that's your real Mac home (Desktop, Documents, Downloads all live there).
+**Or use RaceStudio 3's own Import/Export** buttons, same as on Windows. RS3 still thinks it's
+on Windows, but it runs in a slim Windows environment that mounts your whole Mac drive at the
+root `/`. So in its file browser, expand **My Computer → `/`** and your real Mac home is under
+**Users → your-name** (Desktop, Documents, Downloads all live there). The `Z:` drive points to
+the same `/` if you prefer drive letters.
+
+<p align="center">
+  <img src="img/import-home-dir-tree.png" width="220"
+       alt="RS3 file browser showing the Mac drive mounted at / with the home folder under Users">
+</p>
+<p align="center"><i>RS3's file browser: the Mac drive is <code>/</code>; your home is <code>/Users/your-name</code>.</i></p>
 
 </details>
 
