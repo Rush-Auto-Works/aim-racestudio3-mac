@@ -28,12 +28,18 @@ import Foundation
 func env(_ k: String, _ d: String) -> String { ProcessInfo.processInfo.environment[k] ?? d }
 func envPort(_ k: String, _ d: UInt16) -> UInt16 { UInt16(env(k, String(d))) ?? d }
 
-let LISTEN_ADDR = env("BRIDGE_LISTEN_ADDR", "127.0.0.1")
-let DASH_ADDR   = env("DASH_ADDR", "10.0.0.1")
-let TCP_LISTEN  = envPort("TCP_LISTEN_PORT", 2000)
-let TCP_DASH    = envPort("TCP_DASH_PORT", 2000)
-let UDP_LISTEN  = envPort("UDP_LISTEN_PORT", 36002)
-let UDP_DASH    = envPort("UDP_DASH_PORT", 36002)
+// Production hardening: the daemon runs as ROOT (root is exempt from the Local Network gate).
+// When root, IGNORE the environment and hard-pin the destination + ports — otherwise env
+// injection (a tampered launchd plist, a hostile parent) could turn a root process into an
+// arbitrary outbound proxy. Env overrides are honored ONLY when non-root, which is exactly the
+// hermetic test harness (a normal user). Same split governs SO_REUSEADDR (see serve*()).
+let IS_ROOT     = (getuid() == 0)
+let LISTEN_ADDR = IS_ROOT ? "127.0.0.1" : env("BRIDGE_LISTEN_ADDR", "127.0.0.1")
+let DASH_ADDR   = IS_ROOT ? "10.0.0.1"  : env("DASH_ADDR", "10.0.0.1")
+let TCP_LISTEN  = IS_ROOT ? UInt16(2000)  : envPort("TCP_LISTEN_PORT", 2000)
+let TCP_DASH    = IS_ROOT ? UInt16(2000)  : envPort("TCP_DASH_PORT", 2000)
+let UDP_LISTEN  = IS_ROOT ? UInt16(36002) : envPort("UDP_LISTEN_PORT", 36002)
+let UDP_DASH    = IS_ROOT ? UInt16(36002) : envPort("UDP_DASH_PORT", 36002)
 
 func logmsg(_ s: String) {
     FileHandle.standardError.write(Data(("[aim-bridge] " + s + "\n").utf8))
@@ -77,8 +83,10 @@ func pump(_ from: Int32, _ to: Int32) {
 
 func serveTCP() {
     let ls = socket(AF_INET, SOCK_STREAM, 0)
-    var yes: Int32 = 1
-    setsockopt(ls, SOL_SOCKET, SO_REUSEADDR, &yes, socklen_t(MemoryLayout<Int32>.size))
+    // SO_REUSEADDR only for the (non-root) test harness, which rebinds fixed ports across
+    // scenarios. The root daemon does NOT set it: on loopback it would let any local process
+    // pre-bind and steal 127.0.0.1:<port>. Without it, a conflicting bind fails -> we exit.
+    if !IS_ROOT { var yes: Int32 = 1; setsockopt(ls, SOL_SOCKET, SO_REUSEADDR, &yes, socklen_t(MemoryLayout<Int32>.size)) }
     var la = makeAddr(LISTEN_ADDR, TCP_LISTEN)
     guard withSockaddr(&la, { bind(ls, $0, $1) }) == 0 else {
         logmsg("TCP bind \(LISTEN_ADDR):\(TCP_LISTEN) failed: \(String(cString: strerror(errno)))"); exit(1)
@@ -118,8 +126,10 @@ final class ClientBox: @unchecked Sendable {
 
 func serveUDP() {
     let ls = socket(AF_INET, SOCK_DGRAM, 0)
-    var yes: Int32 = 1
-    setsockopt(ls, SOL_SOCKET, SO_REUSEADDR, &yes, socklen_t(MemoryLayout<Int32>.size))
+    // SO_REUSEADDR only for the (non-root) test harness, which rebinds fixed ports across
+    // scenarios. The root daemon does NOT set it: on loopback it would let any local process
+    // pre-bind and steal 127.0.0.1:<port>. Without it, a conflicting bind fails -> we exit.
+    if !IS_ROOT { var yes: Int32 = 1; setsockopt(ls, SOL_SOCKET, SO_REUSEADDR, &yes, socklen_t(MemoryLayout<Int32>.size)) }
     var la = makeAddr(LISTEN_ADDR, UDP_LISTEN)
     guard withSockaddr(&la, { bind(ls, $0, $1) }) == 0 else {
         logmsg("UDP bind \(LISTEN_ADDR):\(UDP_LISTEN) failed: \(String(cString: strerror(errno)))"); exit(1)
