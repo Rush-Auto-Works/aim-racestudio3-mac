@@ -70,21 +70,25 @@ sudo installer/bridge/build/aim-bridge          # DASH_ADDR defaults to 10.0.0.1
 
 ## Roadmap
 
-- **Phase 1 (done):** the relay + hermetic test (this directory).
-- **Phase 2:** make RS3-under-Wine target `127.0.0.1`. RS3 has no connection-IP setting and
-  auto-derives the dash IP from the AP gateway (`10.0.0.1`), so we rewrite its socket
-  destinations. Preferred: a `DYLD_INSERT_LIBRARIES` interpose dylib wrapping `connect`/`sendto`
-  that rewrites `10.0.0.0/28` → `127.0.0.1` (no Wine rebuild; needs
-  `com.apple.security.cs.allow-dyld-environment-variables` + `disable-library-validation` on the
-  loader's hardened-runtime signature). Fallback: patch the bundled Wine's `ws2_32`/`server/sock.c`.
-- **Phase 3:** ship the relay as a root `SMAppService.daemon` inside the app bundle
-  (`Contents/Library/LaunchDaemons/`), Developer-ID signed + notarized, one-time **Login Items**
-  approval (`SMAppServiceStatusRequiresApproval`). Pin destination/ports; validate the loopback peer.
-- **Phase 4:** on-device integration test on macOS 26 with the MXS — confirm `nehelper` stays
-  silent (RS3 only ever touches loopback) and the dash appears in RS3.
+- **Phase 1 — DONE:** the relay + hermetic + realistic-keepalive tests.
+- **Phase 1.5 — DONE:** proved a Wine guest's loopback traffic escapes the gate (`falsify-loopback.sh`).
+- **Phase 2 — DONE:** RS3 (no connection-IP setting, auto-derives the AP gateway `10.0.0.1`) is
+  redirected by a **Wine `ws2_32` source patch** (`wine-patch/`, built in CI, swapped into the
+  bundle). DYLD interpose (Rosetta blocks it) and a ws2_32 proxy DLL (Wine has no `AppInit_DLLs`)
+  were both ruled out — see `test/interpose_rewrite.c`, `test/appinit_probe.c` and project CLAUDE.md.
+- **Phase 3 — DONE:** the relay ships as a root `SMAppService.daemon` (`aim-bridge-ctl` registers
+  it; one-time Login Items approval), hardened (root → no env, pinned dest, no `SO_REUSEADDR`),
+  with uninstall teardown.
+- **Phase 3.5 — DONE:** launcher health-check + Login Items guidance + SD/USB fallback.
+- **Phase 4 — REMAINING:** on-device end-to-end on macOS 26 with a real MXS — confirm `nehelper`
+  stays silent and the dash appears in RS3 (download + config upload). Needs hardware.
 
 ## Security
 
-Root scope is limited to the relay, never all of Wine. The daemon hardcodes the permitted
-destination subnet (`10.0.0.0/28`) and ports (`36002/UDP`, `2000/TCP`) and declines anything
-else. Phase 3 adds XPC-peer code-signing validation and an idle watchdog.
+Root scope is limited to the relay, never all of Wine. Running as root, `aim-bridge` ignores the
+environment and hardcodes the permitted destination subnet (`10.0.0.0/28`) and ports
+(`36002/UDP`, `2000/TCP`), binds loopback-only, and drops `SO_REUSEADDR` (so a local process
+can't pre-bind/steal the port). We chose loopback-bind + hardcoded-dest over peer validation
+(there's no XPC peer on a raw socket; the confused-deputy risk is low — a dash holds no secrets
+and grants no escalation to the Mac). Uninstall unregisters the daemon (user `aim-bridge-ctl
+unregister` + root `launchctl bootout`), so nothing is left bound after removal.
