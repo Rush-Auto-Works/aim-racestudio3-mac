@@ -56,7 +56,9 @@ IFS=',' read -ra A <<< "$ARCHS"
 for arch in "${A[@]}"; do
   tgt="dlls/ws2_32/${arch}-windows/ws2_32.dll"
   make -j"$(sysctl -n hw.ncpu)" "$tgt" >>build.out 2>&1 || { tail -25 build.out; echo "build $tgt failed"; exit 1; }
-  strings "$tgt" | grep -q 'AiM: redirecting' || { echo "patch not in $tgt"; exit 1; }
+  # plain grep (NOT -q): under `set -o pipefail`, grep -q exits early -> strings gets SIGPIPE
+  # -> the pipeline reports failure even on a match. grep without -q reads all input, no SIGPIPE.
+  strings "$tgt" | grep -F 'AiM: redirecting' >/dev/null || { echo "patch not in $tgt"; exit 1; }
   mkdir -p "$OUT/${arch}-windows"
   cp "$tgt" "$OUT/${arch}-windows/ws2_32.dll"
   echo "[build-ws2_32] built $OUT/${arch}-windows/ws2_32.dll"

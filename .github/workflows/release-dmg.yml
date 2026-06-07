@@ -77,6 +77,16 @@ jobs:
           rm -f "$RUNNER_TEMP/cert.p12"
           security find-identity -v -p codesigning "$KC"
 
+      - name: Build patched ws2_32.dll (WiFi loopback redirect)
+        run: |
+          set -euo pipefail
+          # The macOS 15+/26 Local Network gate drops RS3's WiFi traffic to the dash (10.0.0.1)
+          # for the Wine guest. Our patched ws2_32.dll rewrites 10.0.0.0/28 -> 127.0.0.1 so RS3
+          # stays on loopback; the root aim-bridge daemon relays to the dash. Built from source
+          # here (not committed) so it tracks the pinned Wine version. build-apps.sh swaps it in.
+          brew install mingw-w64 bison flex
+          bash installer/bridge/wine-patch/build-ws2_32.sh
+
       - name: Decode RS3 icon (optional)
         env:
           RS3_LOGO_B64: ${{ secrets.RS3_LOGO_B64 }}

@@ -108,6 +108,33 @@ while IFS= read -r so; do
 done < <(find "$RES/wine/lib/wine" -type f -name 'winemac.so' -path '*-unix/*')
 [ "$qpatched" -gt 0 ] || { echo "no winemac.so found to patch for Cmd-Q (looked for *-unix/winemac.so under $RES/wine/lib/wine)"; exit 1; }
 
+# ---- 1e. WiFi loopback redirect: swap in the patched ws2_32.dll -----------------------------
+# RS3 reaches AiM dashes at 10.0.0.1, which the macOS 15+/26 Local Network gate silently drops
+# for the Wine guest. Our patched ws2_32.dll rewrites 10.0.0.0/28 -> 127.0.0.1 so RS3 stays on
+# loopback (outside the gate); the root aim-bridge daemon relays to the real dash. Build the DLL
+# with installer/bridge/wine-patch/build-ws2_32.sh (CI does this). Like 1c/1d, must run BEFORE
+# signing (it replaces a bundle resource). PE DLLs aren't Mach-O, so they're not codesigned
+# individually — the app-bundle seal covers them, hence the swap must precede step 4.
+WS2_DIR="${WS2_32_PATCHED_DIR:-$HERE/../bridge/wine-patch/build/ws2_32}"
+say "WiFi: swapping patched ws2_32.dll (loopback redirect)"
+swap_ws2() { # <arch>  -> echoes "1" if swapped
+  local arch="$1" src="$WS2_DIR/$1-windows/ws2_32.dll" dst="$RES/wine/lib/wine/$1-windows/ws2_32.dll"
+  [ -f "$src" ] && [ -f "$dst" ] || return 1
+  # plain grep + redirect (NOT grep -q): under `set -o pipefail` grep -q exits early and SIGPIPEs
+  # strings, which would report the pipeline as failed even when the marker is present.
+  strings "$src" | grep -F 'AiM: redirecting' >/dev/null || { echo "patched ws2_32 ($arch) missing redirect marker" >&2; exit 1; }
+  cp "$src" "$dst"; say "  swapped $arch-windows/ws2_32.dll"
+}
+swap_ws2 x86_64 && X64_SWAPPED=1 || X64_SWAPPED=0
+swap_ws2 i386   || true   # 32-bit ws2_32 is best-effort (RS3 main is 64-bit)
+if [ "$X64_SWAPPED" != 1 ]; then
+  if [ "${HARDENED_RUNTIME:-0}" = 1 ]; then
+    echo "no patched x86_64 ws2_32.dll at $WS2_DIR — the WiFi redirect is REQUIRED for release."
+    echo "run: bash installer/bridge/wine-patch/build-ws2_32.sh"; exit 1
+  fi
+  say "  (no patched ws2_32.dll — WiFi redirect not applied; dev build only)"
+fi
+
 # ---- 2. icon (dark rounded square + Rush logo) ----------------------------------------------
 say "Building app icon"
 PYVENV="${PYVENV:-/tmp/rs3-build-venv}"
