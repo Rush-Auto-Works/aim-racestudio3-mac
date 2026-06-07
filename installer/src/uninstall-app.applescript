@@ -34,6 +34,16 @@ on run
 	set b to button returned of (display dialog "Remove RaceStudio 3 from this Mac?" & return & return & "This stops RaceStudio 3 and removes everything in /Applications/AiM (the app, the engine, and the helpers). Your telemetry in " & dataDisp & " is kept unless you choose to remove it." buttons {"Cancel", "Remove everything", "Remove (keep my data)"} default button "Remove (keep my data)" with title "Uninstall RaceStudio 3" with icon caution)
 	if b is "Cancel" then return
 
+	-- Unregister the WiFi bridge daemon in the USER context (SMAppService records are per-user),
+	-- BEFORE the root step deletes RaceStudio 3.app — otherwise a stale "RaceStudio 3" entry can
+	-- linger in Login Items pointing at a deleted app. Best-effort; uninstall.sh also boots it out
+	-- as root. The control tool lives in the sibling RaceStudio 3.app.
+	try
+		set parentP to do shell script "dirname " & quoted form of (text 1 thru -2 of (POSIX path of (path to me)))
+		set rs3ctl to parentP & "/RaceStudio 3.app/Contents/MacOS/aim-bridge-ctl"
+		do shell script "test -x " & quoted form of rs3ctl & " && " & quoted form of rs3ctl & " unregister >/dev/null 2>&1 || true"
+	end try
+
 	set extra to ""
 	if b is "Remove everything" then
 		set c to button returned of (display dialog "Also permanently delete your telemetry in " & dataDisp & "?" & return & return & "This can't be undone." buttons {"Keep my data", "Delete my data"} default button "Keep my data" with title "Delete telemetry?" with icon stop)
