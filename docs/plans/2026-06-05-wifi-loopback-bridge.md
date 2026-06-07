@@ -82,11 +82,14 @@ so we must rewrite its socket destinations. **Prerequisite:** `lsof` the loader 
 PIDs while RS3 is connected to confirm which process owns the TCP:2000 / UDP:36002 sockets, and
 whether it issues `sendto` vs `sendmsg` for UDP — the rewrite must cover the actual call site.
 
-- **Primary: patch the bundled Wine** (`ws2_32`/`server/sock.c`) to rewrite `10.0.0.0/28` →
-  `127.0.0.1`. Deterministic, contained to our bundled Wine, **no entitlement weakening**,
-  survives notarization unchanged. We already ship a custom-patched Wine bundle
-  (`patch-wine-appname.py`), so the marginal cost is a build-from-source step, not a new
-  capability.
+- **Primary: patch the bundled Wine `ws2_32.dll` — PROVEN (2026-06-07).** A ~20-line patch to
+  `dlls/ws2_32/socket.c` rewrites `10.0.0.0/28` → `127.0.0.1` in `connect()`/`WS2_sendto()`/
+  `WS2_ConnectEx()` (covers connect/WSAConnect/sendto/WSASendTo/WSASendMsg). Build only the PE
+  `ws2_32.dll` from wine-11.9 source and swap it into the prebuilt bundle — no full Wine rebuild,
+  no entitlement weakening, survives notarization. Verified end-to-end: built with the patch,
+  swapped into the Gcenx staging bundle (ABI-compatible), and a probe→`10.0.0.1` under the patched
+  Wine landed on the `127.0.0.1` listener for BOTH TCP and UDP. Patch + reproducible builder:
+  `installer/bridge/wine-patch/{ws2_32-localnet.patch,build-ws2_32.sh}`.
 - **DYLD interpose dylib — RULED OUT (spike, 2026-06-07).** `DYLD_INSERT_LIBRARIES` is **not
   honored for Rosetta-translated x86_64 processes** on macOS 26.4.1. Proven with
   `installer/bridge/test/interpose_rewrite.c`: a constructor-marker dylib loads into a native
