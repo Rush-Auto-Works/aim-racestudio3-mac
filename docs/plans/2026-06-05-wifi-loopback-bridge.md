@@ -87,16 +87,19 @@ whether it issues `sendto` vs `sendmsg` for UDP — the rewrite must cover the a
   survives notarization unchanged. We already ship a custom-patched Wine bundle
   (`patch-wine-appname.py`), so the marginal cost is a build-from-source step, not a new
   capability.
-- **Experiment / fallback: DYLD interpose dylib** (`DYLD_INSERT_LIBRARIES` wrapping
-  `connect`/`sendto`). Cheaper *if it works*, but it interposes into a **Rosetta-translated**
-  loader where the interpose may never fire, and it requires
-  `com.apple.security.cs.allow-dyld-environment-variables` + `disable-library-validation` on the
-  loader's hardened-runtime signature — weakening the most fragile signed artifact in the build.
-  **Do not adopt unless a spike first proves the interpose actually fires under translated Wine**
-  and that the `/28`-only guard is airtight (license/update traffic to public IPs must pass
-  through untouched).
-- Testable without hardware once Phase 1.5 passes: launch RS3 through the rewrite against the
-  realistic fake dash; confirm traffic lands on loopback and the dash flow survives.
+- **DYLD interpose dylib — RULED OUT (spike, 2026-06-07).** `DYLD_INSERT_LIBRARIES` is **not
+  honored for Rosetta-translated x86_64 processes** on macOS 26.4.1. Proven with
+  `installer/bridge/test/interpose_rewrite.c`: a constructor-marker dylib loads into a native
+  **arm64** process (marker written, ctor logs) but NOT into the same binary run via
+  `arch -x86_64` (no marker, ctor never runs) — and this is independent of code-signing (tested
+  ad-hoc-signed) and of hardened runtime (tested ad-hoc-resigned wine). The Wine unix-loader runs
+  x86_64 under Rosetta, so the interpose can never fire. This is the trap the review predicted; do
+  not retry DYLD for socket redirect.
+- **Possible lighter alt to a full Wine rebuild (evaluate before committing to from-source):** a
+  win32-side `ws2_32` proxy DLL shipped into the prefix that forwards to the builtin and rewrites
+  addresses. WineHQ warns against overriding `ws2_32`, so treat as secondary to the source patch.
+- Testable without hardware once built: launch RS3 through the rewrite against the realistic fake
+  dash; confirm traffic lands on loopback and the dash flow survives.
 
 ### Phase 3 — Package as root daemon (with a written security spec)
 Ship the relay as `SMAppService.daemon(plistName:)` inside the app bundle
