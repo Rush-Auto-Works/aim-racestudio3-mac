@@ -52,10 +52,12 @@ the same `/` if you prefer drive letters.
 
 - **WiFi.** Join your device's WiFi network in macOS System Settings, then connect inside
   RaceStudio 3 just like on Windows.
-  - **On macOS Sequoia (15) and Tahoe (26):** the first time you connect, macOS asks you to
-    allow **RaceStudio 3** in System Settings ▸ General ▸ Login Items & Extensions ("Allow in
-    the Background"). Turn it on — it's a one‑time step that lets RaceStudio 3 reach your device
-    over the local network. (Newer macOS blocks that access until you do.)
+  - **On macOS Sequoia (15) and Tahoe (26):** the first time you open RaceStudio 3, it explains
+    that it needs a small background helper for Wi-Fi, then macOS shows **"'RaceStudio 3' can run
+    in the background"** — click **Allow**. That one‑time step lets RaceStudio 3 reach your device
+    over the local network (newer macOS blocks it otherwise). If you dismissed it, turn
+    **RaceStudio 3** back on under **System Settings ▸ General ▸ Login Items & Extensions**
+    ("Allow in the Background"). Don't want Wi-Fi? Skip it — SD‑card/USB import still works.
 - **USB cable: not supported.** It doesn't work through Wine. Use WiFi, or pull data off the
   device's SD card.
 
