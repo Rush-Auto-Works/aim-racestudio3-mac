@@ -23,7 +23,7 @@ for _ in $(seq 1 30); do
   if python3 -c "import socket;socket.create_connection(('127.0.0.1',$R_TCP),0.2).close()" 2>/dev/null; then ready=1; break; fi
   sleep 0.1
 done
-[ "$ready" = 1 ] && ok "relay listening" || { bad "relay never started listening"; exit 1; }
+if [ "$ready" = 1 ]; then ok "relay listening"; else bad "relay never started listening"; exit 1; fi
 
 echo "== dash absent: client gets a clean close, no hang =="
 # connect through relay; dial to absent dash fails -> relay closes our side; recv returns b"" fast.

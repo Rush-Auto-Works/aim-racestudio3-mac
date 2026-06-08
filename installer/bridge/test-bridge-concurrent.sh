@@ -20,7 +20,7 @@ for _ in $(seq 1 30); do
   if python3 -c "import socket;socket.create_connection(('127.0.0.1',$R_TCP),0.2).close()" 2>/dev/null; then ready=1; break; fi
   sleep 0.1
 done
-[ "$ready" = 1 ] && ok "relay listening" || { bad "relay never started listening"; exit 1; }
+if [ "$ready" = 1 ]; then ok "relay listening"; else bad "relay never started listening"; exit 1; fi
 
 if python3 "$T/concurrent_client.py" "$R_TCP" "$N"; then ok "$N concurrent connections all round-tripped"; else bad "concurrent round-trip"; fi
 
