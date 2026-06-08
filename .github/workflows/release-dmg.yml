@@ -45,8 +45,14 @@ jobs:
           # Single source of truth for the Wine version: pins.env. The bundle, the cache key, and
           # the patched-ws2_32 build all use it, so they can never drift to different Wine versions.
           ver="$(sed -nE 's/^WINE_PINNED_VER="(.*)"/\1/p' installer/src/pins.env)"
+          url="$(sed -nE 's/^WINE_PINNED_URL="(.*)"/\1/p' installer/src/pins.env)"
+          sha="$(sed -nE 's/^WINE_PINNED_SHA256="(.*)"/\1/p' installer/src/pins.env)"
           [ -n "$ver" ] || { echo "WINE_PINNED_VER not found in pins.env"; exit 1; }
+          [ -n "$url" ] || { echo "WINE_PINNED_URL not found in pins.env"; exit 1; }
+          [ -n "$sha" ] || { echo "WINE_PINNED_SHA256 not found in pins.env"; exit 1; }
           echo "WINE_VER=$ver" >> "$GITHUB_ENV"
+          echo "WINE_URL=$url" >> "$GITHUB_ENV"
+          echo "WINE_SHA256=$sha" >> "$GITHUB_ENV"
 
       - name: Cache pinned Wine tarball
         id: winecache
@@ -61,9 +67,13 @@ jobs:
           mkdir -p ~/wine-cache
           f="$HOME/wine-cache/wine-staging-${WINE_VER}-osx64.tar.xz"
           if [ ! -f "$f" ]; then
-            curl -fSL --proto '=https' -o "$f" \
-              "https://github.com/Gcenx/macOS_Wine_builds/releases/download/${WINE_VER}/wine-staging-${WINE_VER}-osx64.tar.xz"
+            curl -fSL --proto '=https' -o "$f" "$WINE_URL"
           fi
+          # Verify the pinned SHA256 before trusting the tarball — guards a poisoned cache
+          # (restored from the actions cache) just as much as a tampered download, since both
+          # feed straight into the notarized release build.
+          got="$(shasum -a 256 "$f" | awk '{print $1}')"
+          [ "$got" = "$WINE_SHA256" ] || { echo "Wine tarball checksum mismatch: got $got, want $WINE_SHA256"; exit 1; }
           echo "WINE_TARBALL=$f" >> "$GITHUB_ENV"
 
       - name: Import Developer ID certificate
