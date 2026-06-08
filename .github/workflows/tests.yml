@@ -43,3 +43,6 @@ jobs:
 
       - name: Run test suite
         run: bash installer/test/run-all.sh
+
+      - name: Run WiFi-bridge test suite
+        run: bash installer/bridge/run-bridge-tests.sh
