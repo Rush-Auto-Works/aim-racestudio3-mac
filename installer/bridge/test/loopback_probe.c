@@ -35,7 +35,8 @@ int main(int argc, char **argv) {
         ta.sin_addr.s_addr = inet_addr(ip);
         if (connect(ts, (struct sockaddr *)&ta, sizeof ta) == 0) {
             char buf[64]; int n = snprintf(buf, sizeof buf, "TCP:%s", token);
-            if (send(ts, buf, n, 0) == n) tcp_ok = 1;
+            if (n >= 0 && n < (int)sizeof buf) { if (send(ts, buf, n, 0) == n) tcp_ok = 1; }
+            else printf("  (TCP token too long)\n");
         } else {
             printf("  (TCP connect errno=%d)\n", WSAGetLastError());
         }
@@ -51,8 +52,10 @@ int main(int argc, char **argv) {
         ua.sin_family = AF_INET; ua.sin_port = htons((u_short)udp_port);
         ua.sin_addr.s_addr = inet_addr(ip);
         char buf[64]; int n = snprintf(buf, sizeof buf, "UDP:%s", token);
-        if (sendto(us, buf, n, 0, (struct sockaddr *)&ua, sizeof ua) == n) udp_ok = 1;
-        else printf("  (UDP sendto errno=%d)\n", WSAGetLastError());
+        if (n >= 0 && n < (int)sizeof buf) {
+            if (sendto(us, buf, n, 0, (struct sockaddr *)&ua, sizeof ua) == n) udp_ok = 1;
+            else printf("  (UDP sendto errno=%d)\n", WSAGetLastError());
+        } else printf("  (UDP token too long)\n");
         closesocket(us);
     }
     printf("%s UDP sendto %s:%d\n", udp_ok ? "PASS" : "FAIL", ip, udp_port);

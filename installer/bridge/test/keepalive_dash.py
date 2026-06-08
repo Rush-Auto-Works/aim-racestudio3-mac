@@ -36,7 +36,7 @@ def serve_udp(port: int) -> None:
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     s.bind(("127.0.0.1", port))
     while True:
-        data, addr = s.recvfrom(4096)
+        _data, addr = s.recvfrom(4096)
         with lock:
             last_ka = time.monotonic()
         s.sendto(b"ack", addr)

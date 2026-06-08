@@ -39,21 +39,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Resolve pinned Wine version
+        run: |
+          set -euo pipefail
+          # Single source of truth for the Wine version: pins.env. The bundle, the cache key, and
+          # the patched-ws2_32 build all use it, so they can never drift to different Wine versions.
+          ver="$(sed -nE 's/^WINE_PINNED_VER="(.*)"/\1/p' installer/src/pins.env)"
+          [ -n "$ver" ] || { echo "WINE_PINNED_VER not found in pins.env"; exit 1; }
+          echo "WINE_VER=$ver" >> "$GITHUB_ENV"
+
       - name: Cache pinned Wine tarball
         id: winecache
         uses: actions/cache@v4
         with:
           path: ~/wine-cache
-          key: wine-staging-11.9-osx64
+          key: wine-staging-${{ env.WINE_VER }}-osx64
 
       - name: Fetch Wine if not cached
         run: |
           set -euo pipefail
           mkdir -p ~/wine-cache
-          f="$HOME/wine-cache/wine-staging-11.9-osx64.tar.xz"
+          f="$HOME/wine-cache/wine-staging-${WINE_VER}-osx64.tar.xz"
           if [ ! -f "$f" ]; then
             curl -fSL --proto '=https' -o "$f" \
-              "https://github.com/Gcenx/macOS_Wine_builds/releases/download/11.9/wine-staging-11.9-osx64.tar.xz"
+              "https://github.com/Gcenx/macOS_Wine_builds/releases/download/${WINE_VER}/wine-staging-${WINE_VER}-osx64.tar.xz"
           fi
           echo "WINE_TARBALL=$f" >> "$GITHUB_ENV"
 
@@ -85,7 +94,7 @@ jobs:
           # stays on loopback; the root aim-bridge daemon relays to the dash. Built from source
           # here (not committed) so it tracks the pinned Wine version. build-apps.sh swaps it in.
           brew install mingw-w64 bison flex
-          bash installer/bridge/wine-patch/build-ws2_32.sh
+          bash installer/bridge/wine-patch/build-ws2_32.sh "$WINE_VER"
 
       - name: Decode RS3 icon (optional)
         env:
