@@ -98,15 +98,27 @@ on ensureBridge()
 	end try
 	if vmajor < 15 then return
 	set ctlBin to (POSIX path of (path to me)) & "Contents/MacOS/aim-bridge-ctl"
+	-- Already approved + running? Nothing to do — launch straight into RS3.
+	try
+		if (do shell script quoted form of ctlBin & " status 2>/dev/null") is "enabled" then return
+	on error
+		return -- control tool missing/failed: don't nag, just launch RS3
+	end try
+	-- Not enabled yet. PRIME the user BEFORE triggering macOS's background-activity prompt, so the
+	-- system dialog ("“RaceStudio 3” can run in the background…") isn't a surprise. Let them opt out.
+	set b to button returned of (display dialog "To connect AiM devices over Wi-Fi on this version of macOS, RaceStudio 3 uses a small background helper." & return & return & "macOS will now ask to allow “RaceStudio 3” to run in the background — click Allow. You can change this any time in System Settings ▸ General ▸ Login Items & Extensions." & return & return & "Prefer not to? Skip this — you can still import data from an SD card or USB." buttons {"Skip", "Set Up Wi-Fi"} default button "Set Up Wi-Fi" with title "Allow Wi-Fi access" with icon note)
+	if b is "Skip" then return
+	-- This is what raises the macOS approval prompt.
 	set brStatus to ""
 	try
 		set brStatus to do shell script quoted form of ctlBin & " register 2>/dev/null"
 	on error
-		return -- control tool missing/failed: don't nag, just launch RS3
+		return
 	end try
+	-- Still pending (they haven't clicked Allow, or need the Settings toggle) → open the exact pane.
 	if brStatus is "requiresApproval" then
-		set b to button returned of (display dialog "One quick step to connect AiM devices over Wi-Fi on this version of macOS:" & return & return & "Turn on “RaceStudio 3” under System Settings ▸ General ▸ Login Items & Extensions (Allow in the Background). macOS otherwise blocks Wi-Fi device discovery for RaceStudio 3." & return & return & "You can also import data from an SD card or USB instead." buttons {"Open Login Items", "Later"} default button "Open Login Items" with title "Allow Wi-Fi access" with icon caution)
-		if b is "Open Login Items" then
+		set b2 to button returned of (display dialog "Almost there — turn on “RaceStudio 3” under Login Items & Extensions (Allow in the Background) to finish enabling Wi-Fi." buttons {"Open Login Items", "Later"} default button "Open Login Items" with title "Allow Wi-Fi access" with icon caution)
+		if b2 is "Open Login Items" then
 			try
 				do shell script "open 'x-apple.systempreferences:com.apple.LoginItems-Settings'"
 			end try
