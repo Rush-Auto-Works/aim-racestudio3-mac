@@ -142,7 +142,13 @@ jobs:
             gh release upload "$TAG" "$dmg" --clobber
             # Deleting a tag to re-point it (rebuilding the same version) silently converts its
             # published release into a draft; un-draft it so a re-pushed tag always ships publicly.
-            gh release edit "$TAG" --draft=false --latest
+            # Pre-release tags (e.g. vX-test) stay prerelease — GitHub rejects --latest on a
+            # prerelease (HTTP 422), so only mark a real release as latest.
+            if [ "$(gh release view "$TAG" --json isPrerelease --jq .isPrerelease)" = "true" ]; then
+              gh release edit "$TAG" --draft=false
+            else
+              gh release edit "$TAG" --draft=false --latest
+            fi
           else
             gh release create "$TAG" "$dmg" --title "RaceStudio 3 $TAG" --notes "$notes"
           fi
