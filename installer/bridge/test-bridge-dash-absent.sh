@@ -18,7 +18,12 @@ SKIP_SIGN=1 bash "$HERE/build-bridge.sh" >/dev/null 2>&1 && [ -x "$BIN" ] && ok 
 
 # relay up, but NO dash listening on D_TCP/D_UDP yet
 DASH_ADDR=127.0.0.1 TCP_LISTEN_PORT=$R_TCP TCP_DASH_PORT=$D_TCP UDP_LISTEN_PORT=$R_UDP UDP_DASH_PORT=$D_UDP "$BIN" & RELAY=$!; PIDS+=($RELAY)
-for _ in $(seq 1 30); do python3 -c "import socket;socket.create_connection(('127.0.0.1',$R_TCP),0.2).close()" 2>/dev/null && break; sleep 0.1; done
+ready=0
+for _ in $(seq 1 30); do
+  if python3 -c "import socket;socket.create_connection(('127.0.0.1',$R_TCP),0.2).close()" 2>/dev/null; then ready=1; break; fi
+  sleep 0.1
+done
+[ "$ready" = 1 ] && ok "relay listening" || { bad "relay never started listening"; exit 1; }
 
 echo "== dash absent: client gets a clean close, no hang =="
 # connect through relay; dial to absent dash fails -> relay closes our side; recv returns b"" fast.

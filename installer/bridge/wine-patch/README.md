@@ -73,14 +73,15 @@ native listener on `127.0.0.1`: both TCP and UDP arrived (`GOT TCP:WS2PATCH` / `
 So the rewrite fires for `connect()` and `sendto()`, and a vanilla-built DLL is ABI-compatible
 with the staging bundle. Reproduce with `build-ws2_32.sh`.
 
-## CI integration — OPEN DECISION
+## CI integration — built from source in the runner
 
-`release-dmg.yml` currently downloads the prebuilt Gcenx tarball. Two ways to ship the patch:
-1. **Build the patched `ws2_32.dll` in CI** (macos-14 runner installs mingw-w64 + wine source,
-   builds the one DLL, swaps it). Reproducible from source; adds toolchain + build time per release.
-2. **Commit the prebuilt patched `ws2_32.dll`** (x86_64 + i386) and have `build-apps.sh` swap it
-   into the downloaded bundle. Tiny CI cost; a committed binary blob that must be rebuilt and
-   re-committed on every `WINE_PINNED_VER` bump.
+`release-dmg.yml` builds the patched `ws2_32.dll` from Wine source on the macOS runner
+(`brew install mingw-w64 bison flex` → `build-ws2_32.sh "$WINE_VER"`) and `build-apps.sh`
+step 1e swaps it into the bundle before signing. **No patched binary is committed** — it
+always tracks `WINE_PINNED_VER` (resolved once in the workflow and used for the bundle fetch,
+the cache key, and this build, so they can't drift to different Wine versions). The rejected
+alternative (commit the prebuilt DLL) would have meant a binary blob to rebuild and re-commit
+on every Wine bump.
 
-ABI note: a vanilla-11.9-built `ws2_32.dll` swapped into the Gcenx **staging** 11.9 bundle should
-be compatible (same Wine version; ws2_32 PE ABI is stable), but verify on first build.
+ABI note: a vanilla-built `ws2_32.dll` swapped into the Gcenx **staging** bundle of the same
+version is compatible (ws2_32 PE ABI is stable within a Wine version) — verified for 11.9.

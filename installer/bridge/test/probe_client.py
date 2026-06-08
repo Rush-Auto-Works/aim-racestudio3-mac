@@ -38,8 +38,16 @@ def _check(got: bytes, token: bytes) -> int:
 
 
 def main() -> int:
+    if len(sys.argv) != 4:
+        sys.stderr.write("usage: probe_client.py <tcp|udp> <listen_port> <token>\n")
+        return 2
     proto, port, token = sys.argv[1], int(sys.argv[2]), sys.argv[3].encode()
-    return probe_tcp(port, token) if proto == "tcp" else probe_udp(port, token)
+    if proto == "tcp":
+        return probe_tcp(port, token)
+    if proto == "udp":
+        return probe_udp(port, token)
+    sys.stderr.write(f"invalid protocol: {proto!r}; expected 'tcp' or 'udp'\n")
+    return 2
 
 
 if __name__ == "__main__":

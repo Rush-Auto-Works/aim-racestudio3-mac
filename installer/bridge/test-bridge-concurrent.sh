@@ -15,7 +15,12 @@ PIDS=(); trap 'for p in "${PIDS[@]:-}"; do kill "$p" 2>/dev/null||true; done' EX
 SKIP_SIGN=1 bash "$HERE/build-bridge.sh" >/dev/null 2>&1 && [ -x "$BIN" ] && ok "built" || { bad build; exit 1; }
 python3 "$T/fake_dash.py" "$D_TCP" "$D_UDP" & PIDS+=($!)
 DASH_ADDR=127.0.0.1 TCP_LISTEN_PORT=$R_TCP TCP_DASH_PORT=$D_TCP UDP_LISTEN_PORT=$R_UDP UDP_DASH_PORT=$D_UDP "$BIN" & PIDS+=($!)
-for _ in $(seq 1 30); do python3 -c "import socket;socket.create_connection(('127.0.0.1',$R_TCP),0.2).close()" 2>/dev/null && break; sleep 0.1; done
+ready=0
+for _ in $(seq 1 30); do
+  if python3 -c "import socket;socket.create_connection(('127.0.0.1',$R_TCP),0.2).close()" 2>/dev/null; then ready=1; break; fi
+  sleep 0.1
+done
+[ "$ready" = 1 ] && ok "relay listening" || { bad "relay never started listening"; exit 1; }
 
 if python3 "$T/concurrent_client.py" "$R_TCP" "$N"; then ok "$N concurrent connections all round-tripped"; else bad "concurrent round-trip"; fi
 

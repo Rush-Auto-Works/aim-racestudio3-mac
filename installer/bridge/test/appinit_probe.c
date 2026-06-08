@@ -16,6 +16,7 @@
  */
 #include <windows.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved) {
     (void)inst; (void)reserved;
