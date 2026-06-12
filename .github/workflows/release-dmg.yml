@@ -96,15 +96,17 @@ jobs:
           rm -f "$RUNNER_TEMP/cert.p12"
           security find-identity -v -p codesigning "$KC"
 
-      - name: Build patched ws2_32.dll (WiFi loopback redirect)
+      - name: Build patched Wine DLLs (ws2_32 redirect + wlanapi synthetic interface)
         run: |
           set -euo pipefail
-          # The macOS 15+/26 Local Network gate drops RS3's WiFi traffic to the dash (10.0.0.1)
-          # for the Wine guest. Our patched ws2_32.dll rewrites 10.0.0.0/28 -> 127.0.0.1 so RS3
-          # stays on loopback; the root aim-bridge daemon relays to the dash. Built from source
-          # here (not committed) so it tracks the pinned Wine version. build-apps.sh swaps it in.
+          # The macOS 15+/26 Local Network gate drops RS3's WiFi traffic to the dash for the Wine
+          # guest. Two patched Wine PE DLLs fix it: wlanapi.dll presents a synthetic connected
+          # Wi-Fi interface so RS3 starts discovery, and ws2_32.dll redirects the dash subnet +
+          # the 0.0.0.0:36002 discovery target to 127.0.0.1 (and rewrites the reply source back).
+          # The root aim-bridge daemon relays loopback <-> dash. Built from source here (not
+          # committed) so they track the pinned Wine version. build-apps.sh swaps them in.
           brew install mingw-w64 bison flex
-          bash installer/bridge/wine-patch/build-ws2_32.sh "$WINE_VER"
+          bash installer/bridge/wine-patch/build-wine-dlls.sh "$WINE_VER"
 
       - name: Decode RS3 icon (optional)
         env:

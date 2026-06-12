@@ -1,5 +1,5 @@
---- a/dlls/ws2_32/socket.c
-+++ b/dlls/ws2_32/socket.c
+--- a/dlls/ws2_32/socket.c	2026-06-11 19:48:46
++++ b/dlls/ws2_32/socket.c	2026-06-11 19:48:46
 @@ -27,6 +27,9 @@
   */
  
@@ -10,7 +10,31 @@
  
  #define FILE_USE_FILE_POINTER_POSITION ((LONGLONG)-2)
  
-@@ -1141,10 +1144,12 @@
+@@ -1126,6 +1129,23 @@
+         status = piosb->Status;
+     }
+     if (!status && ret_size) *ret_size = piosb->Information;
++    /* AiM: inbound mirror of aim_loopback_redirect. The dash's reply is relayed back from
++     * 127.0.0.1:36003; rewrite the source RS3 sees to the real dash (10.0.0.1:36002) so RS3
++     * accepts it and addresses follow-up unicast keepalives to 10.0.0.1 (which the outbound
++     * redirect then catches). Without this RS3 ignores the reply (wrong source) and never
++     * shows the device. */
++    if (!status && addr && addr_len && *addr_len >= (int)sizeof(struct sockaddr_in))
++    {
++        struct sockaddr_in *sin = (struct sockaddr_in *)addr;
++        if (sin->sin_family == AF_INET && sin->sin_addr.s_addr == htonl( INADDR_LOOPBACK )
++            && sin->sin_port == htons( 36003 ))
++        {
++            unsigned char *d = (unsigned char *)&sin->sin_addr;
++            d[0] = 10; d[1] = 0; d[2] = 0; d[3] = 1;
++            sin->sin_port = htons( 36002 );
++            FIXME( "AiM: rewrote reply source 127.0.0.1:36003 -> 10.0.0.1:36002\n" );
++        }
++    }
+     SetLastError( NtStatusToWSAError( status ) );
+     TRACE( "status %#lx.\n", status );
+     return status ? -1 : 0;
+@@ -1141,10 +1161,12 @@
      HANDLE event = NULL;
      void *cvalue = NULL;
      NTSTATUS status;
@@ -23,26 +47,32 @@
  
      if (!is_valid_socket( s ))
      {
-@@ -1367,14 +1372,39 @@
+@@ -1367,14 +1389,45 @@
  /***********************************************************************
   *      connect   (ws2_32.4)
   */
 +/* AiM WiFi loopback redirect (macOS Local Network gate workaround).
-+ * The AP-mode AiM dash is 10.0.0.0/28, which the macOS 15+/26 Local Network privacy gate
++ * The AP-mode AiM dash is on 10.0.0.0/24, which the macOS 15+/26 Local Network privacy gate
 + * silently drops for the Wine guest. Redirect those sockets to 127.0.0.1, where the notarized
-+ * root aim-bridge daemon relays to the real dash. Only 10.0.0.0/28 is touched; all other
-+ * traffic is unaffected. See aim-racestudio3-mac installer/bridge/. */
++ * root aim-bridge daemon relays to the real dash. Only 10.0.0.0/24 is touched; all other
++ * traffic is unaffected. See aim-racestudio3-mac installer/bridge/.
++ * Port 36002 (aim-ka discovery) is remapped to 36003: RS3 itself binds 0.0.0.0:36002 for
++ * discovery, so the relay must not occupy that port on loopback — it listens on 36003. */
 +static const struct sockaddr *aim_loopback_redirect( const struct sockaddr *addr, int len,
 +                                                     struct sockaddr_in *tmp )
 +{
 +    if (addr && len >= (int)sizeof(*tmp) && addr->sa_family == AF_INET)
 +    {
-+        const unsigned char *b = (const unsigned char *)&((const struct sockaddr_in *)addr)->sin_addr;
-+        if (b[0] == 10 && b[1] == 0 && b[2] == 0 && b[3] <= 15) /* 10.0.0.0/28 */
++        const struct sockaddr_in *in = (const struct sockaddr_in *)addr;
++        const unsigned char *b = (const unsigned char *)&in->sin_addr;
++        int is_dash = (b[0] == 10 && b[1] == 0 && b[2] == 0); /* 10.0.0.0/24 dash subnet */
++        int is_disco0 = (in->sin_addr.s_addr == 0 && in->sin_port == htons( 36002 )); /* 0.0.0.0:36002 */
++        if (is_dash || is_disco0)
 +        {
 +            unsigned char *d = (unsigned char *)&tmp->sin_addr;
-+            *tmp = *(const struct sockaddr_in *)addr;
++            *tmp = *in;
 +            d[0] = 127; d[1] = 0; d[2] = 0; d[3] = 1; /* 127.0.0.1 */
++            if (tmp->sin_port == htons( 36002 )) tmp->sin_port = htons( 36003 );
 +            FIXME( "AiM: redirecting %s to 127.0.0.1\n", debugstr_sockaddr(addr) );
 +            return (const struct sockaddr *)tmp;
 +        }
@@ -63,7 +93,7 @@
  
      if (!(sync_event = get_sync_event())) return -1;
  
-@@ -1425,9 +1455,11 @@
+@@ -1425,9 +1478,11 @@
      struct afd_connect_params *params;
      void *cvalue = NULL;
      NTSTATUS status;

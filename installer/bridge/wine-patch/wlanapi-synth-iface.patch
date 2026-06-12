@@ -1,0 +1,128 @@
+--- a/dlls/wlanapi/main.c	2026-06-11 19:52:08
++++ b/dlls/wlanapi/main.c	2026-06-11 18:10:54
+@@ -38,6 +38,44 @@
+ 
+ #define WLAN_MAGIC 0x574c414e /* WLAN */
+ 
++/* AiM: a fixed GUID for the single synthetic Wi-Fi interface we present to RS3. */
++static const GUID AIM_WLAN_GUID = { 0xa1ada1a1, 0x0000, 0x0000, { 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x01 } };
++
++/* AiM: wlanapi.h in Wine doesn't define the current-connection structs (current_connection was
++ * never implemented). Define the Windows SDK layout here so WlanQueryInterface can answer the
++ * wlan_intf_opcode_current_connection poll RS3 spins on. */
++typedef enum _WLAN_CONNECTION_MODE { wlan_connection_mode_profile = 0 } AIM_WLAN_CONNECTION_MODE;
++#define AIM_DOT11_SSID_MAX_LENGTH 32
++typedef struct _AIM_DOT11_SSID { ULONG uSSIDLength; UCHAR ucSSID[AIM_DOT11_SSID_MAX_LENGTH]; } AIM_DOT11_SSID;
++typedef UCHAR AIM_DOT11_MAC_ADDRESS[6];
++typedef struct _AIM_WLAN_ASSOCIATION_ATTRIBUTES {
++    AIM_DOT11_SSID dot11Ssid;
++    int dot11BssType;            /* DOT11_BSS_TYPE: 1 = infrastructure */
++    AIM_DOT11_MAC_ADDRESS dot11Bssid;
++    int dot11PhyType;            /* DOT11_PHY_TYPE: 7 = HT */
++    ULONG uDot11PhyIndex;
++    ULONG wlanSignalQuality;     /* 0..100 */
++    ULONG ulRxRate;
++    ULONG ulTxRate;
++} AIM_WLAN_ASSOCIATION_ATTRIBUTES;
++typedef struct _AIM_WLAN_SECURITY_ATTRIBUTES {
++    BOOL bSecurityEnabled;
++    BOOL bOneXEnabled;
++    int dot11AuthAlgorithm;      /* 1 = open */
++    int dot11CipherAlgorithm;    /* 0 = none */
++} AIM_WLAN_SECURITY_ATTRIBUTES;
++typedef struct _AIM_WLAN_CONNECTION_ATTRIBUTES {
++    WLAN_INTERFACE_STATE isState;
++    AIM_WLAN_CONNECTION_MODE wlanConnectionMode;
++    WCHAR strProfileName[256];
++    AIM_WLAN_ASSOCIATION_ATTRIBUTES wlanAssociationAttributes;
++    AIM_WLAN_SECURITY_ATTRIBUTES wlanSecurityAttributes;
++} AIM_WLAN_CONNECTION_ATTRIBUTES;
++
++/* The dash's AP SSID. RS3 only needs to believe Wi-Fi is associated; the dash IP is derived
++ * from the host route (10.0.0.1 on the dash AP), not from here. */
++static const char AIM_SSID[] = "AiM-Dash";
++
+ static struct wine_wlan
+ {
+     DWORD magic, cli_version;
+@@ -74,7 +112,7 @@
+     struct wine_wlan *wlan;
+     WLAN_INTERFACE_INFO_LIST *ret_list;
+ 
+-    FIXME("(%p, %p, %p) semi-stub\n", handle, reserved, interface_list);
++    FIXME("(%p, %p, %p) AiM synthetic connected interface\n", handle, reserved, interface_list);
+ 
+     if (!handle || reserved || !interface_list)
+         return ERROR_INVALID_PARAMETER;
+@@ -87,9 +125,16 @@
+     if (!ret_list)
+         return ERROR_NOT_ENOUGH_MEMORY;
+ 
++    /* AiM: macOS Wi-Fi cannot be enumerated through Wine (no native wlanapi backend), so RS3's
++     * CThreadWlanScan sees zero interfaces and never starts dash discovery. Present ONE synthetic
++     * interface, already "connected", so RS3 proceeds to aim-ka discovery — which the patched
++     * ws2_32 + the root aim-bridge daemon then carry to the real dash over loopback. */
+     memset(&ret_list->InterfaceInfo[0], 0, sizeof(WLAN_INTERFACE_INFO));
+-    ret_list->dwNumberOfItems = 0;
+-    ret_list->dwIndex = 0; /* unused in this function */
++    ret_list->InterfaceInfo[0].InterfaceGuid = AIM_WLAN_GUID;
++    lstrcpyW(ret_list->InterfaceInfo[0].strInterfaceDescription, L"AiM Wi-Fi (Wine)");
++    ret_list->InterfaceInfo[0].isState = wlan_interface_state_connected;
++    ret_list->dwNumberOfItems = 1;
++    ret_list->dwIndex = 0;
+     *interface_list = ret_list;
+ 
+     return ERROR_SUCCESS;
+@@ -167,10 +212,50 @@
+ DWORD WINAPI WlanQueryInterface(HANDLE handle, const GUID *guid, WLAN_INTF_OPCODE opcode,
+                     void *reserved, DWORD *data_size, void **data, WLAN_OPCODE_VALUE_TYPE *opcode_type)
+ {
+-    FIXME("(%p, %s, 0x%x, %p, %p, %p, %p) stub\n",
++    FIXME("(%p, %s, 0x%x, %p, %p, %p, %p) AiM\n",
+           handle, wine_dbgstr_guid(guid), opcode, reserved, data_size, data, opcode_type);
+ 
+-    return ERROR_CALL_NOT_IMPLEMENTED;
++    if (!handle || reserved || !data_size || !data)
++        return ERROR_INVALID_PARAMETER;
++    if (!handle_index(handle))
++        return ERROR_INVALID_HANDLE;
++
++    /* AiM: RS3 spins on current_connection waiting to be "connected". Report a connected
++     * infrastructure association to the dash SSID so it proceeds to aim-ka discovery. */
++    if (opcode == wlan_intf_opcode_current_connection)
++    {
++        AIM_WLAN_CONNECTION_ATTRIBUTES *conn = WlanAllocateMemory(sizeof(*conn));
++        if (!conn) return ERROR_NOT_ENOUGH_MEMORY;
++        DWORD i;
++        memset(conn, 0, sizeof(*conn));
++        conn->isState = wlan_interface_state_connected;
++        conn->wlanConnectionMode = wlan_connection_mode_profile;
++        for (i = 0; i < sizeof(AIM_SSID) && i < ARRAY_SIZE(conn->strProfileName) - 1; i++)
++            conn->strProfileName[i] = (WCHAR)(unsigned char)AIM_SSID[i]; /* ASCII -> WCHAR */
++        conn->wlanAssociationAttributes.dot11Ssid.uSSIDLength = sizeof(AIM_SSID) - 1;
++        memcpy(conn->wlanAssociationAttributes.dot11Ssid.ucSSID, AIM_SSID, sizeof(AIM_SSID) - 1);
++        conn->wlanAssociationAttributes.dot11BssType = 1;   /* infrastructure */
++        conn->wlanAssociationAttributes.dot11PhyType = 7;   /* HT */
++        conn->wlanAssociationAttributes.wlanSignalQuality = 90;
++        conn->wlanAssociationAttributes.ulRxRate = 65000;
++        conn->wlanAssociationAttributes.ulTxRate = 65000;
++        *data = conn;
++        *data_size = sizeof(*conn);
++        if (opcode_type) *opcode_type = wlan_opcode_value_type_query_only;
++        return ERROR_SUCCESS;
++    }
++    if (opcode == wlan_intf_opcode_interface_state)
++    {
++        WLAN_INTERFACE_STATE *st = WlanAllocateMemory(sizeof(*st));
++        if (!st) return ERROR_NOT_ENOUGH_MEMORY;
++        *st = wlan_interface_state_connected;
++        *data = st;
++        *data_size = sizeof(*st);
++        if (opcode_type) *opcode_type = wlan_opcode_value_type_query_only;
++        return ERROR_SUCCESS;
++    }
++
++    return ERROR_NOT_SUPPORTED;
+ }
+ 
+ DWORD WINAPI WlanHostedNetworkQueryProperty(HANDLE handle, WLAN_HOSTED_NETWORK_OPCODE opcode,

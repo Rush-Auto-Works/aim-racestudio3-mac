@@ -19,12 +19,16 @@ static const struct sockaddr *aim_loopback_redirect( const struct sockaddr *addr
 {
     if (addr && len >= (int)sizeof(*tmp) && addr->sa_family == AF_INET)
     {
-        const unsigned char *b = (const unsigned char *)&((const struct sockaddr_in *)addr)->sin_addr;
-        if (b[0] == 10 && b[1] == 0 && b[2] == 0 && b[3] <= 15) /* 10.0.0.0/28 */
+        const struct sockaddr_in *in = (const struct sockaddr_in *)addr;
+        const unsigned char *b = (const unsigned char *)&in->sin_addr;
+        int is_dash = (b[0] == 10 && b[1] == 0 && b[2] == 0); /* 10.0.0.0/24 dash subnet */
+        int is_disco0 = (in->sin_addr.s_addr == 0 && in->sin_port == htons( 36002 )); /* 0.0.0.0:36002 */
+        if (is_dash || is_disco0)
         {
             unsigned char *d = (unsigned char *)&tmp->sin_addr;
-            *tmp = *(const struct sockaddr_in *)addr;
+            *tmp = *in;
             d[0] = 127; d[1] = 0; d[2] = 0; d[3] = 1; /* 127.0.0.1 */
+            if (tmp->sin_port == htons( 36002 )) tmp->sin_port = htons( 36003 );
             return (const struct sockaddr *)tmp;
         }
     }
@@ -34,26 +38,38 @@ static const struct sockaddr *aim_loopback_redirect( const struct sockaddr *addr
 
 static int fails = 0;
 
-static struct sockaddr_in mkaddr(const char *ip, int family) {
+static struct sockaddr_in mkaddr_port(const char *ip, int family, unsigned short port) {
     struct sockaddr_in a; memset(&a, 0, sizeof a);
     a.sin_family = (sa_family_t)family;
-    a.sin_port = htons(2000);
+    a.sin_port = htons(port);
     if (ip) inet_pton(AF_INET, ip, &a.sin_addr);
     return a;
 }
+static struct sockaddr_in mkaddr(const char *ip, int family) { return mkaddr_port(ip, family, 2000); }
 
-/* expect_rewrite: the redirect must return tmp with 127.0.0.1 and preserve the port. */
-static void expect_rewrite(const char *ip) {
-    struct sockaddr_in in = mkaddr(ip, AF_INET), tmp;
+/* expect_rewrite_port: redirect must return tmp with 127.0.0.1 and the EXPECTED port —
+ * 36002 (aim-ka discovery) remaps to 36003 (the relay's loopback listen port, freeing
+ * 36002 for RS3's own wildcard bind); every other port is preserved. */
+static void expect_rewrite_port(const char *ip, unsigned short in_port, unsigned short want_port) {
+    struct sockaddr_in in = mkaddr_port(ip, AF_INET, in_port), tmp;
     const struct sockaddr *r = aim_loopback_redirect((struct sockaddr *)&in, sizeof in, &tmp);
     char got[64]; inet_ntop(AF_INET, &((struct sockaddr_in *)r)->sin_addr, got, sizeof got);
-    int port_ok = (((struct sockaddr_in *)r)->sin_port == htons(2000));
+    int port_ok = (((struct sockaddr_in *)r)->sin_port == htons(want_port));
     if (r != (struct sockaddr *)&tmp || strcmp(got, "127.0.0.1") != 0 || !port_ok) {
-        printf("  FAIL rewrite %s -> got %s (port_ok=%d, used_tmp=%d)\n", ip, got, port_ok, r == (struct sockaddr*)&tmp);
+        printf("  FAIL rewrite %s:%u -> got %s:%u want 127.0.0.1:%u (used_tmp=%d)\n", ip, in_port,
+               got, ntohs(((struct sockaddr_in *)r)->sin_port), want_port, r == (struct sockaddr*)&tmp);
         fails++;
-    } else printf("  ok   %s -> 127.0.0.1 (port preserved)\n", ip);
+    } else printf("  ok   %s:%u -> 127.0.0.1:%u\n", ip, in_port, want_port);
 }
+static void expect_rewrite(const char *ip) { expect_rewrite_port(ip, 2000, 2000); }
 
+/* expect_passthrough_port: the redirect must return the ORIGINAL addr untouched (specific port). */
+static void expect_passthrough_port(const char *ip, unsigned short port) {
+    struct sockaddr_in in = mkaddr_port(ip, AF_INET, port), tmp;
+    const struct sockaddr *r = aim_loopback_redirect((struct sockaddr *)&in, sizeof in, &tmp);
+    if (r != (struct sockaddr *)&in) { printf("  FAIL %s:%u should pass through unchanged\n", ip, port); fails++; }
+    else printf("  ok   %s:%u passes through\n", ip, port);
+}
 /* expect_passthrough: the redirect must return the ORIGINAL addr untouched. */
 static void expect_passthrough(const char *ip) {
     struct sockaddr_in in = mkaddr(ip, AF_INET), tmp;
@@ -68,10 +84,21 @@ int main(void) {
     expect_rewrite("10.0.0.0");
     expect_rewrite("10.0.0.1");    /* the real dash */
     expect_rewrite("10.0.0.2");    /* the host's DHCP addr */
-    expect_rewrite("10.0.0.15");   /* top of /28 */
-    /* outside /28 -> passthrough */
-    expect_passthrough("10.0.0.16");
-    expect_passthrough("10.0.0.255");
+    expect_rewrite("10.0.0.15");
+    expect_rewrite("10.0.0.16");   /* inside /24 (was outside the old /28) */
+    expect_rewrite("10.0.0.254");
+    expect_rewrite("10.0.0.255");  /* the subnet BROADCAST RS3 sends discovery to */
+    /* port remap: discovery 36002 -> 36003; everything else preserved */
+    expect_rewrite_port("10.0.0.255", 36002, 36003); /* broadcast discovery -> relay's 36003 */
+    expect_rewrite_port("10.0.0.1", 36002, 36003);   /* aim-ka unicast -> relay's 36003 */
+    expect_rewrite_port("10.0.0.1", 2000, 2000);     /* STCP data port untouched */
+    expect_rewrite_port("10.0.0.1", 36003, 36003);   /* already-36003 not double-mapped */
+    /* 0.0.0.0:36002 — RS3's actual discovery target under Wine — rewrites to 127.0.0.1:36003 */
+    expect_rewrite_port("0.0.0.0", 36002, 36003);
+    /* 0.0.0.0 on any OTHER port is NOT touched (only the discovery port) */
+    expect_passthrough_port("0.0.0.0", 2000);
+    expect_passthrough_port("0.0.0.0", 80);
+    /* outside 10.0.0.0/24 -> passthrough */
     expect_passthrough("10.0.1.1");
     expect_passthrough("10.1.0.1");
     expect_passthrough("11.0.0.1");
