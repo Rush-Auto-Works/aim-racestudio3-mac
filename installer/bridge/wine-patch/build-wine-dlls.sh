@@ -18,11 +18,12 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC_PINS="$HERE/../../src/pins.env"
 
-# DLL -> patch file -> marker string that must appear in the built DLL (drift guard).
+# DLL -> patch file / patched source / marker string that must appear in the built DLL (drift
+# guard). macOS /bin/bash is 3.2 (no associative arrays), so map via case functions, not declare -A.
 DLLS=( ws2_32 wlanapi )
-declare -A PATCHFILE=( [ws2_32]="$HERE/ws2_32-localnet.patch" [wlanapi]="$HERE/wlanapi-synth-iface.patch" )
-declare -A PATCHED_FILE=( [ws2_32]="dlls/ws2_32/socket.c" [wlanapi]="dlls/wlanapi/main.c" )
-declare -A MARKER=( [ws2_32]="AiM: redirecting" [wlanapi]="AiM synthetic" )
+dll_patch()  { case "$1" in ws2_32) echo "$HERE/ws2_32-localnet.patch";; wlanapi) echo "$HERE/wlanapi-synth-iface.patch";; esac; }
+dll_source() { case "$1" in ws2_32) echo "dlls/ws2_32/socket.c";;        wlanapi) echo "dlls/wlanapi/main.c";;            esac; }
+dll_marker() { case "$1" in ws2_32) echo "AiM: redirecting";;            wlanapi) echo "AiM synthetic";;                  esac; }
 
 VER="${1:-}"
 if [ -z "$VER" ] && [ -f "$SRC_PINS" ]; then
@@ -53,9 +54,10 @@ rm -rf "wine-$VER"; tar xf "$TARBALL"
 cd "wine-$VER"
 
 for dll in "${DLLS[@]}"; do
-  echo "[build-wine-dlls] applying ${PATCHFILE[$dll]##*/}"
-  patch -p1 < "${PATCHFILE[$dll]}"
-  grep -q 'AiM' "${PATCHED_FILE[$dll]}" || { echo "patch did not apply for $dll"; exit 1; }
+  patchfile="$(dll_patch "$dll")"
+  echo "[build-wine-dlls] applying ${patchfile##*/}"
+  patch -p1 < "$patchfile"
+  grep -q 'AiM' "$(dll_source "$dll")" || { echo "patch did not apply for $dll"; exit 1; }
 done
 
 echo "[build-wine-dlls] configure"
@@ -73,7 +75,7 @@ for arch in "${A[@]}"; do
     make -j"$(sysctl -n hw.ncpu)" "$tgt" >>build.out 2>&1 || { tail -25 build.out; echo "build $tgt failed"; exit 1; }
     # plain grep (NOT -q): under `set -o pipefail`, grep -q exits early -> strings gets SIGPIPE
     # -> the pipeline reports failure even on a match. grep without -q reads all input, no SIGPIPE.
-    strings "$tgt" | grep -F "${MARKER[$dll]}" >/dev/null || { echo "patch marker missing in $tgt"; exit 1; }
+    strings "$tgt" | grep -F "$(dll_marker "$dll")" >/dev/null || { echo "patch marker missing in $tgt"; exit 1; }
     cp "$tgt" "$OUT/${arch}-windows/${dll}.dll"
     echo "[build-wine-dlls] built $OUT/${arch}-windows/${dll}.dll"
   done
