@@ -92,8 +92,8 @@
 +    if (opcode == wlan_intf_opcode_current_connection)
 +    {
 +        AIM_WLAN_CONNECTION_ATTRIBUTES *conn = WlanAllocateMemory(sizeof(*conn));
-+        if (!conn) return ERROR_NOT_ENOUGH_MEMORY;
 +        DWORD i;
++        if (!conn) return ERROR_NOT_ENOUGH_MEMORY;
 +        memset(conn, 0, sizeof(*conn));
 +        conn->isState = wlan_interface_state_connected;
 +        conn->wlanConnectionMode = wlan_connection_mode_profile;
