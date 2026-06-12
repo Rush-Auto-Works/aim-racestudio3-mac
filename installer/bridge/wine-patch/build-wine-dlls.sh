@@ -39,7 +39,9 @@ echo "[build-wine-dlls] wine $VER, archs $ARCHS, dlls ${DLLS[*]}"
 for t in x86_64-w64-mingw32-gcc bison flex curl; do
   command -v "$t" >/dev/null 2>&1 || { echo "missing dep: $t (brew install mingw-w64 bison flex)"; exit 2; }
 done
-export PATH="$(brew --prefix bison 2>/dev/null)/bin:$(brew --prefix flex 2>/dev/null)/bin:$PATH"
+bison_prefix="$(brew --prefix bison)" || { echo "bison not found (brew install bison)"; exit 2; }
+flex_prefix="$(brew --prefix flex)" || { echo "flex not found (brew install flex)"; exit 2; }
+export PATH="$bison_prefix/bin:$flex_prefix/bin:$PATH"
 
 cd "$WORK"
 TARBALL="wine-$VER.tar.xz"
