@@ -21,8 +21,18 @@ definition) — and run a relay to carry the bytes to the real dash:
 
 ```
 RS3 (Wine) ── 127.0.0.1:2000  (TCP) ──▶ aim-bridge ──▶ DASH:2000     (control + data)
-RS3 (Wine) ── 127.0.0.1:36002 (UDP) ──▶ aim-bridge ──▶ DASH:36002    (aim-ka discovery)
+RS3 (Wine) ── 127.0.0.1:36003 (UDP) ──▶ aim-bridge ──▶ DASH:36002    (aim-ka discovery)
 ```
+
+The relay's UDP listener is **36003**, not 36002, because RS3 itself binds `0.0.0.0:36002` for
+discovery (it sends *from* 36002 — pcap-confirmed). If the relay held `127.0.0.1:36002`, RS3's
+wildcard bind fails with `WSAEADDRINUSE` and discovery never starts — exactly what happened
+on-device (2026-06-11: zero loopback packets from RS3). So the patched `ws2_32` remaps dest
+port 36002→36003 along with the address rewrite, and the relay forwards 36003 → `DASH:36002`.
+The upstream UDP socket is **unconnected** (route + source re-resolved per datagram — joining
+the dash's Wi-Fi after the daemon started needs no restart) and uses an **ephemeral** source
+port: on-device probing showed the dash answers ephemeral sources but ignores keepalives
+sourced from 36002 by a second host.
 
 In production the relay runs as **root** (an `SMAppService` daemon). Root code is exempt from
 the gate, so the relay reaches the dash with no prompt and no entitlement. The relay is
@@ -72,22 +82,25 @@ sudo installer/bridge/build/aim-bridge          # DASH_ADDR defaults to 10.0.0.1
 
 - **Phase 1 — DONE:** the relay + hermetic + realistic-keepalive tests.
 - **Phase 1.5 — DONE:** proved a Wine guest's loopback traffic escapes the gate (`falsify-loopback.sh`).
-- **Phase 2 — DONE:** RS3 (no connection-IP setting, auto-derives the AP gateway `10.0.0.1`) is
-  redirected by a **Wine `ws2_32` source patch** (`wine-patch/`, built in CI, swapped into the
-  bundle). DYLD interpose (Rosetta blocks it) and a ws2_32 proxy DLL (Wine has no `AppInit_DLLs`)
-  were both ruled out — see `test/interpose_rewrite.c`, `test/appinit_probe.c` and project CLAUDE.md.
+- **Phase 2 — DONE:** two Wine source patches (`wine-patch/`, built in CI, swapped into the bundle):
+  `ws2_32` redirects discovery (`0.0.0.0:36002` + `10.0.0.0/24`) to loopback and rewrites the
+  relay's reply source back to the dash; `wlanapi` presents a synthetic connected interface so RS3
+  starts discovery at all. DYLD interpose (Rosetta blocks it) and a ws2_32 proxy DLL (Wine has no
+  `AppInit_DLLs`) were both ruled out — see `test/interpose_rewrite.c`, `test/appinit_probe.c`.
 - **Phase 3 — DONE:** the relay ships as a root `SMAppService.daemon` (`aim-bridge-ctl` registers
   it; one-time Login Items approval), hardened (root → no env, pinned dest, no `SO_REUSEADDR`),
   with uninstall teardown.
 - **Phase 3.5 — DONE:** launcher health-check + Login Items guidance + SD/USB fallback.
-- **Phase 4 — REMAINING:** on-device end-to-end on macOS 26 with a real MXS — confirm `nehelper`
-  stays silent and the dash appears in RS3 (download + config upload). Needs hardware.
+- **Phase 4 — DONE (verified on hardware 2026-06-11):** RaceStudio 3 connected to a real AiM **MXS**
+  dash over WiFi on **macOS 26** under Wine — the device appeared in Connected Devices and RS3 opened
+  the STCP data connection. See memory `wifi-bridge-COMPLETE` for the full on-device trace.
 
 ## Security
 
 Root scope is limited to the relay, never all of Wine. Running as root, `aim-bridge` ignores the
 environment and hardcodes the permitted destination subnet (`10.0.0.0/28`) and ports
-(`36002/UDP`, `2000/TCP`), binds loopback-only, and drops `SO_REUSEADDR` (so a local process
+(listen `36003/UDP` + `2000/TCP`, dash `36002/UDP` + `2000/TCP`), binds loopback-only, filters
+upstream replies to the pinned dash address, and drops `SO_REUSEADDR` (so a local process
 can't pre-bind/steal the port). We chose loopback-bind + hardcoded-dest over peer validation
 (there's no XPC peer on a raw socket; the confused-deputy risk is low — a dash holds no secrets
 and grants no escalation to the Mac). Uninstall unregisters the daemon (user `aim-bridge-ctl

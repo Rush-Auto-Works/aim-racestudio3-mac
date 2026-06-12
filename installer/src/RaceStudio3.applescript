@@ -68,11 +68,28 @@ end doFirstRunSetup
 on launchRS3()
 	ensureBridge()
 	set wb to wineBin()
+	set res to (POSIX path of (path to me)) & "Contents/Resources"
 	set root to (POSIX path of (path to application support folder from user domain)) & "RaceStudio3"
+	-- Pre-launch hygiene, ONLY when RS3 itself isn't running (re-opening the app while RS3 is
+	-- up must never kill the live session):
+	--  1. wineserver -k clears STALE Wine sessions (crash/force-quit leftovers hold the prefix
+	--     lock and make the next launch hang at graphics init — on-device finding 2026-06-08).
+	--  2. Refresh the prefix's copied ws2_32.dll AND wlanapi.dll from the bundle if they differ.
+	--     Wine copies builtins into the prefix at CREATION time only, so an upgraded app left the
+	--     OLD unpatched DLLs in system32/syswow64 and the WiFi redirect/synthetic-interface never
+	--     ran (2026-06-09 / 2026-06-11). RS3 loads from the prefix copy, so it must be refreshed.
+	set hygiene to "if ! pgrep -f 'AiMRS3-64' >/dev/null 2>&1; then " & ¬
+		quoted form of (res & "/wine/bin/wineserver") & " -k 2>/dev/null; " & ¬
+		quoted form of (res & "/wine/bin/wineserver") & " -w 2>/dev/null; " & ¬
+		"for p in 'x86_64-windows system32' 'i386-windows syswow64'; do set -- $p; " & ¬
+		"for dll in ws2_32 wlanapi; do " & ¬
+		"s=" & quoted form of (res & "/wine/lib/wine") & "/$1/$dll.dll; " & ¬
+		"d=" & quoted form of (root & "/prefix/drive_c/windows") & "/$2/$dll.dll; " & ¬
+		"if [ -f \"$s\" ] && [ -f \"$d\" ] && ! cmp -s \"$s\" \"$d\"; then cp -f \"$s\" \"$d\"; fi; done; done; fi; "
 	set sh to "export WINEPREFIX=" & quoted form of (root & "/prefix") & " WINEARCH=win64 WINEDEBUG=-all; " & ¬
 		"export WINEDLLOVERRIDES=" & quoted form of "mscoree=d;mshtml=d" & "; " & ¬
 		"export XDG_CACHE_HOME=" & quoted form of (root & "/cache") & " XDG_CONFIG_HOME=" & quoted form of (root & "/xdg-config") & " XDG_DATA_HOME=" & quoted form of (root & "/xdg-data") & "; " & ¬
-		"mkdir -p " & quoted form of (root & "/logs") & "; " & ¬
+		"mkdir -p " & quoted form of (root & "/logs") & "; " & hygiene & ¬
 		"nohup arch -x86_64 " & quoted form of wb & " 'C:\\AIM_SPORT\\RaceStudio3\\64\\AiMRS3-64-ReleaseU.exe' >> " & quoted form of (root & "/logs/run.log") & " 2>&1 & "
 	try
 		do shell script sh

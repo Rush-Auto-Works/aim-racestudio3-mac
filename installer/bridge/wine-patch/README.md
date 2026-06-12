@@ -20,7 +20,11 @@ A helper, applied at the top of each address-taking entry point:
 
 ```c
 /* AiM WiFi loopback redirect: AP-mode dash is 10.0.0.0/28; the macOS Local Network gate
- * drops it for the Wine guest, so send it to 127.0.0.1 where the root aim-bridge relays. */
+ * drops it for the Wine guest, so send it to 127.0.0.1 where the root aim-bridge relays.
+ * Dest port 36002 (aim-ka discovery) additionally remaps to 36003: RS3 itself binds
+ * 0.0.0.0:36002 (it sends discovery FROM 36002), so the relay must listen on 36003 —
+ * if it held 127.0.0.1:36002, RS3's bind fails WSAEADDRINUSE and discovery never starts
+ * (found on-device 2026-06-11: zero loopback packets from RS3). */
 static const struct sockaddr *aim_loopback_redirect(const struct sockaddr *addr, int len,
                                                     struct sockaddr_in *tmp)
 {
@@ -31,6 +35,7 @@ static const struct sockaddr *aim_loopback_redirect(const struct sockaddr *addr,
         {
             *tmp = *in;
             tmp->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            if (tmp->sin_port == htons(36002)) tmp->sin_port = htons(36003);
             return (const struct sockaddr *)tmp;
         }
     }
@@ -45,43 +50,42 @@ Call sites (each: `struct sockaddr_in _aim_tmp; addr = aim_loopback_redirect(add
 - `WSASendTo()`      (~L3269, the destination param)
 - `WSASendMsg()`     (~L1205, `msg->name`)
 
-Scope guard: ONLY 10.0.0.0/28 is rewritten, so RS3's other traffic (license/update to public
-IPs) is untouched. v1 is AP-mode only (see plan scope).
+Scope guard: only `10.0.0.0/24` and `0.0.0.0:36002` are rewritten, so RS3's other traffic
+(license/update to public IPs) is untouched.
 
-## Build (just the one DLL)
+## On-device reality (2026-06-11) — why the scope is 0.0.0.0:36002 and /24
+
+Logging every send destination under Wine showed RS3 addresses aim-ka discovery to
+**`0.0.0.0:36002`** (its per-interface broadcast resolves to 0.0.0.0 under Wine), NOT
+`10.0.0.255` or the gateway. So the redirect covers both `0.0.0.0:36002` and the dash subnet
+`10.0.0.0/24` (the `.1` keepalive RS3 unicasts *after* discovery). The relay replies from
+`127.0.0.1:36003`; RS3 ignores replies whose source isn't the dash, so the patch ALSO rewrites
+the inbound recv source (`127.0.0.1:36003` → `10.0.0.1:36002`) in `WS2_recv_base`. With these,
+RS3 connected to a real MXS dash and the device appeared. This `ws2_32` patch is necessary but
+not sufficient on its own — RS3 won't start discovery until `wlanapi` reports a Wi-Fi interface
+(see `wlanapi-synth-iface.patch`).
+
+## Build (both DLLs)
 
 ```bash
 brew install mingw-w64 bison flex
-curl -LO https://dl.winehq.org/wine/source/11.x/wine-11.9.tar.xz   # match WINE_PINNED_VER
-tar xf wine-11.9.tar.xz && cd wine-11.9
-# apply the socket.c patch
-./configure --enable-archs=i386,x86_64        # finds clang PE cross + mingw CRT
-make __tooldeps__                              # winebuild, widl, crt import libs
-make dlls/ws2_32/ws2_32.dll                    # build just ws2_32 (both arch dirs)
-# swap into a copy of the bundle: lib/wine/{x86_64,i386}-windows/ws2_32.dll
+bash build-wine-dlls.sh            # version from pins.env (or pass an explicit wine version)
+# -> build/wine-dlls/{x86_64,i386}-windows/{ws2_32,wlanapi}.dll
+# build-apps.sh step 1e swaps both into the bundle: lib/wine/{x86_64,i386}-windows/
 ```
 
-Then verify with the existing harness: run `aim-bridge` + the keepalive dash on loopback,
-launch `loopback_probe.exe 10.0.0.1 ...` under the patched Wine, confirm bytes land on the
-`127.0.0.1` listener (the rewrite fired) and the keepalive-gated transfer survives.
-
-## Status: PROVEN (2026-06-07)
-
-Built the patched `ws2_32.dll` (PE x86-64) from wine-11.9 source, swapped it into the prebuilt
-Gcenx staging bundle, and ran `loopback_probe.exe 10.0.0.1 ...` under the patched Wine with a
-native listener on `127.0.0.1`: both TCP and UDP arrived (`GOT TCP:WS2PATCH` / `GOT UDP:WS2PATCH`).
-So the rewrite fires for `connect()` and `sendto()`, and a vanilla-built DLL is ABI-compatible
-with the staging bundle. Reproduce with `build-ws2_32.sh`.
+`build-wine-dlls.sh` fetches the pinned Wine source, applies BOTH patches, configures once, and
+builds `ws2_32.dll` + `wlanapi.dll` for both arches (verifying each carries its `AiM` marker).
 
 ## CI integration — built from source in the runner
 
-`release-dmg.yml` builds the patched `ws2_32.dll` from Wine source on the macOS runner
-(`brew install mingw-w64 bison flex` → `build-ws2_32.sh "$WINE_VER"`) and `build-apps.sh`
-step 1e swaps it into the bundle before signing. **No patched binary is committed** — it
-always tracks `WINE_PINNED_VER` (resolved once in the workflow and used for the bundle fetch,
-the cache key, and this build, so they can't drift to different Wine versions). The rejected
-alternative (commit the prebuilt DLL) would have meant a binary blob to rebuild and re-commit
-on every Wine bump.
+`release-dmg.yml` builds both patched DLLs from Wine source on the macOS runner
+(`brew install mingw-w64 bison flex` → `build-wine-dlls.sh "$WINE_VER"`) and `build-apps.sh`
+step 1e swaps them into the bundle before signing. **No patched binary is committed** — they
+always track `WINE_PINNED_VER` (resolved once in the workflow and used for the bundle fetch,
+the cache key, and this build, so they can't drift to different Wine versions).
 
-ABI note: a vanilla-built `ws2_32.dll` swapped into the Gcenx **staging** bundle of the same
-version is compatible (ws2_32 PE ABI is stable within a Wine version) — verified for 11.9.
+ABI note: vanilla-built PE DLLs swapped into the Gcenx **staging** bundle of the same version are
+compatible (the PE ABI is stable within a Wine version) — verified for 11.9. Note Wine loads PE
+builtins from the bundle `lib/wine/`, NOT the prefix's `system32` (the prefix copy is only seeded
+at prefix-creation), so the launcher refreshes the prefix copies of both DLLs on upgrade.

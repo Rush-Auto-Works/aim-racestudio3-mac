@@ -108,31 +108,39 @@ while IFS= read -r so; do
 done < <(find "$RES/wine/lib/wine" -type f -name 'winemac.so' -path '*-unix/*')
 [ "$qpatched" -gt 0 ] || { echo "no winemac.so found to patch for Cmd-Q (looked for *-unix/winemac.so under $RES/wine/lib/wine)"; exit 1; }
 
-# ---- 1e. WiFi loopback redirect: swap in the patched ws2_32.dll -----------------------------
-# RS3 reaches AiM dashes at 10.0.0.1, which the macOS 15+/26 Local Network gate silently drops
-# for the Wine guest. Our patched ws2_32.dll rewrites 10.0.0.0/28 -> 127.0.0.1 so RS3 stays on
-# loopback (outside the gate); the root aim-bridge daemon relays to the real dash. Build the DLL
-# with installer/bridge/wine-patch/build-ws2_32.sh (CI does this). Like 1c/1d, must run BEFORE
-# signing (it replaces a bundle resource). PE DLLs aren't Mach-O, so they're not codesigned
+# ---- 1e. WiFi loopback redirect: swap in the patched Wine DLLs ------------------------------
+# RS3 reaches AiM dashes over WiFi, which the macOS 15+/26 Local Network gate silently drops for
+# the Wine guest. Two patched Wine PE DLLs fix it (both REQUIRED):
+#   wlanapi.dll — presents one synthetic connected Wi-Fi interface so RS3 starts dash discovery
+#                 (Wine's wlanapi reports zero interfaces, so RS3 never tries).
+#   ws2_32.dll  — redirects the dash subnet + the 0.0.0.0:36002 discovery target to 127.0.0.1
+#                 (port 36002->36003) and rewrites the relay's reply source back to 10.0.0.1.
+# The root aim-bridge daemon relays loopback <-> the real dash. Build both with
+# installer/bridge/wine-patch/build-wine-dlls.sh (CI does this). Like 1c/1d, must run BEFORE
+# signing (it replaces bundle resources). PE DLLs aren't Mach-O, so they're not codesigned
 # individually — the app-bundle seal covers them, hence the swap must precede step 4.
-WS2_DIR="${WS2_32_PATCHED_DIR:-$HERE/../bridge/wine-patch/build/ws2_32}"
-say "WiFi: swapping patched ws2_32.dll (loopback redirect)"
-swap_ws2() { # <arch>  -> echoes "1" if swapped
-  local arch="$1" src="$WS2_DIR/$1-windows/ws2_32.dll" dst="$RES/wine/lib/wine/$1-windows/ws2_32.dll"
+WINEDLL_DIR="${WINE_PATCHED_DLL_DIR:-${WS2_32_PATCHED_DIR:-$HERE/../bridge/wine-patch/build/wine-dlls}}"
+say "WiFi: swapping patched Wine DLLs (ws2_32 redirect + wlanapi synthetic interface)"
+# <dll> <arch> <marker> -> returns 0 if swapped
+swap_winedll() {
+  local dll="$1" arch="$2" marker="$3"
+  local src="$WINEDLL_DIR/$arch-windows/$dll.dll" dst="$RES/wine/lib/wine/$arch-windows/$dll.dll"
   [ -f "$src" ] && [ -f "$dst" ] || return 1
   # plain grep + redirect (NOT grep -q): under `set -o pipefail` grep -q exits early and SIGPIPEs
   # strings, which would report the pipeline as failed even when the marker is present.
-  strings "$src" | grep -F 'AiM: redirecting' >/dev/null || { echo "patched ws2_32 ($arch) missing redirect marker" >&2; exit 1; }
-  cp "$src" "$dst"; say "  swapped $arch-windows/ws2_32.dll"
+  strings "$src" | grep -F "$marker" >/dev/null || { echo "patched $dll ($arch) missing marker '$marker'" >&2; exit 1; }
+  cp "$src" "$dst"; say "  swapped $arch-windows/$dll.dll"
 }
-swap_ws2 x86_64 && X64_SWAPPED=1 || X64_SWAPPED=0
-swap_ws2 i386   || true   # 32-bit ws2_32 is best-effort (RS3 main is 64-bit)
-if [ "$X64_SWAPPED" != 1 ]; then
+swap_winedll ws2_32 x86_64 'AiM: redirecting' && X64_SWAPPED=1 || X64_SWAPPED=0
+swap_winedll ws2_32 i386   'AiM: redirecting' || true   # 32-bit is best-effort (RS3 main is 64-bit)
+swap_winedll wlanapi x86_64 'AiM synthetic' && WLAN64_SWAPPED=1 || WLAN64_SWAPPED=0
+swap_winedll wlanapi i386   'AiM synthetic' || true
+if [ "$X64_SWAPPED" != 1 ] || [ "$WLAN64_SWAPPED" != 1 ]; then
   if [ "${HARDENED_RUNTIME:-0}" = 1 ]; then
-    echo "no patched x86_64 ws2_32.dll at $WS2_DIR — the WiFi redirect is REQUIRED for release."
-    echo "run: bash installer/bridge/wine-patch/build-ws2_32.sh"; exit 1
+    echo "missing patched x86_64 Wine DLLs at $WINEDLL_DIR — the WiFi redirect is REQUIRED for release."
+    echo "run: bash installer/bridge/wine-patch/build-wine-dlls.sh"; exit 1
   fi
-  say "  (no patched ws2_32.dll — WiFi redirect not applied; dev build only)"
+  say "  (patched Wine DLLs incomplete — WiFi not applied; dev build only)"
 fi
 
 # ---- 1f. aim-bridge root daemon + SMAppService control tool ---------------------------------

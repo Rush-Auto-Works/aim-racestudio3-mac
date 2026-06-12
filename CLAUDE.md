@@ -66,10 +66,20 @@ This file is constraints, conventions, and hard-won gotchas only.
 - **PIL fallback fonts lack glyphs** like `▸` (renders as tofu in the DMG background) — use ASCII.
 - **Tests**: `bash installer/test/run-all.sh` before committing engine changes;
   `bash installer/bridge/run-bridge-tests.sh` before committing WiFi-bridge changes.
-- **WiFi bridge (macOS 15+ Local Network gate)**: RS3 reaches AiM dashes at `10.0.0.1`, which the
-  macOS 15+/26 Local Network gate drops for the Wine guest. Fix = keep RS3 on loopback (a patched
-  `ws2_32.dll` rewrites `10.0.0.0/28`→`127.0.0.1`, built in CI from `installer/bridge/wine-patch/`)
-  + a root `SMAppService` daemon `aim-bridge` that relays loopback↔dash (registered by
-  `aim-bridge-ctl` at launch; one-time Login Items approval). Full design + status:
-  `docs/plans/2026-06-05-wifi-loopback-bridge.md` and `installer/bridge/README.md`. **Phase 4
-  (real-dash end-to-end on macOS 26) is the one remaining unverified step.**
+- **WiFi bridge (macOS 15+ Local Network gate) — WORKS, verified on real MXS dash + macOS 26
+  (2026-06-11).** The gate drops the Wine guest's LAN traffic to the dash. The fix needs FOUR
+  pieces (all load-bearing; each prior one is necessary-but-insufficient — don't drop any):
+  1. **`wlanapi.dll` patch** (`wine-patch/wlanapi-synth-iface.patch`) — Wine's `wlanapi` reports
+     zero Wi-Fi interfaces, so RS3 never starts discovery. Present ONE synthetic *connected*
+     interface (`WlanEnumInterfaces` + `WlanQueryInterface(current_connection)`).
+  2. **`ws2_32.dll` outbound redirect** (`wine-patch/ws2_32-localnet.patch`) — RS3 addresses
+     aim-ka discovery to **`0.0.0.0:36002`** under Wine (NOT `10.0.0.255`/gateway). Redirect both
+     `10.0.0.0/24` and `0.0.0.0:36002` → `127.0.0.1`, remap port `36002`→`36003`.
+  3. **`ws2_32.dll` inbound source-rewrite** — the relay replies from `127.0.0.1:36003`; RS3
+     ignores replies not from the dash, so rewrite the recv source back to `10.0.0.1:36002`.
+  4. **root `SMAppService` daemon `aim-bridge`** — listens `127.0.0.1:36003`(UDP)/`:2000`(TCP),
+     relays to `dash:36002`/`:2000` (registered by `aim-bridge-ctl`; one-time Login Items approval).
+  Both DLLs built in CI by `wine-patch/build-wine-dlls.sh`, swapped by `build-apps.sh` step 1e.
+  Wine loads PE builtins from the BUNDLE `lib/wine/`, not the prefix — the launcher refreshes the
+  prefix copies of BOTH DLLs on upgrade (Wine only seeds them at prefix-creation). Full detail:
+  memory `wifi-bridge-COMPLETE`, `docs/plans/2026-06-05-wifi-loopback-bridge.md`, `installer/bridge/README.md`.

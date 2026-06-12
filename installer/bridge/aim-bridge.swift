@@ -11,15 +11,24 @@
 // bridges two fixed ports to one pinned dash address, and refuses everything else.
 //
 //   RS3 (Wine) --127.0.0.1:2000  (TCP, control + data) -->  relay --> DASH:2000
-//   RS3 (Wine) --127.0.0.1:36002 (UDP, aim-ka discover) -->  relay --> DASH:36002
+//   RS3 (Wine) --127.0.0.1:36003 (UDP, aim-ka discover) -->  relay --> DASH:36002
 //
 // The pcap (promiscuous-slurp/sam cap.pcapng) shows RS3 UNICASTS to the dash's fixed gateway
 // IP — there is no broadcast/multicast in the connect flow — so a plain unicast relay suffices.
 //
+// Why the relay listens on 36003, not 36002 (on-device finding, 2026-06-11): RS3 itself binds
+// 0.0.0.0:36002 for discovery (it sends FROM 36002). If the relay held 127.0.0.1:36002, RS3's
+// wildcard bind fails with WSAEADDRINUSE and discovery never starts — zero packets. The
+// patched ws2_32 therefore remaps dest port 36002->36003 along with the 10.0.0.x->127.0.0.1
+// rewrite, and the relay forwards 36003 -> DASH:36002. The upstream socket is UNCONNECTED and
+// uses an EPHEMERAL source port: the dash answers ephemeral sources but IGNORES keepalives
+// sourced from 36002 by a second host (P2a/P2b on-device test), and per-sendto routing means
+// joining the dash Wi-Fi after the daemon started needs no restart.
+//
 // Config (env, all optional; defaults are the real-hardware values):
 //   DASH_ADDR (10.0.0.1) · BRIDGE_LISTEN_ADDR (127.0.0.1)
 //   TCP_LISTEN_PORT (2000)  TCP_DASH_PORT (2000)
-//   UDP_LISTEN_PORT (36002) UDP_DASH_PORT (36002)
+//   UDP_LISTEN_PORT (36003) UDP_DASH_PORT (36002)
 // Overridable only so the hermetic test can point at a fake dash on loopback.
 
 import Darwin
@@ -38,7 +47,7 @@ let LISTEN_ADDR = IS_ROOT ? "127.0.0.1" : env("BRIDGE_LISTEN_ADDR", "127.0.0.1")
 let DASH_ADDR   = IS_ROOT ? "10.0.0.1"  : env("DASH_ADDR", "10.0.0.1")
 let TCP_LISTEN  = IS_ROOT ? UInt16(2000)  : envPort("TCP_LISTEN_PORT", 2000)
 let TCP_DASH    = IS_ROOT ? UInt16(2000)  : envPort("TCP_DASH_PORT", 2000)
-let UDP_LISTEN  = IS_ROOT ? UInt16(36002) : envPort("UDP_LISTEN_PORT", 36002)
+let UDP_LISTEN  = IS_ROOT ? UInt16(36003) : envPort("UDP_LISTEN_PORT", 36003)
 let UDP_DASH    = IS_ROOT ? UInt16(36002) : envPort("UDP_DASH_PORT", 36002)
 
 func logmsg(_ s: String) {
@@ -134,12 +143,14 @@ func serveUDP() {
     guard withSockaddr(&la, { bind(ls, $0, $1) }) == 0 else {
         logmsg("UDP bind \(LISTEN_ADDR):\(UDP_LISTEN) failed: \(String(cString: strerror(errno)))"); exit(1)
     }
-    // Connected UDP socket toward the dash: send()/recv() and only the dash's replies arrive.
+    // UNCONNECTED upstream socket toward the dash: sendto() per datagram so the kernel
+    // re-resolves the route (and source address) every time — the daemon starts at login on
+    // whatever network the Mac is on, and must keep working after the user joins the dash's
+    // Wi-Fi WITHOUT a restart. A connect()ed socket would pin the stale route/source forever.
+    // Replies are filtered to the pinned dash address (the unconnected socket accepts any
+    // sender; we do the check connect() would have done).
     let us = socket(AF_INET, SOCK_DGRAM, 0)
-    var da = makeAddr(DASH_ADDR, UDP_DASH)
-    guard withSockaddr(&da, { connect(us, $0, $1) }) == 0 else {
-        logmsg("UDP connect \(DASH_ADDR):\(UDP_DASH) failed: \(String(cString: strerror(errno)))"); exit(1)
-    }
+    let dashPinned = makeAddr(DASH_ADDR, UDP_DASH)
     logmsg("UDP \(LISTEN_ADDR):\(UDP_LISTEN) -> \(DASH_ADDR):\(UDP_DASH)")
 
     let client = ClientBox()
@@ -148,15 +159,24 @@ func serveUDP() {
     DispatchQueue.global().async {
         var rbuf = [UInt8](repeating: 0, count: 65536)
         while true {
-            let n = recv(us, &rbuf, rbuf.count, 0)
+            var sa = sockaddr_in()
+            var saLen = socklen_t(MemoryLayout<sockaddr_in>.size)
+            let n = withUnsafeMutablePointer(to: &sa) {
+                $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                    recvfrom(us, &rbuf, rbuf.count, 0, $0, &saLen)
+                }
+            }
             if n < 0 { if errno == EINTR { continue }; continue }
+            // accept only the pinned dash (addr + port) — drop anything else
+            guard sa.sin_addr.s_addr == dashPinned.sin_addr.s_addr,
+                  sa.sin_port == dashPinned.sin_port else { continue }
             guard var ca = client.get() else { continue }
             _ = withSockaddr(&ca) { sap, slen in
                 rbuf.withUnsafeBytes { sendto(ls, $0.baseAddress, n, 0, sap, slen) }
             }
         }
     }
-    // client -> dash
+    // client -> dash (per-datagram sendto: route + source resolved fresh each time)
     var buf = [UInt8](repeating: 0, count: 65536)
     while true {
         var ca = sockaddr_in()
@@ -168,7 +188,10 @@ func serveUDP() {
         }
         if n < 0 { if errno == EINTR { continue }; continue }
         client.set(ca)
-        _ = buf.withUnsafeBytes { send(us, $0.baseAddress, n, 0) }
+        var da = dashPinned
+        _ = withSockaddr(&da) { sap, slen in
+            buf.withUnsafeBytes { sendto(us, $0.baseAddress, n, 0, sap, slen) }
+        }
     }
 }
 
