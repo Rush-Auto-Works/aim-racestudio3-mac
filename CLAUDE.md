@@ -94,3 +94,14 @@ This file is constraints, conventions, and hard-won gotchas only.
   ignores `vlcrc`, takes no options; the d3d11 vout bails upstream of D3D needing dcomp, so DXVK
   AND DXMT can't help). Full detail + the real-fix plan: memory `rs3-video-is-libvlc`,
   `docs/plans/2026-06-13-sharp-video-vout.md`.
+- **SmartyCam SD-card import WORKS; card SWAP needs an RS3 restart (accepted, not fixable).**
+  RS3 reads a SmartyCam 3 card under Wine with no code changes — insert it before launch (startup
+  scan) OR while running (Wine's mountmgr broadcasts `DBT_DEVICEARRIVAL`; RS3's `MyDeviceChange`
+  rescans). The one limitation: pull card A, insert card B → RS3 still shows A. Root cause is
+  inside RS3's closed binary — it caches the card **by drive letter** (`L:`), ignores
+  `DBT_DEVICEREMOVECOMPLETE`, and dedups a same-letter re-insert. Wine is blameless: its `send_notify`
+  (`dlls/mountmgr.sys/device.c`) broadcasts BOTH arrival and removal, Windows-identical
+  (`flags=DBTF_MEDIA`), and RS3 receives both (verified 2026-06-13). Not cleanly fixable: a userspace
+  process can't inject the broadcast (only the mountmgr driver host can), and the only Wine lever
+  (assign a fresh letter per card) is invasive + leaky. **Don't re-litigate.** Full detail: memory
+  `smartycam-sd-import-works`.
