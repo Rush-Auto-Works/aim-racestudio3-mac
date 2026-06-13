@@ -158,7 +158,7 @@ jobs:
         run: |
           set -euo pipefail
           notes="RaceStudio 3 for macOS — drag to Applications, open once to set up. Connect AiM devices over Wi-Fi (USB unsupported)."
-          dmg="$(ls installer/dist/*.dmg)"   # versioned name, e.g. RaceStudio3-3.83.20.dmg
+          dmg="$(ls installer/dist/*.dmg)"   # versioned name, e.g. RaceStudio3-3.83.20-2.dmg
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$dmg" --clobber
             # Deleting a tag to re-point it (rebuilding the same version) silently converts its

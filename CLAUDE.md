@@ -6,9 +6,13 @@ This file is constraints, conventions, and hard-won gotchas only.
 
 ## Conventions
 
-- **Releases**: tag `v<RS3 version>` (e.g. `v3.83.20`) on `main`. The tag triggers `release-dmg.yml`
-  → build + notarize + publish. The DMG filename and app-bundle version both equal the RS3 version
-  (derived from `RS3_PINNED_VER`). Asset is `RaceStudio3-<version>.dmg`.
+- **Releases**: tag `v<RS3 version>-<pkg rev>` (e.g. `v3.83.20-2`) on `main` — Debian/RPM-style
+  `upstream-revision`. The tag triggers `release-dmg.yml` → build + notarize + publish. The upstream
+  version is `RS3_PINNED_VER`; the packaging revision is `RS3_PKG_REV` (both in `pins.env`). Asset is
+  `RaceStudio3-<version>-<rev>.dmg`; `CFBundleShortVersionString` = upstream version (clean, what users
+  see), `CFBundleVersion` = `<version>.<rev>`. Bump `RS3_PKG_REV` by hand when re-releasing the same
+  upstream version; it resets to `1` on an upstream bump (`check-rs3-update.sh --apply` does this and
+  tags `v<newver>-1`). Keep `CHANGELOG.md` in sync (one `## [<ver>-<rev>]` entry per release).
 - **Updating RS3**: don't hand-edit version pins. `weekly-rs3-update.yml` (Mon 12:00 UTC) detects a
   newer AiM release and auto-bumps `pins.env` + tags + releases. To do it manually, run
   `installer/build/check-rs3-update.sh --apply` then tag.
