@@ -1,4 +1,6 @@
 .DS_Store
+.worktrees/
+*.dxvk-cache
 installer/dist/
 installer/bridge/build/
 installer/bridge/wine-patch/build/
