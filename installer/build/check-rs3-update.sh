@@ -55,7 +55,8 @@ if [ "$best_code" -le "${cur_code:-0}" ] 2>/dev/null; then
 fi
 
 echo "Newer RaceStudio 3 available: $RS3_PINNED_VER -> $latest_ver" >&2
-emit "updated=true"; emit "version=$latest_ver"; emit "tag=v$latest_ver"
+# A new upstream version resets the downstream packaging revision to 1 → tag v<ver>-1.
+emit "updated=true"; emit "version=$latest_ver"; emit "tag=v$latest_ver-1"
 emit "file=$latest_file"; emit "url=$best_url"
 
 [ "$APPLY" = 1 ] || { echo "(report only; pass --apply to update pins.env)" >&2; exit 0; }
@@ -91,5 +92,7 @@ ed_pins "RS3_PINNED_FILE" "RS3_PINNED_FILE=\"$latest_file\""
 ed_pins "RS3_PINNED_URL"  "RS3_PINNED_URL=\"$best_url\""
 ed_pins "RS3_PINNED_SIZE" "RS3_PINNED_SIZE=$size"
 ed_pins "RS3_PINNED_SHA256" "RS3_PINNED_SHA256=\"$sha\""
+# New upstream version → reset the downstream packaging revision to 1 (matches the v<ver>-1 tag).
+ed_pins "RS3_PKG_REV" "RS3_PKG_REV=\"1\""
 
 echo "pins.env updated -> $latest_ver (size=$size sha256=$sha)" >&2

@@ -6,9 +6,13 @@ This file is constraints, conventions, and hard-won gotchas only.
 
 ## Conventions
 
-- **Releases**: tag `v<RS3 version>` (e.g. `v3.83.20`) on `main`. The tag triggers `release-dmg.yml`
-  → build + notarize + publish. The DMG filename and app-bundle version both equal the RS3 version
-  (derived from `RS3_PINNED_VER`). Asset is `RaceStudio3-<version>.dmg`.
+- **Releases**: tag `v<RS3 version>-<pkg rev>` (e.g. `v3.83.20-2`) on `main` — Debian/RPM-style
+  `upstream-revision`. The tag triggers `release-dmg.yml` → build + notarize + publish. The upstream
+  version is `RS3_PINNED_VER`; the packaging revision is `RS3_PKG_REV` (both in `pins.env`). Asset is
+  `RaceStudio3-<version>-<rev>.dmg`; `CFBundleShortVersionString` = upstream version (clean, what users
+  see), `CFBundleVersion` = `<version>.<rev>`. Bump `RS3_PKG_REV` by hand when re-releasing the same
+  upstream version; it resets to `1` on an upstream bump (`check-rs3-update.sh --apply` does this and
+  tags `v<newver>-1`). Keep `CHANGELOG.md` in sync (one `## [<ver>-<rev>]` entry per release).
 - **Updating RS3**: don't hand-edit version pins. `weekly-rs3-update.yml` (Mon 12:00 UTC) detects a
   newer AiM release and auto-bumps `pins.env` + tags + releases. To do it manually, run
   `installer/build/check-rs3-update.sh --apply` then tag.
@@ -94,3 +98,14 @@ This file is constraints, conventions, and hard-won gotchas only.
   ignores `vlcrc`, takes no options; the d3d11 vout bails upstream of D3D needing dcomp, so DXVK
   AND DXMT can't help). Full detail + the real-fix plan: memory `rs3-video-is-libvlc`,
   `docs/plans/2026-06-13-sharp-video-vout.md`.
+- **SmartyCam SD-card import WORKS; card SWAP needs an RS3 restart (accepted, not fixable).**
+  RS3 reads a SmartyCam 3 card under Wine with no code changes — insert it before launch (startup
+  scan) OR while running (Wine's mountmgr broadcasts `DBT_DEVICEARRIVAL`; RS3's `MyDeviceChange`
+  rescans). The one limitation: pull card A, insert card B → RS3 still shows A. Root cause is
+  inside RS3's closed binary — it caches the card **by drive letter** (`L:`), ignores
+  `DBT_DEVICEREMOVECOMPLETE`, and dedups a same-letter re-insert. Wine is blameless: its `send_notify`
+  (`dlls/mountmgr.sys/device.c`) broadcasts BOTH arrival and removal, Windows-identical
+  (`flags=DBTF_MEDIA`), and RS3 receives both (verified 2026-06-13). Not cleanly fixable: a userspace
+  process can't inject the broadcast (only the mountmgr driver host can), and the only Wine lever
+  (assign a fresh letter per card) is invasive + leaky. **Don't re-litigate.** Full detail: memory
+  `smartycam-sd-import-works`.
