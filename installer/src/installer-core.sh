@@ -336,6 +336,18 @@ export WINEPREFIX="\$ROOT/prefix" WINEARCH=win64 WINEDEBUG=-all
 export WINEDLLOVERRIDES="mscoree=d;mshtml=d"
 export XDG_CACHE_HOME="\$ROOT/cache" XDG_CONFIG_HOME="\$ROOT/xdg-config" XDG_DATA_HOME="\$ROOT/xdg-data"
 mkdir -p "\$ROOT/logs" "\$ROOT/bin"
+# Force VLC's software (wingdi) video output for the lap-compare videos. Under Wine on Apple
+# Silicon wined3d can't make a D3D11 device, and VLC's d3d9/OpenGL vouts mis-size or corrupt
+# the embedded video; wingdi (GDI) renders correctly at the right size. Disable the GPU vout
+# plugins so VLC falls to wingdi (idempotent; survives RS3 in-app updates). Mirrors the same
+# step in RaceStudio3.applescript's launch hygiene.
+vp="\$ROOT/prefix/drive_c/AIM_SPORT/RaceStudio3/64/plugins"
+if [ -d "\$vp" ]; then
+  for vplug in libdirect3d11_plugin libdirect3d9_plugin libgl_plugin libglwin32_plugin libwgl_plugin; do
+    [ -f "\$vp/\$vplug.dll" ] && mv -f "\$vp/\$vplug.dll" "\$vp/\$vplug.dll.disabled"
+  done
+  rm -f "\$vp/plugins.dat" 2>/dev/null
+fi
 # The macOS app-menu name ("RaceStudio 3" vs "Wine") comes from the CFBundleName in each Wine
 # unix-loader's embedded __info_plist, which build-apps.sh patches at build time
 # (patch-wine-appname.py) — NOT from argv[0], which winemac.drv ignores. So just run Wine directly.

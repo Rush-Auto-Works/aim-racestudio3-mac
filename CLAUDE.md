@@ -83,3 +83,14 @@ This file is constraints, conventions, and hard-won gotchas only.
   Wine loads PE builtins from the BUNDLE `lib/wine/`, not the prefix — the launcher refreshes the
   prefix copies of BOTH DLLs on upgrade (Wine only seeds them at prefix-creation). Full detail:
   memory `wifi-bridge-COMPLETE`, `docs/plans/2026-06-05-wifi-loopback-bridge.md`, `installer/bridge/README.md`.
+- **Lap-compare video = embedded libVLC 3.0.9.2; ship the `wingdi` vout.** RS3 plays compare/
+  SmartyCam video through embedded libVLC. Under Wine on Apple Silicon, `wined3d` can't make a
+  D3D11 device (so VLC's `direct3d11` vout never opens), the `direct3d9` vout shrinks the 2nd
+  compare video on a shared fake device, and the OpenGL vout corrupts the frame. Only `wingdi`
+  (GDI) renders correctly at the right size (software-scaled → soft, accepted). The launcher
+  hygiene (`RaceStudio3.applescript` + generated `bin/launch.sh`) disables the GPU vout plugins
+  (`libdirect3d11/d3d9/gl/glwin32/wgl_plugin.dll`) in the prefix so VLC falls to wingdi —
+  idempotent, re-applies after an RS3 in-app update. Sharp-GPU-video is NOT a config fix (libVLC
+  ignores `vlcrc`, takes no options; the d3d11 vout bails upstream of D3D needing dcomp, so DXVK
+  AND DXMT can't help). Full detail + the real-fix plan: memory `rs3-video-is-libvlc`,
+  `docs/plans/2026-06-13-sharp-video-vout.md`.

@@ -78,6 +78,12 @@ on launchRS3()
 	--     Wine copies builtins into the prefix at CREATION time only, so an upgraded app left the
 	--     OLD unpatched DLLs in system32/syswow64 and the WiFi redirect/synthetic-interface never
 	--     ran (2026-06-09 / 2026-06-11). RS3 loads from the prefix copy, so it must be refreshed.
+	--  3. Force VLC's software (wingdi) video output for the lap-compare videos. RS3 plays them
+	--     through an embedded libVLC; under Wine on Apple Silicon, wined3d can't create a D3D11
+	--     device, so VLC's direct3d11 vout never opens, the direct3d9 vout shrinks the 2nd compare
+	--     video on a shared fake device, and the OpenGL vout corrupts the frame — only wingdi (GDI)
+	--     renders correctly at the right size. Disable the GPU vout plugins so VLC falls to wingdi
+	--     (idempotent; re-applies after an RS3 in-app update re-adds them). 2026-06-13.
 	set hygiene to "if ! pgrep -f 'AiMRS3-64' >/dev/null 2>&1; then " & ¬
 		quoted form of (res & "/wine/bin/wineserver") & " -k 2>/dev/null; " & ¬
 		quoted form of (res & "/wine/bin/wineserver") & " -w 2>/dev/null; " & ¬
@@ -85,7 +91,10 @@ on launchRS3()
 		"for dll in ws2_32 wlanapi; do " & ¬
 		"s=" & quoted form of (res & "/wine/lib/wine") & "/$1/$dll.dll; " & ¬
 		"d=" & quoted form of (root & "/prefix/drive_c/windows") & "/$2/$dll.dll; " & ¬
-		"if [ -f \"$s\" ] && [ -f \"$d\" ] && ! cmp -s \"$s\" \"$d\"; then cp -f \"$s\" \"$d\"; fi; done; done; fi; "
+		"if [ -f \"$s\" ] && [ -f \"$d\" ] && ! cmp -s \"$s\" \"$d\"; then cp -f \"$s\" \"$d\"; fi; done; done; " & ¬
+		"vp=" & quoted form of (root & "/prefix/drive_c/AIM_SPORT/RaceStudio3/64/plugins") & "; " & ¬
+		"if [ -d \"$vp\" ]; then for vplug in libdirect3d11_plugin libdirect3d9_plugin libgl_plugin libglwin32_plugin libwgl_plugin; do " & ¬
+		"[ -f \"$vp/$vplug.dll\" ] && mv -f \"$vp/$vplug.dll\" \"$vp/$vplug.dll.disabled\"; done; rm -f \"$vp/plugins.dat\" 2>/dev/null; fi; fi; "
 	set sh to "export WINEPREFIX=" & quoted form of (root & "/prefix") & " WINEARCH=win64 WINEDEBUG=-all; " & ¬
 		"export WINEDLLOVERRIDES=" & quoted form of "mscoree=d;mshtml=d" & "; " & ¬
 		"export XDG_CACHE_HOME=" & quoted form of (root & "/cache") & " XDG_CONFIG_HOME=" & quoted form of (root & "/xdg-config") & " XDG_DATA_HOME=" & quoted form of (root & "/xdg-data") & "; " & ¬
