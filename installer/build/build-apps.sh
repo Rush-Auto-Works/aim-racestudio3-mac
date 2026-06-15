@@ -280,6 +280,7 @@ if [ "${HARDENED_RUNTIME:-0}" = 1 ]; then
   say "Signing the Import / Uninstall apps…"
   codesign --force --options runtime $TS --sign "$IDENTITY" "$IMPORT_APP_BUILT"    || { echo "import codesign failed"; exit 1; }
   codesign --force --options runtime $TS --sign "$IDENTITY" "$UNINSTALL_APP_BUILT" || { echo "uninstall codesign failed"; exit 1; }
+  codesign --force --options runtime $TS --sign "$IDENTITY" "$SHOWLOGS_APP_BUILT" || { echo "show-logs codesign failed"; exit 1; }
   say "Signing nested Wine binaries individually (notarization-grade — slow)…"
   while IFS= read -r f; do
     case "$(file -b "$f" 2>/dev/null)" in
@@ -303,6 +304,7 @@ else
   codesign --deep --force --sign "$IDENTITY" "$APP" || { echo "codesign failed"; exit 1; }
   codesign --deep --force --sign "$IDENTITY" "$IMPORT_APP_BUILT"    || { echo "import codesign failed"; exit 1; }
   codesign --deep --force --sign "$IDENTITY" "$UNINSTALL_APP_BUILT" || { echo "uninstall codesign failed"; exit 1; }
+  codesign --deep --force --sign "$IDENTITY" "$SHOWLOGS_APP_BUILT" || { echo "show-logs codesign failed"; exit 1; }
 fi
 codesign --verify --strict "$APP" && say "signature verifies"
 
