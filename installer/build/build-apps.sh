@@ -218,6 +218,9 @@ UNINSTALL_APP_BUILT="$DIST/Uninstall RaceStudio 3.app"
 rm -rf "$IMPORT_APP_BUILT" "$UNINSTALL_APP_BUILT"
 osacompile -o "$IMPORT_APP_BUILT"    "$SRC/import-app.applescript"    || { echo "osacompile import failed"; exit 1; }
 osacompile -o "$UNINSTALL_APP_BUILT" "$SRC/uninstall-app.applescript" || { echo "osacompile uninstall failed"; exit 1; }
+SHOWLOGS_APP_BUILT="$DIST/Show RaceStudio 3 Logs.app"
+rm -rf "$SHOWLOGS_APP_BUILT"
+osacompile -o "$SHOWLOGS_APP_BUILT" "$SRC/show-logs-app.applescript" || { echo "osacompile show-logs failed"; exit 1; }
 
 # Import merges data, so it needs the engine — embed installer-core.sh + lib + pins.env (same
 # layout as RaceStudio 3.app's Resources). Uninstall calls the self-contained uninstall.sh at run
@@ -227,6 +230,13 @@ ditto "$SRC/installer-core.sh" "$IMP_RES/installer-core.sh"
 ditto "$SRC/pins.env"          "$IMP_RES/pins.env"
 ditto "$SRC/lib"               "$IMP_RES/lib"
 chmod +x "$IMP_RES/installer-core.sh"
+
+# Show Logs runs collect-logs.sh, which reads pins.env for the version. Embed both (no lib/ — the
+# collector is standalone and shells to the sibling RaceStudio 3.app for aim-bridge-ctl).
+SL_RES="$SHOWLOGS_APP_BUILT/Contents/Resources"
+ditto "$SRC/collect-logs.sh" "$SL_RES/collect-logs.sh"
+ditto "$SRC/pins.env"        "$SL_RES/pins.env"
+chmod +x "$SL_RES/collect-logs.sh"
 
 # brand each applet: RS3 icon + identity/version. osacompile makes a droplet (uses droplet.icns)
 # when the script has `on open`, else an applet (applet.icns) — overwrite whichever exists.
@@ -244,6 +254,7 @@ brand_applet() { # <app> <bundle-id> <name> <icns>
 }
 brand_applet "$IMPORT_APP_BUILT"    "$BUNDLE_ID.import"    "Import RaceStudio 3 Data" "$DIST/rs3-import.icns"
 brand_applet "$UNINSTALL_APP_BUILT" "$BUNDLE_ID.uninstall" "Uninstall RaceStudio 3"   "$DIST/rs3-uninstall.icns"
+brand_applet "$SHOWLOGS_APP_BUILT"  "$BUNDLE_ID.showlogs" "Show RaceStudio 3 Logs"   "$DIST/rs3.icns"
 rm -f "$DIST/rs3.icns" "$DIST/rs3-import.icns" "$DIST/rs3-uninstall.icns"
 
 if [ "${SKIP_SIGN:-0}" = 1 ]; then say "SKIP_SIGN=1 — compiled only."; exit 0; fi
@@ -338,6 +349,7 @@ STAGE="$DIST/.dmgstage"; rm -rf "$STAGE"; mkdir -p "$STAGE/.background" "$STAGE/
 ditto "$APP"                 "$STAGE/AiM/RaceStudio 3.app"            || { echo "staging ditto failed (app)"; exit 1; }
 ditto "$IMPORT_APP_BUILT"    "$STAGE/AiM/Import RaceStudio 3 Data.app" || { echo "staging ditto failed (import)"; exit 1; }
 ditto "$UNINSTALL_APP_BUILT" "$STAGE/AiM/Uninstall RaceStudio 3.app"   || { echo "staging ditto failed (uninstall)"; exit 1; }
+ditto "$SHOWLOGS_APP_BUILT" "$STAGE/AiM/Show RaceStudio 3 Logs.app"  || { echo "staging ditto failed (show-logs)"; exit 1; }
 ln -s /Applications "$STAGE/Applications"
 cp "$BG" "$STAGE/.background/bg.png"
 
