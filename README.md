@@ -91,6 +91,16 @@ run the **Uninstall** app and reinstall.
 </details>
 
 <details>
+<summary><b>macOS keeps warning "Intel app support is ending"?</b></summary>
+
+macOS 26.4+ (Tahoe) shows a periodic reminder whenever you launch an Intel app, and RaceStudio 3
+is one. It's harmless — the app still works. To silence it, install the optional configuration
+profile: [extras/README.md](extras/README.md). (A `defaults write` won't stick — only the profile
+does; details in that file.)
+
+</details>
+
+<details>
 <summary><b>No release posted yet? / Build it yourself</b></summary>
 
 The notarized DMG is produced from this repo by `installer/build/build-apps.sh` (needs an
