@@ -108,6 +108,16 @@ jobs:
           brew install mingw-w64 bison flex
           bash installer/bridge/wine-patch/build-wine-dlls.sh "$WINE_VER"
 
+      - name: Build patched winemac.so (native app-menu items + ⌘Q)
+        run: |
+          set -euo pipefail
+          # RS3's bold macOS app menu is built in winemac.drv's compiled Cocoa. We rebuild that one
+          # unix module from a source patch so the menu gains Import / Uninstall / Show Logs items
+          # above a ⌘Q Quit. It must be x86_64 (Rosetta) to drop into the osx64 bundle — the build
+          # hard-fails if the result is not x86_64. mingw/bison/flex installed in the step above.
+          softwareupdate --install-rosetta --agree-to-license 2>/dev/null || true
+          bash installer/wine-patch/build-winemac-so.sh "$WINE_VER"
+
       - name: Decode RS3 icon (optional)
         env:
           RS3_LOGO_B64: ${{ secrets.RS3_LOGO_B64 }}
