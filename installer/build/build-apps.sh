@@ -337,6 +337,7 @@ notarize_staple() { # <path>
 notarize_staple "$APP"                 || { rc=$?; [ "$rc" -eq 2 ] || { echo "app notarization failed (rc=$rc)"; exit "$rc"; }; }
 notarize_staple "$IMPORT_APP_BUILT"    || { rc=$?; [ "$rc" -eq 2 ] || { echo "Import app notarization failed (rc=$rc)"; exit "$rc"; }; }
 notarize_staple "$UNINSTALL_APP_BUILT" || { rc=$?; [ "$rc" -eq 2 ] || { echo "Uninstall app notarization failed (rc=$rc)"; exit "$rc"; }; }
+notarize_staple "$SHOWLOGS_APP_BUILT"  || { rc=$?; [ "$rc" -eq 2 ] || { echo "Show Logs app notarization failed (rc=$rc)"; exit "$rc"; }; }
 
 # ---- 6. branded drag-to-Applications DMG ----------------------------------------------------
 if [ "${NO_DMG:-0}" = 1 ]; then say "NO_DMG=1 — skipping DMG."; exit 0; fi
