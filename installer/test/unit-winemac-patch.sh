@@ -20,6 +20,9 @@ grep -qF 'wine_rs3ImportData:' "$M"      && ok "Import action present"    || bad
 grep -qF 'wine_rs3Uninstall:' "$M"       && ok "Uninstall action present" || bad "Uninstall action missing"
 grep -qF 'Import RaceStudio 3 Data' "$M" && ok "Import title present"     || bad "Import title missing"
 grep -qF 'Uninstall RaceStudio 3' "$M"   && ok "Uninstall title present"  || bad "Uninstall title missing"
+grep -qF 'wine_rs3ShowLogs:' "$M"             && ok "Show Logs action present"     || bad "Show Logs action missing"
+grep -qF 'Show Logs' "$M"                     && ok "Show Logs title present"      || bad "Show Logs title missing"
+grep -qF 'Show RaceStudio 3 Logs.app' "$M"    && ok "Show Logs app target present" || bad "Show Logs app target missing"
 # ⌘Q fold-in (added in Task 4): Quit mask Command-only.
 grep -qE 'setKeyEquivalentModifierMask:NSEventModifierFlagCommand\]' "$M" && ok "Quit is ⌘Q (Command only)" || bad "Quit mask not folded to ⌘Q"
 echo "unit-winemac-patch: $P passed, $F failed"; [ "$F" -eq 0 ]
