@@ -212,12 +212,15 @@ pset CFBundleIconFile "applet" string
 # the whole folder drops into /Applications/AiM in one drag. Wine owns the macOS menu bar while RS3
 # runs and that menu can't host custom items, and the old NSStatusItem menu-bar helper proved
 # unreliable (Bartender/Tahoe), so these standalone apps are the reachable Import/Uninstall surface.
-say "Building Import / Uninstall apps"
+say "Building helper apps (Import / Uninstall / Show Logs)"
 IMPORT_APP_BUILT="$DIST/Import RaceStudio 3 Data.app"
 UNINSTALL_APP_BUILT="$DIST/Uninstall RaceStudio 3.app"
 rm -rf "$IMPORT_APP_BUILT" "$UNINSTALL_APP_BUILT"
 osacompile -o "$IMPORT_APP_BUILT"    "$SRC/import-app.applescript"    || { echo "osacompile import failed"; exit 1; }
 osacompile -o "$UNINSTALL_APP_BUILT" "$SRC/uninstall-app.applescript" || { echo "osacompile uninstall failed"; exit 1; }
+SHOWLOGS_APP_BUILT="$DIST/Show RaceStudio 3 Logs.app"
+rm -rf "$SHOWLOGS_APP_BUILT"
+osacompile -o "$SHOWLOGS_APP_BUILT" "$SRC/show-logs-app.applescript" || { echo "osacompile show-logs failed"; exit 1; }
 
 # Import merges data, so it needs the engine — embed installer-core.sh + lib + pins.env (same
 # layout as RaceStudio 3.app's Resources). Uninstall calls the self-contained uninstall.sh at run
@@ -227,6 +230,13 @@ ditto "$SRC/installer-core.sh" "$IMP_RES/installer-core.sh"
 ditto "$SRC/pins.env"          "$IMP_RES/pins.env"
 ditto "$SRC/lib"               "$IMP_RES/lib"
 chmod +x "$IMP_RES/installer-core.sh"
+
+# Show Logs runs collect-logs.sh, which reads pins.env for the version. Embed both (no lib/ — the
+# collector is standalone and shells to the sibling RaceStudio 3.app for aim-bridge-ctl).
+SL_RES="$SHOWLOGS_APP_BUILT/Contents/Resources"
+ditto "$SRC/collect-logs.sh" "$SL_RES/collect-logs.sh"
+ditto "$SRC/pins.env"        "$SL_RES/pins.env"
+chmod +x "$SL_RES/collect-logs.sh"
 
 # brand each applet: RS3 icon + identity/version. osacompile makes a droplet (uses droplet.icns)
 # when the script has `on open`, else an applet (applet.icns) — overwrite whichever exists.
@@ -244,6 +254,7 @@ brand_applet() { # <app> <bundle-id> <name> <icns>
 }
 brand_applet "$IMPORT_APP_BUILT"    "$BUNDLE_ID.import"    "Import RaceStudio 3 Data" "$DIST/rs3-import.icns"
 brand_applet "$UNINSTALL_APP_BUILT" "$BUNDLE_ID.uninstall" "Uninstall RaceStudio 3"   "$DIST/rs3-uninstall.icns"
+brand_applet "$SHOWLOGS_APP_BUILT"  "$BUNDLE_ID.showlogs" "Show RaceStudio 3 Logs"   "$DIST/rs3.icns"
 rm -f "$DIST/rs3.icns" "$DIST/rs3-import.icns" "$DIST/rs3-uninstall.icns"
 
 if [ "${SKIP_SIGN:-0}" = 1 ]; then say "SKIP_SIGN=1 — compiled only."; exit 0; fi
@@ -266,9 +277,10 @@ if [ "${HARDENED_RUNTIME:-0}" = 1 ]; then
   # shortcut is rejected by notarytool). Sign all of Wine's binaries first, then the app bundle.
   TS="--timestamp"; [ "${NO_TIMESTAMP:-0}" = 1 ] && TS=""
   # Sibling helper apps (no special entitlements — they bundle no Mach-O of their own).
-  say "Signing the Import / Uninstall apps…"
+  say "Signing the helper apps (Import / Uninstall / Show Logs)…"
   codesign --force --options runtime $TS --sign "$IDENTITY" "$IMPORT_APP_BUILT"    || { echo "import codesign failed"; exit 1; }
   codesign --force --options runtime $TS --sign "$IDENTITY" "$UNINSTALL_APP_BUILT" || { echo "uninstall codesign failed"; exit 1; }
+  codesign --force --options runtime $TS --sign "$IDENTITY" "$SHOWLOGS_APP_BUILT" || { echo "show-logs codesign failed"; exit 1; }
   say "Signing nested Wine binaries individually (notarization-grade — slow)…"
   while IFS= read -r f; do
     case "$(file -b "$f" 2>/dev/null)" in
@@ -292,6 +304,7 @@ else
   codesign --deep --force --sign "$IDENTITY" "$APP" || { echo "codesign failed"; exit 1; }
   codesign --deep --force --sign "$IDENTITY" "$IMPORT_APP_BUILT"    || { echo "import codesign failed"; exit 1; }
   codesign --deep --force --sign "$IDENTITY" "$UNINSTALL_APP_BUILT" || { echo "uninstall codesign failed"; exit 1; }
+  codesign --deep --force --sign "$IDENTITY" "$SHOWLOGS_APP_BUILT" || { echo "show-logs codesign failed"; exit 1; }
 fi
 codesign --verify --strict "$APP" && say "signature verifies"
 
@@ -324,6 +337,7 @@ notarize_staple() { # <path>
 notarize_staple "$APP"                 || { rc=$?; [ "$rc" -eq 2 ] || { echo "app notarization failed (rc=$rc)"; exit "$rc"; }; }
 notarize_staple "$IMPORT_APP_BUILT"    || { rc=$?; [ "$rc" -eq 2 ] || { echo "Import app notarization failed (rc=$rc)"; exit "$rc"; }; }
 notarize_staple "$UNINSTALL_APP_BUILT" || { rc=$?; [ "$rc" -eq 2 ] || { echo "Uninstall app notarization failed (rc=$rc)"; exit "$rc"; }; }
+notarize_staple "$SHOWLOGS_APP_BUILT"  || { rc=$?; [ "$rc" -eq 2 ] || { echo "Show Logs app notarization failed (rc=$rc)"; exit "$rc"; }; }
 
 # ---- 6. branded drag-to-Applications DMG ----------------------------------------------------
 if [ "${NO_DMG:-0}" = 1 ]; then say "NO_DMG=1 — skipping DMG."; exit 0; fi
@@ -338,6 +352,7 @@ STAGE="$DIST/.dmgstage"; rm -rf "$STAGE"; mkdir -p "$STAGE/.background" "$STAGE/
 ditto "$APP"                 "$STAGE/AiM/RaceStudio 3.app"            || { echo "staging ditto failed (app)"; exit 1; }
 ditto "$IMPORT_APP_BUILT"    "$STAGE/AiM/Import RaceStudio 3 Data.app" || { echo "staging ditto failed (import)"; exit 1; }
 ditto "$UNINSTALL_APP_BUILT" "$STAGE/AiM/Uninstall RaceStudio 3.app"   || { echo "staging ditto failed (uninstall)"; exit 1; }
+ditto "$SHOWLOGS_APP_BUILT" "$STAGE/AiM/Show RaceStudio 3 Logs.app"  || { echo "staging ditto failed (show-logs)"; exit 1; }
 ln -s /Applications "$STAGE/Applications"
 cp "$BG" "$STAGE/.background/bg.png"
 
