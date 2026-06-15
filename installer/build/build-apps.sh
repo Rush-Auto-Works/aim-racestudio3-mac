@@ -277,7 +277,7 @@ if [ "${HARDENED_RUNTIME:-0}" = 1 ]; then
   # shortcut is rejected by notarytool). Sign all of Wine's binaries first, then the app bundle.
   TS="--timestamp"; [ "${NO_TIMESTAMP:-0}" = 1 ] && TS=""
   # Sibling helper apps (no special entitlements — they bundle no Mach-O of their own).
-  say "Signing the Import / Uninstall apps…"
+  say "Signing the helper apps (Import / Uninstall / Show Logs)…"
   codesign --force --options runtime $TS --sign "$IDENTITY" "$IMPORT_APP_BUILT"    || { echo "import codesign failed"; exit 1; }
   codesign --force --options runtime $TS --sign "$IDENTITY" "$UNINSTALL_APP_BUILT" || { echo "uninstall codesign failed"; exit 1; }
   codesign --force --options runtime $TS --sign "$IDENTITY" "$SHOWLOGS_APP_BUILT" || { echo "show-logs codesign failed"; exit 1; }
