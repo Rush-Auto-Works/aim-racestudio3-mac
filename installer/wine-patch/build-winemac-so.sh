@@ -24,6 +24,10 @@ if [ -z "$VER" ] && [ -f "$SRC_PINS" ]; then
 fi
 VER="${VER:?wine version not given and not found in pins.env}"
 MAJOR="${VER%%.*}"
+# Supply-chain integrity: pin the winehq source tarball's sha256 (pins.env, override via env).
+# This is release-critical source consumed by the build, so verify before extracting.
+WINE_SRC_SHA256="${WINE_SRC_SHA256:-}"
+[ -n "$WINE_SRC_SHA256" ] || { [ -f "$SRC_PINS" ] && WINE_SRC_SHA256="$(sed -nE 's/^WINE_SRC_SHA256="([0-9a-fA-F]{64})"/\1/p' "$SRC_PINS")"; }
 
 OUT="${OUT:-$HERE/build/winemac}"
 WORK="${WORK:-$(mktemp -d "${TMPDIR:-/tmp}/winemac-so.XXXXXX")}"
@@ -42,8 +46,12 @@ cd "$WORK"
 TARBALL="wine-$VER.tar.xz"
 if [ ! -f "$TARBALL" ]; then
   echo "[build-winemac-so] fetching source"
-  curl -fsSL -o "$TARBALL" "https://dl.winehq.org/wine/source/$MAJOR.x/wine-$VER.tar.xz"
+  curl -fsSL --proto '=https' -o "$TARBALL" "https://dl.winehq.org/wine/source/$MAJOR.x/wine-$VER.tar.xz"
 fi
+[ -n "$WINE_SRC_SHA256" ] || { echo "missing WINE_SRC_SHA256 for wine-$VER.tar.xz (set in pins.env or env)"; exit 2; }
+echo "$WINE_SRC_SHA256  $TARBALL" | shasum -a 256 -c - >/dev/null 2>&1 \
+  || { echo "sha256 mismatch for $TARBALL (expected $WINE_SRC_SHA256)"; exit 1; }
+echo "[build-winemac-so] source sha256 verified"
 rm -rf "wine-$VER"; tar xf "$TARBALL"
 cd "wine-$VER"
 

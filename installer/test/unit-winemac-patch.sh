@@ -13,8 +13,10 @@ ok(){ P=$((P+1)); echo "  ok   $1"; }; bad(){ F=$((F+1)); echo "  FAIL $1" >&2; 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/winemacpatch.XXXXXX")"; trap 'rm -rf "$WORK"' EXIT
 cp -R "$SRC" "$WORK/src"
 
-git -C "$WORK/src" apply --check "$PATCH" 2>/dev/null && ok "patch applies cleanly" || bad "patch does not apply"
-git -C "$WORK/src" apply "$PATCH" 2>/dev/null || true
+# Apply with `patch -p1` (not `git apply`) to mirror build-winemac-so.sh exactly — the two tools
+# can disagree (fuzz/whitespace), so testing with the same applier the release build uses avoids
+# a green test over a patch the build would choke on. The copy is throwaway, so a real apply is fine.
+if patch -p1 -d "$WORK/src" <"$PATCH" >/dev/null 2>&1; then ok "patch applies cleanly"; else bad "patch does not apply"; fi
 M="$WORK/src/dlls/winemac.drv/cocoa_app.m"
 grep -qF 'wine_rs3ImportData:' "$M"      && ok "Import action present"    || bad "Import action missing"
 grep -qF 'wine_rs3Uninstall:' "$M"       && ok "Uninstall action present" || bad "Uninstall action missing"

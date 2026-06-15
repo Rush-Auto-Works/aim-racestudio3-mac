@@ -266,7 +266,7 @@ git commit -m "refactor: move ⌘Q remap into the winemac source patch; retire b
 ```bash
 SO="installer/dist/RaceStudio 3.app/Contents/Resources/wine/lib/wine/x86_64-unix/winemac.so"
 strings -a "$SO" | grep -E 'wine_rs3ImportData:|wine_rs3Uninstall:|Import RaceStudio 3 Data|Uninstall RaceStudio 3'
-otool -tV "$SO" | grep -nE 'movl\s+\$0x1[08]0000, %edx'   # Quit site now 0x100000 (⌘Q)
+otool -tV "$SO" | grep -nE 'movl\s+\$0x100000, %edx'   # Quit site now 0x100000 (⌘Q)
 ```
 Expected: all four strings present; the Quit mask is `0x100000`.
 
@@ -292,4 +292,3 @@ Expected: all four strings present; the Quit mask is `0x100000`.
 - **Feasibility corrected:** this is a single-module build (`make dlls/winemac.drv` → `winemac.so`) swapped into the prebuilt bundle, NOT a full Wine rebuild — the same proven technique as the bridge's `ws2_32.dll` patch (`installer/bridge/wine-patch/README.md`). Shared toolchain + CI decision.
 - **Selector/title consistency:** `wine_rs3ImportData:` / `wine_rs3Uninstall:` / `wine_rs3OpenAuxApp:` and the exact `.app` titles are used identically in the patch, the unit test, and the build-output assertion.
 - **Open coordination items:** (1) patch directory — generalize `installer/bridge/wine-patch/` → `installer/wine-patch/` or co-locate; (2) the CI build-vs-commit-blob decision — pick once for both modules.
-```

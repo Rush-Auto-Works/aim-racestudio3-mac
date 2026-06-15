@@ -120,7 +120,11 @@ if [ -f "$src_so" ]; then
   strings "$src_so" | grep -F 'wine_rs3OpenAuxApp' >/dev/null || { echo "patched winemac.so missing marker 'wine_rs3OpenAuxApp'" >&2; exit 1; }
   lipo -archs "$src_so" 2>/dev/null | grep -qw x86_64 || { echo "patched winemac.so is not x86_64" >&2; exit 1; }
   while IFS= read -r dst; do
-    cp "$src_so" "$dst"; say "  swapped $(echo "$dst" | sed "s#$RES/wine/lib/wine/##")"; WINEMAC_SWAPPED=1
+    # explicit failure check: this script has no `set -e`, so a silent cp failure must not be
+    # mistaken for a successful swap (which would ship the stock winemac.so + no menu items).
+    cp "$src_so" "$dst" || { echo "failed to copy patched winemac.so to $dst" >&2; exit 1; }
+    say "  swapped $(echo "$dst" | sed "s#$RES/wine/lib/wine/##")"
+    WINEMAC_SWAPPED=1
   done < <(find "$RES/wine/lib/wine" -type f -name 'winemac.so' -path '*x86_64-unix/*')
 fi
 if [ "$WINEMAC_SWAPPED" != 1 ]; then
