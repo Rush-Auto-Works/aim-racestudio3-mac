@@ -16,6 +16,10 @@
     <true/>
     <key>ProcessType</key>
     <string>Background</string>
+    <key>StandardErrorPath</key>
+    <string>/Library/Logs/aim-bridge.log</string>
+    <key>StandardOutPath</key>
+    <string>/Library/Logs/aim-bridge.log</string>
     <key>AssociatedBundleIdentifiers</key>
     <array>
         <string>com.rushautoworks.racestudio3</string>
