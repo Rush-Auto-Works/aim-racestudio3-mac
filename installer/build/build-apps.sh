@@ -212,7 +212,7 @@ pset CFBundleIconFile "applet" string
 # the whole folder drops into /Applications/AiM in one drag. Wine owns the macOS menu bar while RS3
 # runs and that menu can't host custom items, and the old NSStatusItem menu-bar helper proved
 # unreliable (Bartender/Tahoe), so these standalone apps are the reachable Import/Uninstall surface.
-say "Building Import / Uninstall apps"
+say "Building helper apps (Import / Uninstall / Show Logs)"
 IMPORT_APP_BUILT="$DIST/Import RaceStudio 3 Data.app"
 UNINSTALL_APP_BUILT="$DIST/Uninstall RaceStudio 3.app"
 rm -rf "$IMPORT_APP_BUILT" "$UNINSTALL_APP_BUILT"
