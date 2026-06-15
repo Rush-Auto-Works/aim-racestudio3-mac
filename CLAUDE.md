@@ -36,14 +36,21 @@ This file is constraints, conventions, and hard-won gotchas only.
 ## Don't retry (ruled out, with reasons)
 
 - **NSStatusItem menu-bar helper** (removed): invisible under Bartender / Tahoe. Abandoned.
-- **Custom items in Wine's macOS app menu**: `winemac.drv` builds it in compiled Cocoa with no
-  config hook; would require rebuilding Wine from source. Not worth it.
+- **Custom items in Wine's macOS app menu** — **SUPERSEDED (achieved, PR #14).** `winemac.drv`
+  builds the menu in compiled Cocoa with no config hook, so it *does* require rebuilding from source —
+  but that's just ONE module (`winemac.so`), not all of Wine. We patch `dlls/winemac.drv/cocoa_app.m`
+  (`installer/wine-patch/winemac-native-menu.patch`) to add Import / Uninstall / Show Logs items + fold
+  in ⌘Q, build the single x86_64 module (`build-winemac-so.sh`, under Rosetta to match the osx64
+  bundle), and swap it in (`build-apps.sh` step 1d). The old "not worth it" framing assumed a full
+  Wine rebuild. Build-verified; on-device acceptance is the final gate.
 - **Cmd-Q to quit RS3**: the native app-menu Quit (`terminate:`) **does reliably quit RS3** — verified
   on device 2026-06-07 (⌘⌥Q quit a running RS3). The old "RS3 ignores `WM_QUERYENDSESSION`" worry
   applies to *forwarding a keystroke into the app*, NOT the AppKit menu item, which terminates the Wine
-  process directly. We bind it to the Mac-standard ⌘Q by binary-patching winemac.so's Quit modifier
-  mask (`patch-wine-cmdq.py`, build step 1d) — no Accessibility grant needed (the menu owns ⌘Q; no
-  global keystroke intercept). `wineserver -k` is still the hard kill used by the Uninstall app.
+  process directly. We bind it to the Mac-standard ⌘Q in the `winemac.so` source patch (a
+  `setKeyEquivalentModifierMask:` change folded into `winemac-native-menu.patch`; was the
+  `patch-wine-cmdq.py` post-build binary edit before PR #14, now retired) — no Accessibility grant
+  needed (the menu owns ⌘Q; no global keystroke intercept). `wineserver -k` is still the hard kill
+  used by the Uninstall app.
 - **Trusting `lsappinfo`/`localizedName`** for the menu name (filename-derived, not the menu title).
 - **Patching `CFBundleExecutable` to fix the Dock name** ("wine"): doesn't work — macOS derives the
   Dock/process name from the real on-disk loader filename, not the plist. Worse, a `CFBundleExecutable`
