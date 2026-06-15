@@ -38,6 +38,7 @@ assert_true "[ ! -f '$OUT/install.log' ]"    "absent install.log was skipped (no
 assert_true "[ -f '$OUT/system-info.txt' ]"  "system-info.txt written"
 assert_true "[ -f '$OUT/README.txt' ]"       "README.txt written"
 assert_true "grep -q 'install.log' '$OUT/README.txt'" "README notes the missing install.log"
+assert_true "grep -q 'aim-bridge.log' '$OUT/README.txt'" "README notes the missing aim-bridge.log"
 assert_true "[ \"\$(cat '$OPENLOG' 2>/dev/null)\" = '$OUT' ]" "open was called on the output folder"
 
 finish

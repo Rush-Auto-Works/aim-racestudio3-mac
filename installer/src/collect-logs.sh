@@ -22,7 +22,7 @@ CTL="$HERE/../../../RaceStudio 3.app/Contents/MacOS/aim-bridge-ctl"
 
 ts="$(date '+%Y%m%d-%H%M%S')"
 OUT="$DESKTOP/AiM-Logs-$ts"
-mkdir -p "$OUT"
+mkdir -p "$OUT" || { echo "failed to create output folder: $OUT" >&2; exit 1; }
 
 missing=()
 copy_if_present() {  # $1=source file  $2=basename in OUT
@@ -46,7 +46,7 @@ copy_if_present "$BRIDGE_LOG"                     "aim-bridge.log"
   fi
   if [ -x "$CTL" ]; then echo "bridge daemon: $("$CTL" status 2>&1)"
   else echo "bridge daemon: (aim-bridge-ctl not found)"; fi
-} > "$OUT/system-info.txt" 2>/dev/null
+} > "$OUT/system-info.txt" 2>/dev/null || { echo "failed to write system-info.txt" >&2; exit 1; }
 
 {
   echo "These are the current RaceStudio 3 logs, collected $(date)."
@@ -61,7 +61,7 @@ copy_if_present "$BRIDGE_LOG"                     "aim-bridge.log"
     echo "Not found (normal if you haven't used that feature yet):"
     printf '  - %s\n' "${missing[@]}"
   fi
-} > "$OUT/README.txt" 2>/dev/null
+} > "$OUT/README.txt" 2>/dev/null || { echo "failed to write README.txt" >&2; exit 1; }
 
 "$OPEN_CMD" "$OUT" 2>/dev/null || true
 exit 0

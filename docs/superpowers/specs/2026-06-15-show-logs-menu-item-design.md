@@ -127,7 +127,7 @@ Following the repo's TDD pattern (`installer/test/run-all.sh`):
 |---|---|---|
 | `collect-logs.sh` | gather present logs + system-info into a Desktop folder, reveal in Finder | `INSTALL_ROOT` layout, `aim-bridge-ctl`, `pins.env` |
 | `Show RaceStudio 3 Logs.app` | thin AppleScript wrapper that runs `collect-logs.sh` | aux-app mold (`lib/ui.sh`) |
-| bridge plist `StandardErrorPath` | persist daemon stderr to `/Library/Logs/AiM/aim-bridge.log` | daemon runs as root |
+| bridge plist `StandardErrorPath` | persist daemon stderr to `/Library/Logs/aim-bridge.log` | daemon runs as root |
 | winemac patch `wine_rs3ShowLogs:` | menu item → launch the aux app | PR #14's `wine_rs3OpenAuxApp:` |
 | `build-apps.sh` aux-app build | ship the new app in the bundle | existing Import/Uninstall build path |
 
