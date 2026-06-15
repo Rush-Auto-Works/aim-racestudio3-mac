@@ -52,7 +52,7 @@ A script `installer/src/collect-logs.sh`, run by the app wrapper, does the minim
 2. Copy in whatever exists — each optional, never fail if absent:
    - `$INSTALL_ROOT/logs/run.log` — RS3 runtime stdout/stderr
    - `$INSTALL_ROOT/logs/install.log` — install/import engine log
-   - `/Library/Logs/AiM/aim-bridge.log` — the bridge daemon log (see below)
+   - `/Library/Logs/aim-bridge.log` — the bridge daemon log (see below)
    - a generated `system-info.txt`: macOS build (`sw_vers`), app `CFBundleVersion`,
      `INSTALL_ROOT` path, bridge registration state (`aim-bridge-ctl status`), and the
      pins (`RS3_PINNED_VER` / `RS3_PKG_REV`)
@@ -77,13 +77,17 @@ diagnostic suite can be layered on later if the plain log dump proves insufficie
 discarded. Add to the plist:
 
 ```xml
-<key>StandardErrorPath</key><string>/Library/Logs/AiM/aim-bridge.log</string>
-<key>StandardOutPath</key><string>/Library/Logs/AiM/aim-bridge.log</string>
+<key>StandardErrorPath</key><string>/Library/Logs/aim-bridge.log</string>
+<key>StandardOutPath</key><string>/Library/Logs/aim-bridge.log</string>
 ```
 
-The daemon runs as root, so the system-wide, root-writable `/Library/Logs/AiM/` is the
-correct home (not `~/Library/Logs`, which the root daemon can't reliably resolve to the
-logged-in user). `collect-logs.sh` reads the log from this path. Without this change "Show
+The daemon runs as root, so a system-wide, root-writable path is correct (not
+`~/Library/Logs`, which the root daemon can't reliably resolve to the logged-in user).
+`/Library/Logs/` is chosen because it always exists and is root-writable: `launchd` does
+not reliably create parent directories for `StandardErrorPath`, and the daemon's first
+`RunAtLoad` launch happens before any code could `mkdir` a subdir, so a
+`/Library/Logs/AiM/` subfolder would silently drop the first session's output.
+`collect-logs.sh` reads the log from this path. Without this change "Show
 Logs" has no bridge signal — the most useful thing for the WiFi case that motivated the
 feature.
 
