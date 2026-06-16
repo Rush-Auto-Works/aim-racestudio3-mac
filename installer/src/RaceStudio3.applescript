@@ -95,11 +95,25 @@ on launchRS3()
 		"vp=" & quoted form of (root & "/prefix/drive_c/AIM_SPORT/RaceStudio3/64/plugins") & "; " & ¬
 		"if [ -d \"$vp\" ]; then for vplug in libdirect3d11_plugin libdirect3d9_plugin libgl_plugin libglwin32_plugin libwgl_plugin; do " & ¬
 		"[ -f \"$vp/$vplug.dll\" ] && mv -f \"$vp/$vplug.dll\" \"$vp/$vplug.dll.disabled\"; done; rm -f \"$vp/plugins.dat\" 2>/dev/null; fi; fi; "
+	-- Build the launch command. The trailing bridge loop keeps THIS launcher applet (and its Dock
+	-- icon) alive until the wine GUI window is actually on screen, so the Dock icon never blinks out
+	-- mid-launch (which reads as a crash). wine boots in the background and takes ~3-4s (RS3 +
+	-- MoltenVK init) to show a window.
+	-- Signal: the GUI process advertises our patched CFBundleName "RaceStudio 3" (same display name
+	-- as this applet) and winemac force-activates it when its window appears. So bridge until the
+	-- FRONTMOST app is named *RaceStudio* with an ASN different from this launcher's own — i.e. the
+	-- RS3 GUI window became active (the visible moment), not merely registered (~1s before its tile
+	-- draws) and not this still-frontmost launcher. Matching *RaceStudio* (not a generic *wine*)
+	-- keeps it specific to RS3, so an unrelated Wine app already running can't trip the wait early.
+	-- Bounded ~8s (32 * 0.25) so a focus-steal can never hang the applet. The trailing pgrep makes
+	-- the launch's exit status reflect whether RS3 actually came up (the nohup'd wine is detached, so
+	-- without this the script would always exit 0 and the on-error dialog below could never fire).
+	set bridgeWait to "self_asn=\"$(/usr/bin/lsappinfo front)\"; for _i in $(seq 1 32); do f=\"$(/usr/bin/lsappinfo front)\"; if [ \"$f\" != \"$self_asn\" ]; then case \"$(/usr/bin/lsappinfo info -only name \"$f\" 2>/dev/null)\" in *RaceStudio*) break ;; esac; fi; /bin/sleep 0.25; done; /usr/bin/pgrep -f AiMRS3-64 >/dev/null 2>&1 || exit 1"
 	set sh to "export WINEPREFIX=" & quoted form of (root & "/prefix") & " WINEARCH=win64 WINEDEBUG=-all; " & ¬
 		"export WINEDLLOVERRIDES=" & quoted form of "mscoree=d;mshtml=d" & "; " & ¬
 		"export XDG_CACHE_HOME=" & quoted form of (root & "/cache") & " XDG_CONFIG_HOME=" & quoted form of (root & "/xdg-config") & " XDG_DATA_HOME=" & quoted form of (root & "/xdg-data") & "; " & ¬
 		"mkdir -p " & quoted form of (root & "/logs") & "; " & hygiene & ¬
-		"nohup arch -x86_64 " & quoted form of wb & " 'C:\\AIM_SPORT\\RaceStudio3\\64\\AiMRS3-64-ReleaseU.exe' >> " & quoted form of (root & "/logs/run.log") & " 2>&1 & "
+		"nohup arch -x86_64 " & quoted form of wb & " 'C:\\AIM_SPORT\\RaceStudio3\\64\\AiMRS3-64-ReleaseU.exe' >> " & quoted form of (root & "/logs/run.log") & " 2>&1 & " & bridgeWait
 	try
 		do shell script sh
 	on error
