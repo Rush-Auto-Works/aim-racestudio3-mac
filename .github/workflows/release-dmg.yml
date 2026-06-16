@@ -167,10 +167,25 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          notes="RaceStudio 3 for macOS — drag to Applications, open once to set up. Connect AiM devices over Wi-Fi (USB unsupported)."
+          # Build the release notes from CHANGELOG.md: a short install line on top, then the
+          # section for this tag's version (## [<ver>], everything up to the next ## [ header).
+          # Single source of truth — the GitHub release notes track CHANGELOG.md automatically,
+          # so a tag is the only manual step. Falls back to just the install line if the version
+          # has no CHANGELOG section (awk literal-match avoids the '[' regex pitfall in the header).
+          ver="${TAG#v}"   # e.g. 3.83.20-3
+          install_line="RaceStudio 3 for macOS — drag the AiM folder to Applications, open once to set up. Connect AiM devices over Wi-Fi (USB unsupported)."
+          body="$(awk -v hdr="## [$ver]" 'index($0,hdr)==1{f=1;next} /^## \[/{if(f)exit} f{print}' CHANGELOG.md)"
+          notes_file="$RUNNER_TEMP/relnotes.md"
+          if [ -n "$(printf '%s' "$body" | tr -d '[:space:]')" ]; then
+            printf '%s\n\n---\n%s\n' "$install_line" "$body" > "$notes_file"
+          else
+            echo "no CHANGELOG section for $ver — using the install line only" >&2
+            printf '%s\n' "$install_line" > "$notes_file"
+          fi
           dmg="$(ls installer/dist/*.dmg)"   # versioned name, e.g. RaceStudio3-3.83.20-2.dmg
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$dmg" --clobber
+            gh release edit "$TAG" --notes-file "$notes_file"   # refresh notes on a rebuild/re-tag
             # Deleting a tag to re-point it (rebuilding the same version) silently converts its
             # published release into a draft; un-draft it so a re-pushed tag always ships publicly.
             # Pre-release tags (e.g. vX-test) stay prerelease — GitHub rejects --latest on a
@@ -181,5 +196,5 @@ jobs:
               gh release edit "$TAG" --draft=false --latest
             fi
           else
-            gh release create "$TAG" "$dmg" --title "RaceStudio 3 $TAG" --notes "$notes"
+            gh release create "$TAG" "$dmg" --title "RaceStudio 3 $TAG" --notes-file "$notes_file"
           fi
