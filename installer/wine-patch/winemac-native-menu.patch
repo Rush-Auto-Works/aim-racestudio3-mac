@@ -1,0 +1,80 @@
+diff --git a/dlls/winemac.drv/cocoa_app.m b/dlls/winemac.drv/cocoa_app.m
+index 2a9dab2..27a2220 100644
+--- a/dlls/winemac.drv/cocoa_app.m
++++ b/dlls/winemac.drv/cocoa_app.m
+@@ -220,6 +220,43 @@ static NSString* WineLocalizedString(unsigned int stringID)
+         [super dealloc];
+     }
+ 
++    /* RaceStudio 3 add-on: shared launcher for the standalone helper apps that ship beside
++       RaceStudio 3.app in /Applications/AiM. Launch via /usr/bin/open (universal, no deprecated
++       NSWorkspace API; runs the .app natively even though winemac runs x86_64-under-Rosetta).
++       /Applications first, then the per-user fallback the engine uses when /Applications isn't
++       writable. Menu actions run on the main thread — safe for AppKit/NSTask. */
++    - (void) wine_rs3OpenAuxApp:(NSString*)appName
++    {
++        NSArray<NSString*>* roots = @[@"/Applications/AiM",
++                                      [NSHomeDirectory() stringByAppendingPathComponent:@"Applications/AiM"]];
++        for (NSString* root in roots)
++        {
++            NSString* path = [root stringByAppendingPathComponent:appName];
++            if ([[NSFileManager defaultManager] fileExistsAtPath:path])
++            {
++                @try { [NSTask launchedTaskWithLaunchPath:@"/usr/bin/open" arguments:@[path]]; }
++                @catch (NSException *e) { NSBeep(); }
++                return;
++            }
++        }
++        NSBeep();   /* neither location present — should not happen for an installed app */
++    }
++
++    - (void) wine_rs3ImportData:(id)sender
++    {
++        [self wine_rs3OpenAuxApp:@"Import RaceStudio 3 Data.app"];
++    }
++
++    - (void) wine_rs3Uninstall:(id)sender
++    {
++        [self wine_rs3OpenAuxApp:@"Uninstall RaceStudio 3.app"];
++    }
++
++    - (void) wine_rs3ShowLogs:(id)sender
++    {
++        [self wine_rs3OpenAuxApp:@"Show RaceStudio 3 Logs.app"];
++    }
++
+     - (void) transformProcessToForeground:(BOOL)activateIfTransformed
+     {
+         if ([NSApp activationPolicy] != NSApplicationActivationPolicyRegular)
+@@ -264,12 +301,30 @@ static NSString* WineLocalizedString(unsigned int stringID)
+ 
+             [submenu addItem:[NSMenuItem separatorItem]];
+ 
++            /* RaceStudio 3 add-on: launch the standalone Import / Uninstall apps from RS3's own
++               app menu (Wine owns the macOS menu bar while RS3 runs). Inserted between the
++               Show-All separator above and the Quit item below so the order is
++               … Show All, ----, Import, Uninstall, ----, Quit. */
++            item = [submenu addItemWithTitle:@"Import RaceStudio 3 Data…"
++                                      action:@selector(wine_rs3ImportData:) keyEquivalent:@""];
++            [item setTarget:self];
++            item = [submenu addItemWithTitle:@"Uninstall RaceStudio 3…"
++                                      action:@selector(wine_rs3Uninstall:) keyEquivalent:@""];
++            [item setTarget:self];
++            item = [submenu addItemWithTitle:@"Show Logs…"
++                                      action:@selector(wine_rs3ShowLogs:) keyEquivalent:@""];
++            [item setTarget:self];
++            [submenu addItem:[NSMenuItem separatorItem]];
++
+             if ([bundleName length])
+                 title = [NSString stringWithFormat:WineLocalizedString(STRING_MENU_ITEM_QUIT_APPNAME), bundleName];
+             else
+                 title = WineLocalizedString(STRING_MENU_ITEM_QUIT);
+             item = [submenu addItemWithTitle:title action:@selector(terminate:) keyEquivalent:@"q"];
+-            [item setKeyEquivalentModifierMask:NSEventModifierFlagCommand | NSEventModifierFlagOption];
++            /* RaceStudio 3: bind Quit to the Mac-standard ⌘Q (Wine ships ⌘⌥Q). Folded in here from
++               the former post-build binary patch (patch-wine-cmdq.py). The AppKit menu item owns
++               ⌘Q, so no Accessibility/global-keystroke grant is needed. */
++            [item setKeyEquivalentModifierMask:NSEventModifierFlagCommand];
+             item = [[[NSMenuItem alloc] init] autorelease];
+             [item setTitle:WineLocalizedString(STRING_MENU_WINE)];
+             [item setSubmenu:submenu];

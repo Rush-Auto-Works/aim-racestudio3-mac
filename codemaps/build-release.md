@@ -13,7 +13,7 @@ Cannot run on Linux/Ubicloud.
 | 1 | embed engine | ditto `installer-core.sh` + `lib/` + `pins.env` into Resources |
 | 1b | bundle Wine | extract pinned tarball (cache `/tmp/claude/wine11.tar.xz`); drop gecko+mono (~290 MB) |
 | 1c | **rebrand Wine app-menu** | `patch-wine-appname.py` rewrites `CFBundleName` in every `*-unix/wine` loader; fails if zero patched |
-| 1d | **native ⌘Q** | `patch-wine-cmdq.py` flips `winemac.so` Quit shortcut ⌘⌥Q→⌘Q (one mask immediate); strict/fail-loud, fails if zero patched |
+| 1d | **native app-menu** | swap the from-source `winemac.so` (Import/Uninstall/Show Logs items + ⌘Q Quit) into `*x86_64-unix/winemac.so`; built by `installer/wine-patch/build-winemac-so.sh` from `winemac-native-menu.patch` (x86_64/Rosetta). Fail-loud under `HARDENED_RUNTIME=1`; dev build ships stock menu if absent. (replaced the `patch-wine-cmdq.py` binary edit) |
 | 2 | icons | `build_icns` runs `compose-icon.py` 3× → `rs3.icns` (plain), `rs3-import.icns` (badge), `rs3-uninstall.icns` (badge) |
 | 3 | Info.plist | `CFBundleName`/version (= `RS3_PINNED_VER`); delete `CFBundleIconName` droplet quirk |
 | 3b | Import/Uninstall applets | osacompile siblings in `$DIST`; embed engine into Import; `brand_applet` applies the badged icns + id/version, deletes `CFBundleIconName` |
@@ -30,7 +30,6 @@ Key vars: `VERSION` ← `RS3_PINNED_VER` (override `RS3_VERSION`); `VOL="RaceStu
 | File | Role |
 |------|------|
 | `patch-wine-appname.py <loader> [name]` | Patch `CFBundleName` in the loader's Mach-O `__TEXT,__info_plist` (fixed-size section: strips XML indent, pads). Idempotency scoped to the `CFBundleName` key. |
-| `patch-wine-cmdq.py <winemac.so>` | Flip the native menu Quit shortcut ⌘⌥Q→⌘Q by rewriting one mask immediate (0x180000→0x100000) at the Quit-specific instruction sequence (distinct from Hide-Others ⌘⌥H). Strict: exactly one site or exits nonzero. Idempotent. (not a Pillow helper — plain stdlib) |
 | `compose-icon.py <logo> <out> [none\|import\|uninstall]` | 1024² app icon (white rounded tile + RS3 wordmark). Optional badge: `import` = bottom-left orange file→RS3, `uninstall` = bottom-left red trash. |
 | `compose-dmg-bg.py <logo> <out>` | DMG background ("Drag the AiM folder into Applications"). PIL fallback font lacks `▸` → use ASCII. |
 | `check-rs3-update.sh [--apply]` | Scrape AiM page; max `RaceStudio3-64_<vercode>_*.exe` (38320→3.83.20); `--apply` downloads, hashes, rewrites pins.env. |

@@ -103,17 +103,37 @@ done < <(find "$RES/wine/lib/wine" -type f -name wine -path '*-unix/wine')
 # fail fast: zero loaders means the Wine layout changed and the menu would still read "Wine".
 [ "$patched" -gt 0 ] || { echo "no Wine unix loaders found to rebrand (looked for *-unix/wine under $RES/wine/lib/wine)"; exit 1; }
 
-# ---- 1d. native Cmd-Q: flip winemac.so's Quit shortcut from ⌘⌥Q to ⌘Q ------------------------
-# winemac.drv hard-codes the menu Quit item to ⌘⌥Q; the only lever is the compiled Cocoa code in
-# lib/wine/<arch>-unix/winemac.so. Strict + fail-loud (a Wine bump that moves the code red-fails
-# here, never ships ⌘⌥Q silently). Same as 1c: must run BEFORE signing — it edits the Mach-O.
-say "Native Cmd-Q: patching winemac.so Quit shortcut -> ⌘Q"
-qpatched=0
-while IFS= read -r so; do
-  python3 "$HERE/patch-wine-cmdq.py" "$so" || { echo "cmd-q patch failed for $so"; exit 1; }
-  qpatched=$((qpatched+1))
-done < <(find "$RES/wine/lib/wine" -type f -name 'winemac.so' -path '*-unix/*')
-[ "$qpatched" -gt 0 ] || { echo "no winemac.so found to patch for Cmd-Q (looked for *-unix/winemac.so under $RES/wine/lib/wine)"; exit 1; }
+# ---- 1d. native app-menu: swap in the from-source winemac.so --------------------------------
+# winemac.drv builds the bold "RaceStudio 3" app menu in compiled Cocoa. We rebuild that one unix
+# module from a source patch (installer/wine-patch/winemac-native-menu.patch) so RS3's app menu
+# gains Import / Uninstall / Show Logs items above a ⌘Q Quit, then swap it for the bundle's stock
+# winemac.so. The patch also folds in the ⌘Q remap that used to be a post-build binary edit
+# (patch-wine-cmdq.py, now retired). The module is x86_64 (built under Rosetta) to match the
+# osx64 bundle; build with installer/wine-patch/build-winemac-so.sh (CI does this). Like 1c/1e,
+# must run BEFORE signing — it replaces a Mach-O the app-bundle seal then covers.
+WINEMAC_SO_DIR="${WINEMAC_SO_DIR:-$HERE/../wine-patch/build/winemac}"
+say "Native app menu: swapping patched winemac.so (Import/Uninstall/Show Logs + ⌘Q)"
+WINEMAC_SWAPPED=0
+src_so="$WINEMAC_SO_DIR/x86_64-unix/winemac.so"
+if [ -f "$src_so" ]; then
+  # plain grep + redirect (NOT grep -q): under `set -o pipefail` grep -q SIGPIPEs strings.
+  strings "$src_so" | grep -F 'wine_rs3OpenAuxApp' >/dev/null || { echo "patched winemac.so missing marker 'wine_rs3OpenAuxApp'" >&2; exit 1; }
+  lipo -archs "$src_so" 2>/dev/null | grep -qw x86_64 || { echo "patched winemac.so is not x86_64" >&2; exit 1; }
+  while IFS= read -r dst; do
+    # explicit failure check: this script has no `set -e`, so a silent cp failure must not be
+    # mistaken for a successful swap (which would ship the stock winemac.so + no menu items).
+    cp "$src_so" "$dst" || { echo "failed to copy patched winemac.so to $dst" >&2; exit 1; }
+    say "  swapped $(echo "$dst" | sed "s#$RES/wine/lib/wine/##")"
+    WINEMAC_SWAPPED=1
+  done < <(find "$RES/wine/lib/wine" -type f -name 'winemac.so' -path '*x86_64-unix/*')
+fi
+if [ "$WINEMAC_SWAPPED" != 1 ]; then
+  if [ "${HARDENED_RUNTIME:-0}" = 1 ]; then
+    echo "missing patched winemac.so at $WINEMAC_SO_DIR — native menu items + ⌘Q are REQUIRED for release."
+    echo "run: bash installer/wine-patch/build-winemac-so.sh"; exit 1
+  fi
+  say "  (patched winemac.so absent — native menu/⌘Q not applied; dev build ships stock Wine menu)"
+fi
 
 # ---- 1e. WiFi loopback redirect: swap in the patched Wine DLLs ------------------------------
 # RS3 reaches AiM dashes over WiFi, which the macOS 15+/26 Local Network gate silently drops for

@@ -4,6 +4,7 @@
 installer/dist/
 installer/bridge/build/
 installer/bridge/wine-patch/build/
+installer/wine-patch/build/
 *.notarize.zip
 .serena/
 __pycache__/
