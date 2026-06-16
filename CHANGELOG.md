@@ -12,6 +12,23 @@ only this installer is versioned here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.83.20-4] — 2026-06-16
+
+### Fixed
+- **Wi-Fi setup prompt now actually appears on first launch.** The launcher probed the
+  background-helper state with `aim-bridge-ctl status`, but that tool exits non-zero for
+  every not-yet-enabled state (`notFound`, `requiresApproval`) and AppleScript's
+  `do shell script` treats *any* non-zero exit as an error — so the launcher silently
+  bailed before showing the "Set Up Wi-Fi" dialog. The helper was never registered, and
+  Wi-Fi found no connected devices. The status/register probes now tolerate the non-zero
+  exit, so the setup flow (and its Login Items follow-up) is reachable. SD-card / USB
+  import was unaffected.
+
+### Changed
+- **"Show RaceStudio 3 Logs" diagnostics** now flag an un-enabled Wi-Fi helper explicitly:
+  on macOS 15+ a `bridge daemon` state other than `enabled` prints a note that this is why
+  Wi-Fi shows no devices, plus the steps to fix it.
+
 ## [3.83.20-3] — 2026-06-16
 
 Native macOS app-menu items and a smoother launch.

@@ -138,22 +138,32 @@ on ensureBridge()
 	end try
 	if vmajor < 15 then return
 	set ctlBin to (POSIX path of (path to me)) & "Contents/MacOS/aim-bridge-ctl"
-	-- Already approved + running? Nothing to do — launch straight into RS3.
+	-- Control tool missing → nothing we can do; launch straight into RS3.
 	try
-		if (do shell script quoted form of ctlBin & " status 2>/dev/null") is "enabled" then return
+		do shell script "test -x " & quoted form of ctlBin
 	on error
-		return -- control tool missing/failed: don't nag, just launch RS3
+		return
 	end try
+	-- Read the daemon state. aim-bridge-ctl exits NON-ZERO for every non-enabled state
+	-- (notFound=1, requiresApproval=3) and `do shell script` raises an AppleScript error on ANY
+	-- non-zero exit — so we MUST swallow the exit code (|| true), otherwise the setup dialog below
+	-- is unreachable on first run (the bug that left users with no Wi-Fi prompt and no devices).
+	-- Already approved + running? Launch straight into RS3.
+	set brState to ""
+	try
+		set brState to do shell script quoted form of ctlBin & " status 2>/dev/null || true"
+	end try
+	if brState is "enabled" then return
 	-- Not enabled yet. PRIME the user BEFORE triggering macOS's background-activity prompt, so the
 	-- system dialog ("“RaceStudio 3” can run in the background…") isn't a surprise. Let them opt out.
 	set b to button returned of (display dialog "To connect AiM devices over Wi-Fi on this version of macOS, RaceStudio 3 uses a small background helper." & return & return & "macOS will now ask to allow “RaceStudio 3” to run in the background — click Allow. You can change this any time in System Settings ▸ General ▸ Login Items & Extensions." & return & return & "Prefer not to? Skip this — you can still import data from an SD card or USB." buttons {"Skip", "Set Up Wi-Fi"} default button "Set Up Wi-Fi" with title "Allow Wi-Fi access" with icon note)
 	if b is "Skip" then return
-	-- This is what raises the macOS approval prompt.
+	-- This is what raises the macOS approval prompt. Like `status`, `register` echoes the resulting
+	-- state and exits non-zero for it (requiresApproval=3) — swallow the exit code so the follow-up
+	-- dialog below is reachable instead of being skipped by `do shell script`'s error-on-nonzero.
 	set brStatus to ""
 	try
-		set brStatus to do shell script quoted form of ctlBin & " register 2>/dev/null"
-	on error
-		return
+		set brStatus to do shell script quoted form of ctlBin & " register 2>/dev/null || true"
 	end try
 	-- Still pending (they haven't clicked Allow, or need the Settings toggle) → open the exact pane.
 	if brStatus is "requiresApproval" then
