@@ -44,7 +44,18 @@ copy_if_present "$BRIDGE_LOG"                     "aim-bridge.log"
     echo "RS3 version: $(sed -nE 's/^RS3_PINNED_VER="(.*)"/\1/p' "$PINS")"
     echo "pkg rev:     $(sed -nE 's/^RS3_PKG_REV="(.*)"/\1/p' "$PINS")"
   fi
-  if [ -x "$CTL" ]; then echo "bridge daemon: $("$CTL" status 2>&1)"
+  os_major="$(sw_vers -productVersion 2>/dev/null | cut -d. -f1)"
+  if [ -x "$CTL" ]; then
+    bstat="$("$CTL" status 2>&1)"
+    echo "bridge daemon: $bstat"
+    # On macOS 15+ the Local Network gate means WiFi device discovery REQUIRES this 'enabled'.
+    # Anything else (notFound / notRegistered / requiresApproval) => RS3 will list no WiFi devices.
+    if [ "${os_major:-0}" -ge 15 ] 2>/dev/null && [ "$bstat" != "enabled" ]; then
+      echo "  ^ NOT enabled — on macOS 15+ this is why WiFi shows no connected devices."
+      echo "    Fix: relaunch RaceStudio 3, choose \"Set Up Wi-Fi\", click Allow, then turn on"
+      echo "    \"RaceStudio 3\" in System Settings > General > Login Items & Extensions"
+      echo "    (Allow in the Background). SD-card / USB import works without it."
+    fi
   else echo "bridge daemon: (aim-bridge-ctl not found)"; fi
 } > "$OUT/system-info.txt" 2>/dev/null || { echo "failed to write system-info.txt" >&2; exit 1; }
 
