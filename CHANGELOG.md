@@ -12,6 +12,31 @@ only this installer is versioned here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.83.20-3] — 2026-06-16
+
+Native macOS app-menu items and a smoother launch.
+
+### Added
+- **Native menu items in RaceStudio 3's own menu bar.** Opening the bold **RaceStudio 3**
+  menu (top-left, while RS3 is running) now shows **Import RaceStudio 3 Data…**,
+  **Uninstall RaceStudio 3…**, and **Show Logs…** above a ⌘Q **Quit** — each launches the
+  matching app, so the controls are reachable without hunting in the AiM folder. Built by
+  compiling a small patch into Wine's macOS driver and swapping that one module in.
+- **"Show RaceStudio 3 Logs" app.** One click gathers the current logs (run/install logs,
+  the Wi-Fi bridge log, and a system-info summary) into a dated folder on your Desktop and
+  opens it in Finder — handy for sending diagnostics to support. Also reachable as the
+  **Show Logs…** menu item above.
+
+### Fixed
+- **Launch no longer looks like a crash.** The Dock icon used to appear, vanish for a few
+  seconds, then reappear with the window. It now stays continuously visible until the
+  RaceStudio 3 window is up. (The ~3-4s startup itself is RaceStudio 3's own graphics
+  initialization and is unchanged.)
+
+### Changed
+- The ⌘Q Quit shortcut and the new menu items are now a single from-source Wine driver
+  patch; the previous post-build binary patcher is retired.
+
 ## [3.83.20-2] — 2026-06-13
 
 First release to ship the Wi-Fi fix, plus several features that had merged since the
