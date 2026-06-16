@@ -12,26 +12,9 @@ only this installer is versioned here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [3.83.20-4] — 2026-06-16
-
-### Fixed
-- **Wi-Fi setup prompt now actually appears on first launch.** The launcher probed the
-  background-helper state with `aim-bridge-ctl status`, but that tool exits non-zero for
-  every not-yet-enabled state (`notFound`, `requiresApproval`) and AppleScript's
-  `do shell script` treats *any* non-zero exit as an error — so the launcher silently
-  bailed before showing the "Set Up Wi-Fi" dialog. The helper was never registered, and
-  Wi-Fi found no connected devices. The status/register probes now tolerate the non-zero
-  exit, so the setup flow (and its Login Items follow-up) is reachable. SD-card / USB
-  import was unaffected.
-
-### Changed
-- **"Show RaceStudio 3 Logs" diagnostics** now flag an un-enabled Wi-Fi helper explicitly:
-  on macOS 15+ a `bridge daemon` state other than `enabled` prints a note that this is why
-  Wi-Fi shows no devices, plus the steps to fix it.
-
 ## [3.83.20-3] — 2026-06-16
 
-Native macOS app-menu items and a smoother launch.
+Native macOS app-menu items, a smoother launch, and a Wi-Fi first-launch fix.
 
 ### Added
 - **Native menu items in RaceStudio 3's own menu bar.** Opening the bold **RaceStudio 3**
@@ -45,6 +28,14 @@ Native macOS app-menu items and a smoother launch.
   **Show Logs…** menu item above.
 
 ### Fixed
+- **Wi-Fi setup prompt now actually appears on first launch.** The launcher probed the
+  background-helper state with `aim-bridge-ctl status`, but that tool exits non-zero for
+  every not-yet-enabled state (`notFound`, `requiresApproval`) and AppleScript's
+  `do shell script` treats *any* non-zero exit as an error — so the launcher silently
+  bailed before showing the "Set Up Wi-Fi" dialog. The helper was never registered, and
+  Wi-Fi found no connected devices. The status/register probes now tolerate the non-zero
+  exit, so the setup flow (and its Login Items follow-up) is reachable. SD-card / USB
+  import was unaffected.
 - **Launch no longer looks like a crash.** The Dock icon used to appear, vanish for a few
   seconds, then reappear with the window. It now stays continuously visible until the
   RaceStudio 3 window is up. (The ~3-4s startup itself is RaceStudio 3's own graphics
@@ -53,6 +44,9 @@ Native macOS app-menu items and a smoother launch.
 ### Changed
 - The ⌘Q Quit shortcut and the new menu items are now a single from-source Wine driver
   patch; the previous post-build binary patcher is retired.
+- **"Show RaceStudio 3 Logs" diagnostics** now flag an un-enabled Wi-Fi helper explicitly:
+  on macOS 15+ a `bridge daemon` state other than `enabled` prints a note that this is why
+  Wi-Fi shows no devices, plus the steps to fix it.
 
 ## [3.83.20-2] — 2026-06-13
 
