@@ -224,15 +224,19 @@ func serveUDP() {
                 }
             }
             if n < 0 { if errno == EINTR { continue }; continue }
-            // accept only the pinned dash (addr + port) — drop anything else
-            guard sa.sin_addr.s_addr == dashPinned.sin_addr.s_addr,
-                  sa.sin_port == dashPinned.sin_port else {
+            // Accept any reply from the dash IP, regardless of source port. The `us` socket only
+            // ever talks to the dash, so anything arriving on it from 10.0.0.1 is a dash reply.
+            // We deliberately do NOT pin the source port: real AiM dashes answer discovery from an
+            // EPHEMERAL port (e.g. 49861), not 36002 — pinning the port silently dropped every
+            // reply and RS3 saw no device. The IP pin still drops a stray foreign sender; the
+            // ws2_32 inbound rewrite makes RS3 accept the loopback-delivered reply as 10.0.0.1:36002.
+            guard sa.sin_addr.s_addr == dashPinned.sin_addr.s_addr else {
                 let fn = counts.bump("d2c-drop")
-                if milestone(fn) { logmsg("udp: ignored reply from \(ipv4(sa.sin_addr)):\(port16(sa.sin_port)) (#\(fn)) — expected dash \(DASH_ADDR):\(UDP_DASH); dash may be at a different IP") }
+                if milestone(fn) { logmsg("udp: ignored reply from \(ipv4(sa.sin_addr)):\(port16(sa.sin_port)) (#\(fn)) — not the dash \(DASH_ADDR)") }
                 continue
             }
             let rn = counts.bump("d2c")
-            if milestone(rn) { logmsg("udp: reply from dash \(DASH_ADDR):\(UDP_DASH) (#\(rn), \(n)B) — discovery reply path OK") }
+            if milestone(rn) { logmsg("udp: reply from dash \(DASH_ADDR):\(port16(sa.sin_port)) (#\(rn), \(n)B) — discovery reply path OK, delivering to RS3") }
             guard var ca = client.get() else {
                 let nn = counts.bump("d2c-noclient")
                 if milestone(nn) { logmsg("udp: dash reply with no loopback client yet (#\(nn)) — dropping") }

@@ -22,11 +22,14 @@ CTL="$HERE/../../../RaceStudio 3.app/Contents/MacOS/aim-bridge-ctl"
 BUNDLE="$HERE/../../../RaceStudio 3.app"
 DASH_ADDR="10.0.0.1"   # AiM dash IP when the Mac is joined to the dash's own Wi-Fi access point
 
-# Verify a shipped binary is the AiM-patched build (marker string present), not stock Wine. Uses
-# plain grep + redirect (NOT grep -q): under `set -o pipefail` grep -q SIGPIPEs strings.
+# Verify a shipped binary is the AiM-patched build (marker string present), not stock Wine.
+# Greps the binary directly with `grep -aF` (treat-as-text + fixed-string) rather than piping
+# `strings`: `strings` ships with the Xcode Command Line Tools, which an end-user Mac usually
+# lacks — when absent it silently produces nothing and EVERY component falsely reads STOCK.
+# `grep` is always present and finds the marker in the raw bytes.
 chk_marker() {  # $1=file  $2=marker  $3=label
   if [ -f "$1" ]; then
-    if strings "$1" 2>/dev/null | grep -F "$2" >/dev/null 2>&1; then echo "  $3: patched"
+    if grep -aF "$2" "$1" >/dev/null 2>&1; then echo "  $3: patched"
     else echo "  $3: STOCK — marker absent (this fix is NOT active)"; fi
   else echo "  $3: not found"; fi
 }
