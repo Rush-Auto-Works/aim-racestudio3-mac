@@ -19,6 +19,17 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PINS="$HERE/pins.env"
 # aim-bridge-ctl lives in the sibling RaceStudio 3.app (…/AiM/RaceStudio 3.app/Contents/MacOS).
 CTL="$HERE/../../../RaceStudio 3.app/Contents/MacOS/aim-bridge-ctl"
+BUNDLE="$HERE/../../../RaceStudio 3.app"
+DASH_ADDR="10.0.0.1"   # AiM dash IP when the Mac is joined to the dash's own Wi-Fi access point
+
+# Verify a shipped binary is the AiM-patched build (marker string present), not stock Wine. Uses
+# plain grep + redirect (NOT grep -q): under `set -o pipefail` grep -q SIGPIPEs strings.
+chk_marker() {  # $1=file  $2=marker  $3=label
+  if [ -f "$1" ]; then
+    if strings "$1" 2>/dev/null | grep -F "$2" >/dev/null 2>&1; then echo "  $3: patched"
+    else echo "  $3: STOCK — marker absent (this fix is NOT active)"; fi
+  else echo "  $3: not found"; fi
+}
 
 ts="$(date '+%Y%m%d-%H%M%S')"
 OUT="$DESKTOP/AiM-Logs-$ts"
@@ -57,6 +68,32 @@ copy_if_present "$BRIDGE_LOG"                     "aim-bridge.log"
       echo "    (Allow in the Background). SD-card / USB import works without it."
     fi
   else echo "bridge daemon: (aim-bridge-ctl not found)"; fi
+
+  echo
+  echo "=== patched components (every line should read 'patched') ==="
+  WB="$BUNDLE/Contents/Resources/wine/lib/wine"
+  chk_marker "$WB/x86_64-windows/ws2_32.dll"  "AiM: redirecting"   "bundle ws2_32  (WiFi redirect)"
+  chk_marker "$WB/x86_64-windows/wlanapi.dll" "AiM synthetic"      "bundle wlanapi (WiFi interface)"
+  chk_marker "$WB/x86_64-unix/winemac.so"     "wine_rs3OpenAuxApp" "bundle winemac (menu + Cmd-Q)"
+  PFX="$INSTALL_ROOT/prefix/drive_c/windows/system32"
+  chk_marker "$PFX/ws2_32.dll"  "AiM: redirecting" "prefix ws2_32  (what RS3 actually loads)"
+  chk_marker "$PFX/wlanapi.dll" "AiM synthetic"    "prefix wlanapi (what RS3 actually loads)"
+
+  if [ "$(uname)" = "Darwin" ]; then
+    echo
+    echo "=== network (dash $DASH_ADDR; the Mac must be joined to the dash's Wi-Fi) ==="
+    wifi_dev="$(networksetup -listallhardwareports 2>/dev/null | awk '/Wi-Fi|AirPort/{getline; print $2; exit}')"
+    wifi_dev="${wifi_dev:-en0}"
+    ssid="$(networksetup -getairportnetwork "$wifi_dev" 2>/dev/null | sed -E 's/^.*Network: //')"
+    echo "  Wi-Fi device: $wifi_dev    SSID: ${ssid:-(unknown / redacted by macOS)}"
+    echo "  Wi-Fi IPv4:   $(ipconfig getifaddr "$wifi_dev" 2>/dev/null || echo none)"
+    ifconfig 2>/dev/null | awk '/^[a-z0-9]+:/{ifc=substr($1,1,length($1)-1)} /inet /{if($2!="127.0.0.1")print "  addr: "ifc" "$2}'
+    route -n get "$DASH_ADDR" 2>/dev/null | awk '/route to:|gateway:|interface:/{print "  route"$0}'
+    if ping -c1 -t2 "$DASH_ADDR" >/dev/null 2>&1; then echo "  ping $DASH_ADDR: reachable"
+    else echo "  ping $DASH_ADDR: NO RESPONSE (dash off, or Mac not on the dash Wi-Fi)"; fi
+    arp -n "$DASH_ADDR" 2>/dev/null | sed 's/^/  arp: /'
+  fi
+  : # ensure this block's exit status is 0 (prior probes may exit non-zero under pipefail)
 } > "$OUT/system-info.txt" 2>/dev/null || { echo "failed to write system-info.txt" >&2; exit 1; }
 
 {

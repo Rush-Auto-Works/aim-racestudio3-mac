@@ -44,9 +44,13 @@ Native macOS app-menu items, a smoother launch, and a Wi-Fi first-launch fix.
 ### Changed
 - The ⌘Q Quit shortcut and the new menu items are now a single from-source Wine driver
   patch; the previous post-build binary patcher is retired.
-- **"Show RaceStudio 3 Logs" diagnostics** now flag an un-enabled Wi-Fi helper explicitly:
-  on macOS 15+ a `bridge daemon` state other than `enabled` prints a note that this is why
-  Wi-Fi shows no devices, plus the steps to fix it.
+- **"Show RaceStudio 3 Logs" diagnostics** now capture the whole Wi-Fi picture so a single log
+  bundle pinpoints any connection problem: the bridge-helper state (with a fix hint when it's
+  not enabled), whether each patched component (Wi-Fi DLLs + menu driver) is actually active in
+  the bundle and the Wine prefix, and the live network context — Wi-Fi SSID, the Mac's IP, and
+  the route / reachability to the dash. The background helper and the patched `ws2_32`/`wlanapi`
+  now log each step of dash discovery to the logs (helper relay traffic + the in-Wine redirect),
+  so it's clear whether RS3 is sending, the dash is reachable, and the dash is replying.
 
 ## [3.83.20-2] — 2026-06-13
 
