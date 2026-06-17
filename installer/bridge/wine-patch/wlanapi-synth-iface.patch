@@ -1,9 +1,15 @@
---- a/dlls/wlanapi/main.c	2026-06-11 19:52:08
-+++ b/dlls/wlanapi/main.c	2026-06-11 18:10:54
-@@ -38,6 +38,44 @@
+--- a/dlls/wlanapi/main.c	2026-06-17 10:04:18
++++ b/dlls/wlanapi/main.c	2026-06-17 10:04:21
+@@ -38,6 +38,50 @@
  
  #define WLAN_MAGIC 0x574c414e /* WLAN */
  
++/* RS3's launcher runs Wine with WINEDEBUG=-all, silencing FIXME/ERR, so AiM diagnostics never
++ * reach run.log. __wine_dbg_output writes straight to stderr (the run.log fd), ungated by
++ * WINEDEBUG; the static guard one-shots each call site so hot paths don't flood the log. */
++#define AIM_DIAG_ONCE(args) do { static int _aim_done; \
++    if (!_aim_done) { _aim_done = 1; __wine_dbg_output(wine_dbg_sprintf args); } } while(0)
++
 +/* AiM: a fixed GUID for the single synthetic Wi-Fi interface we present to RS3. */
 +static const GUID AIM_WLAN_GUID = { 0xa1ada1a1, 0x0000, 0x0000, { 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x01 } };
 +
@@ -45,7 +51,7 @@
  static struct wine_wlan
  {
      DWORD magic, cli_version;
-@@ -74,7 +112,7 @@
+@@ -74,7 +118,7 @@
      struct wine_wlan *wlan;
      WLAN_INTERFACE_INFO_LIST *ret_list;
  
@@ -54,7 +60,7 @@
  
      if (!handle || reserved || !interface_list)
          return ERROR_INVALID_PARAMETER;
-@@ -87,9 +125,16 @@
+@@ -87,10 +131,18 @@
      if (!ret_list)
          return ERROR_NOT_ENOUGH_MEMORY;
  
@@ -71,9 +77,11 @@
 +    ret_list->dwNumberOfItems = 1;
 +    ret_list->dwIndex = 0;
      *interface_list = ret_list;
++    AIM_DIAG_ONCE(("AiM/wlanapi: WlanEnumInterfaces -> 1 synthetic connected interface (RS3 started Wi-Fi scan)\n"));
  
      return ERROR_SUCCESS;
-@@ -167,10 +212,50 @@
+ }
+@@ -167,10 +219,51 @@
  DWORD WINAPI WlanQueryInterface(HANDLE handle, const GUID *guid, WLAN_INTF_OPCODE opcode,
                      void *reserved, DWORD *data_size, void **data, WLAN_OPCODE_VALUE_TYPE *opcode_type)
  {
@@ -109,6 +117,7 @@
 +        *data = conn;
 +        *data_size = sizeof(*conn);
 +        if (opcode_type) *opcode_type = wlan_opcode_value_type_query_only;
++        AIM_DIAG_ONCE(("AiM/wlanapi: WlanQueryInterface(current_connection) -> connected (RS3 proceeding to dash discovery)\n"));
 +        return ERROR_SUCCESS;
 +    }
 +    if (opcode == wlan_intf_opcode_interface_state)

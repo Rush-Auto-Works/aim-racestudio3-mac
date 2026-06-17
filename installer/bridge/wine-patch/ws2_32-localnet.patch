@@ -1,16 +1,22 @@
---- a/dlls/ws2_32/socket.c	2026-06-11 19:48:46
-+++ b/dlls/ws2_32/socket.c	2026-06-11 19:48:46
-@@ -27,6 +27,9 @@
-  */
+--- a/dlls/ws2_32/socket.c	2026-06-17 10:04:18
++++ b/dlls/ws2_32/socket.c	2026-06-17 10:04:21
+@@ -28,6 +28,15 @@
  
  #include "ws2_32_private.h"
-+
+ 
 +static const struct sockaddr *aim_loopback_redirect( const struct sockaddr *addr, int len,
 +                                                     struct sockaddr_in *tmp );
- 
++
++/* RS3's launcher runs Wine with WINEDEBUG=-all, silencing FIXME/ERR, so AiM diagnostics never
++ * reach run.log. __wine_dbg_output writes straight to stderr (the run.log fd), ungated by
++ * WINEDEBUG; the static guard one-shots each call site so hot paths don't flood the log. */
++#define AIM_DIAG_ONCE(args) do { static int _aim_done; \
++    if (!_aim_done) { _aim_done = 1; __wine_dbg_output(wine_dbg_sprintf args); } } while(0)
++
  #define FILE_USE_FILE_POINTER_POSITION ((LONGLONG)-2)
  
-@@ -1126,6 +1129,23 @@
+ WINE_DEFAULT_DEBUG_CHANNEL(winsock);
+@@ -1126,6 +1135,23 @@
          status = piosb->Status;
      }
      if (!status && ret_size) *ret_size = piosb->Information;
@@ -28,13 +34,13 @@
 +            unsigned char *d = (unsigned char *)&sin->sin_addr;
 +            d[0] = 10; d[1] = 0; d[2] = 0; d[3] = 1;
 +            sin->sin_port = htons( 36002 );
-+            FIXME( "AiM: rewrote reply source 127.0.0.1:36003 -> 10.0.0.1:36002\n" );
++            AIM_DIAG_ONCE(("AiM/ws2_32: rewrote reply source 127.0.0.1:36003 -> 10.0.0.1:36002 (dash answered; RS3 will accept it)\n"));
 +        }
 +    }
      SetLastError( NtStatusToWSAError( status ) );
      TRACE( "status %#lx.\n", status );
      return status ? -1 : 0;
-@@ -1141,10 +1161,12 @@
+@@ -1141,10 +1167,12 @@
      HANDLE event = NULL;
      void *cvalue = NULL;
      NTSTATUS status;
@@ -47,7 +53,7 @@
  
      if (!is_valid_socket( s ))
      {
-@@ -1367,14 +1389,45 @@
+@@ -1367,14 +1395,45 @@
  /***********************************************************************
   *      connect   (ws2_32.4)
   */
@@ -73,7 +79,7 @@
 +            *tmp = *in;
 +            d[0] = 127; d[1] = 0; d[2] = 0; d[3] = 1; /* 127.0.0.1 */
 +            if (tmp->sin_port == htons( 36002 )) tmp->sin_port = htons( 36003 );
-+            FIXME( "AiM: redirecting %s to 127.0.0.1\n", debugstr_sockaddr(addr) );
++            AIM_DIAG_ONCE(("AiM: redirecting %s to 127.0.0.1:36003 (RS3 is addressing the dash; wlanapi+send path reached)\n", debugstr_sockaddr(addr)));
 +            return (const struct sockaddr *)tmp;
 +        }
 +    }
@@ -93,7 +99,7 @@
  
      if (!(sync_event = get_sync_event())) return -1;
  
-@@ -1425,9 +1478,11 @@
+@@ -1425,9 +1484,11 @@
      struct afd_connect_params *params;
      void *cvalue = NULL;
      NTSTATUS status;
