@@ -12,6 +12,24 @@ only this installer is versioned here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.83.20-4] — 2026-06-17
+
+A Wi-Fi discovery fix found with the new diagnostics: AiM devices now appear over Wi-Fi
+on dashes that reply from an ephemeral port.
+
+### Fixed
+- **Wi-Fi devices that replied from an ephemeral port were invisible.** The background helper
+  accepted the dash's discovery reply only if it came from the exact port the Mac sent to
+  (`36002`). Real AiM dashes answer from an *ephemeral* source port (e.g. `49861`), so every
+  reply was silently dropped and RaceStudio 3 listed no connected device — even though the Mac
+  was on the dash's Wi-Fi and the dash was answering. The helper now accepts any reply from the
+  dash's IP regardless of source port (it still ignores other senders). First confirmed on a
+  user's dash that the previous build, verified on an MXS, did not cover.
+- **Diagnostics no longer mislabel a patched build as "STOCK".** The "Show RaceStudio 3 Logs"
+  component check used `strings`, which ships with the Xcode Command Line Tools and is absent on
+  a typical user's Mac — so it silently reported every Wi-Fi/menu component as un-patched. It now
+  reads the binaries with `grep`, which is always present, so the report is accurate.
+
 ## [3.83.20-3] — 2026-06-16
 
 Native macOS app-menu items, a smoother launch, and a Wi-Fi first-launch fix.
