@@ -46,11 +46,11 @@ Native macOS app-menu items, a smoother launch, and a Wi-Fi first-launch fix.
   patch; the previous post-build binary patcher is retired.
 - **"Show RaceStudio 3 Logs" diagnostics** now capture the whole Wi-Fi picture so a single log
   bundle pinpoints any connection problem: the bridge-helper state (with a fix hint when it's
-  not enabled), whether each patched component (Wi-Fi DLLs + menu driver) is actually active in
-  the bundle and the Wine prefix, and the live network context — Wi-Fi SSID, the Mac's IP, and
-  the route / reachability to the dash. The background helper and the patched `ws2_32`/`wlanapi`
-  now log each step of dash discovery to the logs (helper relay traffic + the in-Wine redirect),
-  so it's clear whether RS3 is sending, the dash is reachable, and the dash is replying.
+  not enabled), whether the patched Wi-Fi DLLs are active in both the app bundle and the Wine
+  prefix (plus a bundle check of the menu driver), and the live network context — Wi-Fi SSID,
+  the Mac's IP, and the route / reachability to the dash. The background helper and the patched
+  `ws2_32`/`wlanapi` now log each step of dash discovery (helper relay traffic + the in-Wine
+  redirect), so it's clear whether RS3 is sending, the dash is reachable, and the dash is replying.
 
 ## [3.83.20-2] — 2026-06-13
 
