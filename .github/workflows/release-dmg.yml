@@ -39,6 +39,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Classify release tag (single source for USB-build + prerelease gates)
+        id: tag
+        # Both the USB-content gate (the wineusb build step) and the publish prerelease gate read
+        # these two outputs, so they can never diverge (a USB build is always a prerelease, never
+        # "latest"). The predicate lives in installer/build/classify-tag.sh and is unit-tested.
+        run: bash installer/build/classify-tag.sh "${GITHUB_REF_NAME:-}" >> "$GITHUB_OUTPUT"
+
       - name: Resolve pinned Wine version
         run: |
           set -euo pipefail
@@ -121,9 +128,10 @@ jobs:
       - name: Build patched wineusb.so + libusb (USB prereleases only)
         # AiM USB devices (notably the USB-only PDM) are vendor-class WinUSB. Wine's winusb.dll needs
         # the libusb-backed wineusb.sys bus driver, which the Gcenx bundle was built without. We
-        # rebuild it (+ an x86_64 libusb) here ONLY for -usb prerelease tags, and flip INCLUDE_USB so
-        # build-apps step 1f adds it. Kept out of stable releases until validated on real hardware.
-        if: contains(github.ref_name, '-usb')
+        # rebuild it (+ an x86_64 libusb) here ONLY for -usb[0-9] prerelease tags, and flip
+        # INCLUDE_USB so build-apps step 1f adds it. Same predicate as the publish prerelease gate
+        # (classify-tag.sh), so a USB build can never slip out as a stable "latest" release.
+        if: steps.tag.outputs.is_usb == 'true'
         run: |
           set -euo pipefail
           softwareupdate --install-rosetta --agree-to-license 2>/dev/null || true
@@ -177,6 +185,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
+          IS_USB: ${{ steps.tag.outputs.is_usb }}
+          IS_PRERELEASE: ${{ steps.tag.outputs.is_prerelease }}
         run: |
           set -euo pipefail
           # Build the release notes from CHANGELOG.md: a short install line on top, then the
@@ -185,7 +195,13 @@ jobs:
           # so a tag is the only manual step. Falls back to just the install line if the version
           # has no CHANGELOG section (awk literal-match avoids the '[' regex pitfall in the header).
           ver="${TAG#v}"   # e.g. 3.83.20-3
-          install_line="RaceStudio 3 for macOS — drag the AiM folder to Applications, open once to set up. Connect AiM devices over Wi-Fi (USB unsupported)."
+          # USB prereleases are the one build whose purpose IS USB — don't tell the tester it's
+          # unsupported. Stable/other tags keep the Wi-Fi-only line.
+          if [ "${IS_USB:-false}" = true ]; then
+            install_line="RaceStudio 3 for macOS (experimental USB build) — drag the AiM folder to Applications. To test USB, install CLEAN (uninstall any existing RaceStudio 3 first), then open once to set up."
+          else
+            install_line="RaceStudio 3 for macOS — drag the AiM folder to Applications, open once to set up. Connect AiM devices over Wi-Fi (USB unsupported)."
+          fi
           body="$(awk -v hdr="## [$ver]" 'index($0,hdr)==1{f=1;next} /^## \[/{if(f)exit} f{print}' CHANGELOG.md)"
           notes_file="$RUNNER_TEMP/relnotes.md"
           if [ -n "$(printf '%s' "$body" | tr -d '[:space:]')" ]; then
@@ -198,23 +214,24 @@ jobs:
           # Prerelease tags carry a suffix after the packaging rev (e.g. v3.83.20-5-usb1, -rc1,
           # -beta1, -test). They must NOT become "latest" — they ship experimental builds (e.g. the
           # gated USB support) to a tester, not to everyone.
+          # Prerelease decision comes from the same classify-tag.sh predicate as the USB-build gate
+          # (step "tag"), so "USB build" and "is a prerelease" can never disagree.
           prerelease_flag=""
-          # Numbered prerelease suffixes are digit-anchored so a stray "-usb"/"-rc" mid-tag can't
-          # trip the flag; bare "-test" (unnumbered) is kept as-is for ad-hoc test tags.
-          case "$TAG" in
-            *-rc[0-9]*|*-beta[0-9]*|*-usb[0-9]*|*-test*) prerelease_flag="--prerelease" ;;
-          esac
+          [ "${IS_PRERELEASE:-false}" = true ] && prerelease_flag="--prerelease"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$dmg" --clobber
             gh release edit "$TAG" --notes-file "$notes_file"   # refresh notes on a rebuild/re-tag
             # Deleting a tag to re-point it (rebuilding the same version) silently converts its
             # published release into a draft; un-draft it so a re-pushed tag always ships publicly.
-            # Pre-release tags (e.g. vX-test) stay prerelease — GitHub rejects --latest on a
-            # prerelease (HTTP 422), so only mark a real release as latest.
-            if [ "$(gh release view "$TAG" --json isPrerelease --jq .isPrerelease)" = "true" ]; then
-              gh release edit "$TAG" --draft=false
+            # The classifier (IS_PRERELEASE) is the AUTHORITY for prerelease state — NOT the release's
+            # current state on GitHub. Re-deriving from the existing release would let one mis-created
+            # as non-prerelease (the old substring bug, or a manual edit) get re-promoted to --latest;
+            # setting it explicitly here corrects a wrong state in either direction on the next build.
+            # GitHub rejects --latest on a prerelease (HTTP 422), so a prerelease never gets --latest.
+            if [ "${IS_PRERELEASE:-false}" = true ]; then
+              gh release edit "$TAG" --draft=false --prerelease
             else
-              gh release edit "$TAG" --draft=false --latest
+              gh release edit "$TAG" --draft=false --prerelease=false --latest
             fi
           else
             gh release create "$TAG" "$dmg" --title "RaceStudio 3 $TAG" --notes-file "$notes_file" $prerelease_flag

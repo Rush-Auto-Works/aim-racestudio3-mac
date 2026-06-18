@@ -193,17 +193,18 @@ if [ "${INCLUDE_USB:-0}" = 1 ] && [ -f "$usb_unix_src" ]; then
   cp "$usb_unix_src" "$ud/wineusb.so" || { echo "failed to copy wineusb.so" >&2; exit 1; }
   cp "$WINEUSB_DIR/x86_64-unix/libusb-1.0.0.dylib" "$ud/libusb-1.0.0.dylib" || { echo "failed to copy libusb dylib" >&2; exit 1; }
   say "  added x86_64-unix/{wineusb.so,libusb-1.0.0.dylib}"
-  # x86_64 wineusb.sys is REQUIRED (RS3 is 64-bit) — fail loud rather than ship a USB-labelled
-  # bundle that can't bind. i386 stays optional (RS3 has no 32-bit path here).
+  # x86_64 wineusb.sys is REQUIRED (RS3 is 64-bit). Assert source AND dest AND the copy itself —
+  # the earlier version only checked the source, so a missing dest dir would silently skip the copy
+  # and ship a USB-labelled bundle with the .so but no .sys (unregisterable). Mirror the .inf path.
   [ -f "$WINEUSB_DIR/x86_64-windows/wineusb.sys" ] || { echo "missing required $WINEUSB_DIR/x86_64-windows/wineusb.sys (INCLUDE_USB=1)" >&2; exit 1; }
-  for usb_arch in x86_64 i386; do
-    usb_sys_src="$WINEUSB_DIR/$usb_arch-windows/wineusb.sys"
-    usb_sys_dst="$RES/wine/lib/wine/$usb_arch-windows/wineusb.sys"
-    if [ -f "$usb_sys_src" ] && [ -d "$RES/wine/lib/wine/$usb_arch-windows" ]; then
-      cp "$usb_sys_src" "$usb_sys_dst" || { echo "failed to copy wineusb.sys ($usb_arch)" >&2; exit 1; }
-      say "  added $usb_arch-windows/wineusb.sys"
-    fi
-  done
+  [ -d "$RES/wine/lib/wine/x86_64-windows" ] || { echo "missing destination $RES/wine/lib/wine/x86_64-windows (INCLUDE_USB=1)" >&2; exit 1; }
+  cp "$WINEUSB_DIR/x86_64-windows/wineusb.sys" "$RES/wine/lib/wine/x86_64-windows/wineusb.sys" || { echo "failed to copy wineusb.sys (x86_64)" >&2; exit 1; }
+  say "  added x86_64-windows/wineusb.sys"
+  # i386 wineusb.sys is optional (RS3 has no 32-bit path here) — best-effort.
+  if [ -f "$WINEUSB_DIR/i386-windows/wineusb.sys" ] && [ -d "$RES/wine/lib/wine/i386-windows" ]; then
+    cp "$WINEUSB_DIR/i386-windows/wineusb.sys" "$RES/wine/lib/wine/i386-windows/wineusb.sys" || { echo "failed to copy wineusb.sys (i386)" >&2; exit 1; }
+    say "  added i386-windows/wineusb.sys"
+  fi
   # wineusb.inf lets wineboot register the root\wineusb bus device + service on a fresh prefix
   # (wine.inf already references it). Without it the driver files are present but never loaded —
   # REQUIRED, so fail loud rather than silently ship an unregisterable USB bundle.
@@ -212,7 +213,10 @@ if [ "${INCLUDE_USB:-0}" = 1 ] && [ -f "$usb_unix_src" ]; then
   cp "$WINEUSB_DIR/wineusb.inf" "$RES/wine/share/wine/wineusb.inf" || { echo "failed to copy wineusb.inf" >&2; exit 1; }
   say "  added share/wine/wineusb.inf"
 elif [ "${INCLUDE_USB:-0}" = 1 ]; then
-  say "USB: INCLUDE_USB=1 but wineusb.so absent — run installer/wine-patch/build-wineusb-so.sh first"
+  # Fail loud: a USB-tagged build asked for USB but the artifact isn't here. Shipping a USB-labelled
+  # DMG with zero USB content is the same class of silent failure the per-file guards above prevent.
+  echo "USB: INCLUDE_USB=1 but wineusb.so absent at $usb_unix_src — build it first (installer/wine-patch/build-wineusb-so.sh)" >&2
+  exit 1
 fi
 
 # ---- 1g. aim-bridge root daemon + SMAppService control tool ---------------------------------
