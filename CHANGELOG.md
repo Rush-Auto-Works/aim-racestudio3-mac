@@ -12,6 +12,23 @@ only this installer is versioned here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.83.20-5-usb1] — 2026-06-17
+
+**Experimental prerelease — USB device support (Wi-Fi/SD users don't need this).** First build that
+can talk to AiM USB devices under Wine, aimed at the USB-only PDM (which has no Wi-Fi or SD-card
+path). Not yet confirmed against real AiM hardware — please test and report back.
+
+> **Install clean to test USB.** USB only activates on a freshly created Windows environment, so
+> uninstall any existing RaceStudio 3 first (AiM ▸ Uninstall), then install this build. Upgrading
+> in place will not enable USB. Wi-Fi and SD-card import are unchanged either way.
+
+### Added
+- **USB (WinUSB) support for AiM devices.** AiM USB devices are vendor-class WinUSB (e.g. the PDM).
+  The bundled Wine shipped without libusb, so its USB bus driver was missing entirely. This build
+  rebuilds Wine's `wineusb` bus driver against libusb (plus a bundled x86_64 libusb) so RaceStudio 3
+  can enumerate and open AiM USB devices. Verified on the Mac side (Wine enumerates host USB through
+  libusb); the final RaceStudio-3-to-device handshake is what this prerelease is testing.
+
 ## [3.83.20-4] — 2026-06-17
 
 A Wi-Fi discovery fix found with the new diagnostics: AiM devices now appear over Wi-Fi

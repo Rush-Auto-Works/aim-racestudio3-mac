@@ -118,6 +118,18 @@ jobs:
           softwareupdate --install-rosetta --agree-to-license 2>/dev/null || true
           bash installer/wine-patch/build-winemac-so.sh "$WINE_VER"
 
+      - name: Build patched wineusb.so + libusb (USB prereleases only)
+        # AiM USB devices (notably the USB-only PDM) are vendor-class WinUSB. Wine's winusb.dll needs
+        # the libusb-backed wineusb.sys bus driver, which the Gcenx bundle was built without. We
+        # rebuild it (+ an x86_64 libusb) here ONLY for -usb prerelease tags, and flip INCLUDE_USB so
+        # build-apps step 1f adds it. Kept out of stable releases until validated on real hardware.
+        if: contains(github.ref_name, '-usb')
+        run: |
+          set -euo pipefail
+          softwareupdate --install-rosetta --agree-to-license 2>/dev/null || true
+          bash installer/wine-patch/build-wineusb-so.sh "$WINE_VER"
+          echo "INCLUDE_USB=1" >> "$GITHUB_ENV"
+
       - name: Decode RS3 icon (optional)
         env:
           RS3_LOGO_B64: ${{ secrets.RS3_LOGO_B64 }}

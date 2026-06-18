@@ -50,3 +50,48 @@ brew install mingw-w64 bison flex          # once
 bash installer/wine-patch/build-winemac-so.sh   # -> build/winemac/x86_64-unix/winemac.so
 NO_DMG=1 bash installer/build/build-apps.sh      # swaps it into the bundle (step 1d)
 ```
+
+## USB (WinUSB) support — `wineusb.so` + libusb (`build-wineusb-so.sh`)
+
+AiM devices — notably the **USB-only PDM**, which has no WiFi/SD fallback — are vendor-class
+**WinUSB** devices (`Class=USBDevice`, VID `0x11CC`; PID `0x0130` = "AiM Device 1.3"). On Windows RS3
+opens them via `WinUsb_Initialize`. Wine implements that as `winusb.dll` (the API, **already** in the
+Gcenx bundle) backed by **`wineusb.sys`** — the raw-USB *bus* driver whose unixlib (`wineusb.so`) is
+**libusb-backed**. Wine's `configure` *disables `wineusb.sys` entirely* when libusb-1.0 isn't found,
+and the Gcenx `osx64` bundle was built without it — so `wineusb.{sys,so}` + `wineusb.inf` are absent
+and `winusb.dll` has nothing to bind. (Vendor-class is the *favorable* case on macOS: no Apple class
+driver claims the interface, so libusb opens it directly — no kext, no SIP, unlike HID.)
+
+`build-wineusb-so.sh` fixes the gap with **no source patch** — a pure rebuild with `--with-usb`:
+
+| File | Role |
+|------|------|
+| `build-wineusb-so.sh` | cross-builds an **x86_64** libusb (brew's is arm64-only), configures the pinned Wine `--with-usb`, builds `wineusb.so` (unix) + `wineusb.sys` (PE) → `build/wineusb/`. Hard-asserts configure detected libusb and the module is x86_64 + links libusb. |
+
+Outputs (`build/wineusb/`): `x86_64-unix/wineusb.so`, `x86_64-unix/libusb-1.0.0.dylib` (loaded via
+`@loader_path`, so no Homebrew runtime dep), `{x86_64,i386}-windows/wineusb.sys`, `wineusb.inf`.
+`build-apps.sh` **step 1f** adds them to the bundle (Mach-O, so before signing), **gated behind
+`INCLUDE_USB=1`**. CI builds this and sets the flag **only for `-usb` prerelease tags** — stable
+releases stay USB-free until the feature is validated on real AiM hardware.
+
+### Prefix registration — fresh installs only (verified locally)
+
+A **fresh** Wine prefix self-registers the `wineusb` bus during `wineboot --init` (because the bundle
+now ships `wine.inf`'s referenced `wineusb.inf` + the driver) and immediately enumerates host USB
+through libusb — **no launcher code needed**. Verified locally: a clean prefix lists the Mac's own USB
+devices via the new driver.
+
+**Existing prefixes do NOT get USB by upgrading in place.** Wine builds the live PnP device stack only
+at first init; transplanting the registry keys / running `wineboot -u` on an already-created prefix is
+not sufficient (tested — the service/Class binding doesn't take). So a **clean install** (uninstall,
+then install) is required to enable USB today. Existing prefixes are inert-but-safe: the driver only
+loads once registered, so nothing changes for Wi-Fi/SD users who upgrade.
+
+Still **unverified on AiM hardware**: whether RS3 completes the WinUSB handshake with a plugged-in PDM
+and pushes a config (`WinUsb_WritePipe`, write-heavy). That's what the `-usb` prerelease tests. See
+memory `usb-pdm-winusb-path`.
+
+```bash
+bash installer/wine-patch/build-wineusb-so.sh             # -> build/wineusb/...
+INCLUDE_USB=1 NO_DMG=1 bash installer/build/build-apps.sh  # adds it to the bundle (step 1f)
+```
