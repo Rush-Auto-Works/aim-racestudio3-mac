@@ -195,6 +195,11 @@ jobs:
             printf '%s\n' "$install_line" > "$notes_file"
           fi
           dmg="$(ls installer/dist/*.dmg)"   # versioned name, e.g. RaceStudio3-3.83.20-2.dmg
+          # Prerelease tags carry a suffix after the packaging rev (e.g. v3.83.20-5-usb1, -rc1,
+          # -beta1, -test). They must NOT become "latest" — they ship experimental builds (e.g. the
+          # gated USB support) to a tester, not to everyone.
+          prerelease_flag=""
+          case "$TAG" in *-rc*|*-beta*|*-test*|*-usb*) prerelease_flag="--prerelease" ;; esac
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$dmg" --clobber
             gh release edit "$TAG" --notes-file "$notes_file"   # refresh notes on a rebuild/re-tag
@@ -208,5 +213,5 @@ jobs:
               gh release edit "$TAG" --draft=false --latest
             fi
           else
-            gh release create "$TAG" "$dmg" --title "RaceStudio 3 $TAG" --notes-file "$notes_file"
+            gh release create "$TAG" "$dmg" --title "RaceStudio 3 $TAG" --notes-file "$notes_file" $prerelease_flag
           fi
