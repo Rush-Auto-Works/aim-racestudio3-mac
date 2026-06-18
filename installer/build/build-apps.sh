@@ -193,6 +193,9 @@ if [ "${INCLUDE_USB:-0}" = 1 ] && [ -f "$usb_unix_src" ]; then
   cp "$usb_unix_src" "$ud/wineusb.so" || { echo "failed to copy wineusb.so" >&2; exit 1; }
   cp "$WINEUSB_DIR/x86_64-unix/libusb-1.0.0.dylib" "$ud/libusb-1.0.0.dylib" || { echo "failed to copy libusb dylib" >&2; exit 1; }
   say "  added x86_64-unix/{wineusb.so,libusb-1.0.0.dylib}"
+  # x86_64 wineusb.sys is REQUIRED (RS3 is 64-bit) — fail loud rather than ship a USB-labelled
+  # bundle that can't bind. i386 stays optional (RS3 has no 32-bit path here).
+  [ -f "$WINEUSB_DIR/x86_64-windows/wineusb.sys" ] || { echo "missing required $WINEUSB_DIR/x86_64-windows/wineusb.sys (INCLUDE_USB=1)" >&2; exit 1; }
   for usb_arch in x86_64 i386; do
     usb_sys_src="$WINEUSB_DIR/$usb_arch-windows/wineusb.sys"
     usb_sys_dst="$RES/wine/lib/wine/$usb_arch-windows/wineusb.sys"
@@ -202,11 +205,12 @@ if [ "${INCLUDE_USB:-0}" = 1 ] && [ -f "$usb_unix_src" ]; then
     fi
   done
   # wineusb.inf lets wineboot register the root\wineusb bus device + service on a fresh prefix
-  # (wine.inf already references it). Without it the driver files are present but never loaded.
-  if [ -f "$WINEUSB_DIR/wineusb.inf" ] && [ -d "$RES/wine/share/wine" ]; then
-    cp "$WINEUSB_DIR/wineusb.inf" "$RES/wine/share/wine/wineusb.inf" || { echo "failed to copy wineusb.inf" >&2; exit 1; }
-    say "  added share/wine/wineusb.inf"
-  fi
+  # (wine.inf already references it). Without it the driver files are present but never loaded —
+  # REQUIRED, so fail loud rather than silently ship an unregisterable USB bundle.
+  [ -f "$WINEUSB_DIR/wineusb.inf" ] || { echo "missing required $WINEUSB_DIR/wineusb.inf (INCLUDE_USB=1)" >&2; exit 1; }
+  [ -d "$RES/wine/share/wine" ] || { echo "missing destination $RES/wine/share/wine" >&2; exit 1; }
+  cp "$WINEUSB_DIR/wineusb.inf" "$RES/wine/share/wine/wineusb.inf" || { echo "failed to copy wineusb.inf" >&2; exit 1; }
+  say "  added share/wine/wineusb.inf"
 elif [ "${INCLUDE_USB:-0}" = 1 ]; then
   say "USB: INCLUDE_USB=1 but wineusb.so absent — run installer/wine-patch/build-wineusb-so.sh first"
 fi
