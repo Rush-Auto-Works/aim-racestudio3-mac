@@ -35,7 +35,7 @@ The first draft of this spec used a committed capability-generation integer (`PR
 
 **So the trigger is the postcondition itself:**
 
-```
+```text
 on launch, RS3 not running, holding the migrate lock:
     if bundle_has_usb and not bus_registered(PREFIX):
         migrate_prefix()
@@ -62,7 +62,7 @@ minutes-long rebuild). For users on whom the feature failed, that's a silent per
 regression with zero payoff. So keep one tiny piece of state — a **failure counter**, not a success
 stamp:
 
-```
+```text
 # ALL of the following runs AFTER acquiring the migrate lock and re-checking pgrep (see Concurrency),
 # so the read→compare→increment is atomic across racing launches — otherwise two applets could both
 # read attempts=1, both pass <MAX, and double-migrate (the exact race the lock exists to prevent).
@@ -116,7 +116,7 @@ in `Contents/Resources/wine`, and `installer-core.sh` only resolves `WINE_BIN` f
 `RS3_WINE_BIN` is passed (installer-core.sh:81–85). Migration spawns Wine, so it must be invoked like
 `runCoreAsync` (applescript:226):
 
-```
+```sh
 RS3_SINGLE_APP=1 RS3_WINE_BIN=<wineBin()> UI_MODE=applet <installer-core.sh> migrate-prefix
 ```
 
