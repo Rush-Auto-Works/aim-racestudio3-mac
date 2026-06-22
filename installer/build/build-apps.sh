@@ -170,7 +170,56 @@ if [ "$X64_SWAPPED" != 1 ] || [ "$WLAN64_SWAPPED" != 1 ]; then
   say "  (patched Wine DLLs incomplete — WiFi not applied; dev build only)"
 fi
 
-# ---- 1f. aim-bridge root daemon + SMAppService control tool ---------------------------------
+# ---- 1f. USB (WinUSB) support: add the libusb-backed wineusb bus driver ----------------------
+# AiM devices (notably the USB-only PDM) are vendor-class WinUSB (Class=USBDevice, VID 0x11CC). RS3
+# opens them via WinUsb_Initialize -> winusb.dll (already bundled) -> wineusb.sys, the raw-USB *bus*
+# driver whose unixlib (wineusb.so) is libusb-backed. The stock Gcenx bundle was built WITHOUT
+# libusb, so wineusb.{sys,so} are absent and winusb.dll has nothing to bind. We add them here (plus
+# an x86_64 libusb dylib loaded via @loader_path), built by installer/wine-patch/build-wineusb-so.sh.
+# Mach-O modules, so like 1d they must land BEFORE signing. Verified locally: a FRESH prefix
+# self-registers the wineusb bus via wineboot --init and enumerates host USB through libusb (no
+# launcher code needed). Existing prefixes stay inert-but-safe (the driver only loads once
+# registered, which a from-scratch init does) — so a clean install is required to get USB today.
+# GATED behind INCLUDE_USB=1 and still UNVERIFIED on AiM hardware (the PDM handshake) — kept out of
+# stable releases until validated; CI sets the flag only for -usb prerelease tags. See memory
+# usb-pdm-winusb-path and installer/wine-patch/README.md.
+WINEUSB_DIR="${WINEUSB_DIR:-$HERE/../wine-patch/build/wineusb}"
+usb_unix_src="$WINEUSB_DIR/x86_64-unix/wineusb.so"
+if [ "${INCLUDE_USB:-0}" = 1 ] && [ -f "$usb_unix_src" ]; then
+  say "USB: adding libusb-backed wineusb bus driver (WinUSB for AiM devices) [INCLUDE_USB=1]"
+  lipo -archs "$usb_unix_src" 2>/dev/null | grep -qw x86_64 || { echo "wineusb.so is not x86_64" >&2; exit 1; }
+  otool -L "$usb_unix_src" | grep -q '@loader_path/libusb-1.0.0.dylib' || { echo "wineusb.so does not load bundled libusb" >&2; exit 1; }
+  ud="$RES/wine/lib/wine/x86_64-unix"
+  cp "$usb_unix_src" "$ud/wineusb.so" || { echo "failed to copy wineusb.so" >&2; exit 1; }
+  cp "$WINEUSB_DIR/x86_64-unix/libusb-1.0.0.dylib" "$ud/libusb-1.0.0.dylib" || { echo "failed to copy libusb dylib" >&2; exit 1; }
+  say "  added x86_64-unix/{wineusb.so,libusb-1.0.0.dylib}"
+  # x86_64 wineusb.sys is REQUIRED (RS3 is 64-bit). Assert source AND dest AND the copy itself —
+  # the earlier version only checked the source, so a missing dest dir would silently skip the copy
+  # and ship a USB-labelled bundle with the .so but no .sys (unregisterable). Mirror the .inf path.
+  [ -f "$WINEUSB_DIR/x86_64-windows/wineusb.sys" ] || { echo "missing required $WINEUSB_DIR/x86_64-windows/wineusb.sys (INCLUDE_USB=1)" >&2; exit 1; }
+  [ -d "$RES/wine/lib/wine/x86_64-windows" ] || { echo "missing destination $RES/wine/lib/wine/x86_64-windows (INCLUDE_USB=1)" >&2; exit 1; }
+  cp "$WINEUSB_DIR/x86_64-windows/wineusb.sys" "$RES/wine/lib/wine/x86_64-windows/wineusb.sys" || { echo "failed to copy wineusb.sys (x86_64)" >&2; exit 1; }
+  say "  added x86_64-windows/wineusb.sys"
+  # i386 wineusb.sys is optional (RS3 has no 32-bit path here) — best-effort.
+  if [ -f "$WINEUSB_DIR/i386-windows/wineusb.sys" ] && [ -d "$RES/wine/lib/wine/i386-windows" ]; then
+    cp "$WINEUSB_DIR/i386-windows/wineusb.sys" "$RES/wine/lib/wine/i386-windows/wineusb.sys" || { echo "failed to copy wineusb.sys (i386)" >&2; exit 1; }
+    say "  added i386-windows/wineusb.sys"
+  fi
+  # wineusb.inf lets wineboot register the root\wineusb bus device + service on a fresh prefix
+  # (wine.inf already references it). Without it the driver files are present but never loaded —
+  # REQUIRED, so fail loud rather than silently ship an unregisterable USB bundle.
+  [ -f "$WINEUSB_DIR/wineusb.inf" ] || { echo "missing required $WINEUSB_DIR/wineusb.inf (INCLUDE_USB=1)" >&2; exit 1; }
+  [ -d "$RES/wine/share/wine" ] || { echo "missing destination $RES/wine/share/wine" >&2; exit 1; }
+  cp "$WINEUSB_DIR/wineusb.inf" "$RES/wine/share/wine/wineusb.inf" || { echo "failed to copy wineusb.inf" >&2; exit 1; }
+  say "  added share/wine/wineusb.inf"
+elif [ "${INCLUDE_USB:-0}" = 1 ]; then
+  # Fail loud: a USB-tagged build asked for USB but the artifact isn't here. Shipping a USB-labelled
+  # DMG with zero USB content is the same class of silent failure the per-file guards above prevent.
+  echo "USB: INCLUDE_USB=1 but wineusb.so absent at $usb_unix_src — build it first (installer/wine-patch/build-wineusb-so.sh)" >&2
+  exit 1
+fi
+
+# ---- 1g. aim-bridge root daemon + SMAppService control tool ---------------------------------
 # The 1e redirect sends RS3's dash traffic to 127.0.0.1; this root daemon (registered at first
 # launch via SMAppService -> the user enables it once in Login Items) relays loopback <-> the
 # real dash, exempt from the Local Network gate because it runs as root. The launcher
