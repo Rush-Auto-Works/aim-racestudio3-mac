@@ -35,11 +35,13 @@ assert_eq "$(printf '%s' "$RS3_PINNED_SHA256" | wc -c | tr -d ' ')" "64" "pinned
 
 # 6. rs3_url_from_html (the stale-URL self-heal parser). A page that lists several versions, with
 #    the pinned file served from a DIFFERENT directory than RS3_PINNED_URL (the exact prod bug).
-PAGE_HTML='<html><body>
- <a href="https://www.aim-sportline.com/aim-software-betas/Software/Applications/WebUpdater/release/RaceStudio3-64_38320_000000_000000_20260528_145224.exe">latest</a>
- <a href="https://www.aim-sportline.com/aim-software-betas/Software/Applications/WebUpdater/release/RaceStudio3-64_38312_000000_000000_20260521_151606.exe">older</a>
- <a href="../pdf/racestudio3-docs-en-latest.pdf">docs</a>
-</body></html>'
+#    The "latest" link is built from $RS3_PINNED_FILE so this fixture can't drift when the weekly
+#    auto-updater bumps the pin (check-rs3-update.sh edits pins.env only, not this test).
+PAGE_HTML="<html><body>
+ <a href=\"https://www.aim-sportline.com/aim-software-betas/Software/Applications/WebUpdater/release/$RS3_PINNED_FILE\">latest</a>
+ <a href=\"https://www.aim-sportline.com/aim-software-betas/Software/Applications/WebUpdater/release/RaceStudio3-64_38312_000000_000000_20260521_151606.exe\">older</a>
+ <a href=\"../pdf/racestudio3-docs-en-latest.pdf\">docs</a>
+</body></html>"
 
 # exact pinned filename resolves to its real URL even though it isn't the one in pins.env's path.
 assert_eq "$(rs3_url_from_html "$PAGE_HTML" "$RS3_PINNED_FILE")" \
