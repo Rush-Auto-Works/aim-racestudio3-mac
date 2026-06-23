@@ -26,6 +26,10 @@ DIST="$HERE/../dist"
 ASSETS="$HERE/assets"
 
 IDENTITY="${CODESIGN_IDENTITY:-Developer ID Application: Samuel Reed (HYBSCYDCMB)}"
+# Developer ID *Installer* identity (distinct cert from the Application one) — used by productsign
+# to sign the .pkg. Optional: if it isn't in the keychain we ship an unsigned pkg (still
+# MDM-deployable). Override with INSTALLER_IDENTITY.
+INSTALLER_IDENTITY="${INSTALLER_IDENTITY:-Developer ID Installer: Samuel Reed (HYBSCYDCMB)}"
 TEAMID="HYBSCYDCMB"
 BUNDLE_ID="com.rushautoworks.racestudio3"
 MIN_OS="12.0"
@@ -407,6 +411,43 @@ notarize_staple "$APP"                 || { rc=$?; [ "$rc" -eq 2 ] || { echo "ap
 notarize_staple "$IMPORT_APP_BUILT"    || { rc=$?; [ "$rc" -eq 2 ] || { echo "Import app notarization failed (rc=$rc)"; exit "$rc"; }; }
 notarize_staple "$UNINSTALL_APP_BUILT" || { rc=$?; [ "$rc" -eq 2 ] || { echo "Uninstall app notarization failed (rc=$rc)"; exit "$rc"; }; }
 notarize_staple "$SHOWLOGS_APP_BUILT"  || { rc=$?; [ "$rc" -eq 2 ] || { echo "Show Logs app notarization failed (rc=$rc)"; exit "$rc"; }; }
+
+# ---- 5b. installer .pkg (component pkg → /Applications/AiM) ----------------------------------
+# A flat installer package alongside the DMG: double-click to install (and auto-launch RaceStudio 3
+# via pkg-scripts/postinstall), and MDM-deployable (Mosyle/Jamf InstallApplication). Mirrors the DMG
+# layout exactly: the four already-signed-&-stapled apps land in /Applications/AiM. Signed with a
+# Developer ID *Installer* cert + notarized when one is present (a different cert from the Application
+# cert above); otherwise an unsigned pkg is still emitted. Skip with NO_PKG=1.
+if [ "${NO_PKG:-0}" != 1 ]; then
+  PKG="$DIST/RaceStudio3-${FULLVER}.pkg"
+  PKGROOT="$DIST/.pkgroot"; rm -rf "$PKGROOT"; mkdir -p "$PKGROOT/AiM"
+  ditto "$APP"                 "$PKGROOT/AiM/RaceStudio 3.app"             || { echo "pkg staging failed (app)"; exit 1; }
+  ditto "$IMPORT_APP_BUILT"    "$PKGROOT/AiM/Import RaceStudio 3 Data.app" || { echo "pkg staging failed (import)"; exit 1; }
+  ditto "$UNINSTALL_APP_BUILT" "$PKGROOT/AiM/Uninstall RaceStudio 3.app"   || { echo "pkg staging failed (uninstall)"; exit 1; }
+  ditto "$SHOWLOGS_APP_BUILT"  "$PKGROOT/AiM/Show RaceStudio 3 Logs.app"   || { echo "pkg staging failed (show-logs)"; exit 1; }
+  say "Building component pkg → /Applications/AiM"
+  UNSIGNED_PKG="$DIST/.unsigned.pkg"; rm -f "$UNSIGNED_PKG" "$PKG"
+  PKG_SCRIPTS_ARG=""
+  if [ -f "$HERE/pkg-scripts/postinstall" ]; then
+    chmod +x "$HERE/pkg-scripts/postinstall"
+    PKG_SCRIPTS_ARG="--scripts $HERE/pkg-scripts"
+  fi
+  # shellcheck disable=SC2086
+  pkgbuild --root "$PKGROOT/AiM" --install-location "/Applications/AiM" \
+    $PKG_SCRIPTS_ARG --identifier "${BUNDLE_ID}.pkg" --version "$FULLVER" "$UNSIGNED_PKG" \
+    || { echo "pkgbuild failed"; exit 1; }
+  rm -rf "$PKGROOT"
+  if security find-identity -v 2>/dev/null | grep -Fq -- "$INSTALLER_IDENTITY"; then
+    say "Signing pkg with $INSTALLER_IDENTITY"
+    productsign --sign "$INSTALLER_IDENTITY" "$UNSIGNED_PKG" "$PKG" || { echo "productsign failed"; exit 1; }
+    rm -f "$UNSIGNED_PKG"
+    notarize_staple "$PKG" || { rc=$?; [ "$rc" -eq 2 ] || { echo "pkg notarization failed (rc=$rc)"; exit "$rc"; }; }
+  else
+    say "No '$INSTALLER_IDENTITY' identity — shipping UNSIGNED pkg (MDM-deployable; not Gatekeeper-validated)."
+    mv "$UNSIGNED_PKG" "$PKG"
+  fi
+  say "pkg: $PKG"
+fi
 
 # ---- 6. branded drag-to-Applications DMG ----------------------------------------------------
 if [ "${NO_DMG:-0}" = 1 ]; then say "NO_DMG=1 — skipping DMG."; exit 0; fi

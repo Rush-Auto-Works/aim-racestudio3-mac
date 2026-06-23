@@ -1,0 +1,18 @@
+#!/bin/sh
+# postinstall — launch RaceStudio 3 once installation finishes.
+#
+# The macOS Installer runs this as root, so we can't just `open` (that would target root's GUI
+# session). Use `launchctl asuser <uid> open` to open the app in the logged-in console user's
+# session. Skip silently when there is no interactive console user (an MDM/unattended push), so a
+# fleet deploy doesn't try to launch into a non-existent session.
+app="/Applications/AiM/RaceStudio 3.app"
+[ -d "$app" ] || exit 0
+
+uid="$(/usr/bin/stat -f %u /dev/console 2>/dev/null)"
+user="$(/usr/bin/stat -f %Su /dev/console 2>/dev/null)"
+case "$user" in
+  ""|root|_mbsetupuser|loginwindow) exit 0 ;;   # no real console user → don't auto-launch
+esac
+
+/bin/launchctl asuser "$uid" /usr/bin/open "$app" 2>/dev/null || true
+exit 0

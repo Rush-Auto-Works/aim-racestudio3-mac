@@ -18,8 +18,11 @@ name: release-dmg
 #   ASC_KEY_ID                   the key id (the XXXX in AuthKey_XXXX.p8)
 #   ASC_ISSUER_ID                the Issuer ID (UUID) from App Store Connect → Integrations → Keys
 # Optional:
-#   CODESIGN_IDENTITY            full identity name; defaults to "Developer ID Application: Samuel Reed (HYBSCYDCMB)"
-#   RS3_LOGO_B64                 base64 of the colored RS3 icon PNG (else falls back to the Rush logo)
+#   CODESIGN_IDENTITY                  full identity name; defaults to "Developer ID Application: Samuel Reed (HYBSCYDCMB)"
+#   RS3_LOGO_B64                       base64 of the colored RS3 icon PNG (else falls back to the Rush logo)
+#   DEVELOPER_ID_INSTALLER_CERT_P12    base64 of your "Developer ID Installer" .p12 export (signs the .pkg)
+#   DEVELOPER_ID_INSTALLER_CERT_PASSWORD  password used when exporting that .p12
+#   (without the Installer cert the .pkg is still built, just UNSIGNED — fine for MDM push)
 
 on:
   push:
@@ -37,7 +40,7 @@ jobs:
   build:
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
 
       - name: Classify release tag (single source for USB-build + prerelease gates)
         id: tag
@@ -63,7 +66,7 @@ jobs:
 
       - name: Cache pinned Wine tarball
         id: winecache
-        uses: actions/cache@v4
+        uses: actions/cache@5a3ec84eff668545e0b6f57cc1b4e9557e09c4a4  # v4.2.3
         with:
           path: ~/wine-cache
           key: wine-staging-${{ env.WINE_VER }}-osx64
@@ -87,6 +90,8 @@ jobs:
         env:
           CERT_B64: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
           CERT_PW: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
+          INSTALLER_CERT_B64: ${{ secrets.DEVELOPER_ID_INSTALLER_CERT_P12 }}
+          INSTALLER_CERT_PW: ${{ secrets.DEVELOPER_ID_INSTALLER_CERT_PASSWORD }}
           KC_PW: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
           set -euo pipefail
@@ -96,12 +101,22 @@ jobs:
           security unlock-keychain -p "$KC_PW" "$KC"
           printf '%s' "$CERT_B64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
           security import "$RUNNER_TEMP/cert.p12" -k "$KC" -P "$CERT_PW" -T /usr/bin/codesign
-          # allow codesign to use the key without an interactive prompt (the CI equivalent of "Always Allow")
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KC_PW" "$KC" >/dev/null
+          rm -f "$RUNNER_TEMP/cert.p12"
+          # Optional Developer ID *Installer* cert for signing the .pkg (productsign). When its secret
+          # isn't set, build-apps emits an UNSIGNED pkg (still MDM-deployable).
+          if [ -n "${INSTALLER_CERT_B64:-}" ]; then
+            printf '%s' "$INSTALLER_CERT_B64" | base64 --decode > "$RUNNER_TEMP/installer.p12"
+            security import "$RUNNER_TEMP/installer.p12" -k "$KC" -P "$INSTALLER_CERT_PW" -T /usr/bin/productsign -T /usr/bin/productbuild
+            rm -f "$RUNNER_TEMP/installer.p12"
+            echo "imported Developer ID Installer cert — pkg will be signed + notarized"
+          else
+            echo "no DEVELOPER_ID_INSTALLER_CERT_P12 secret — pkg will be UNSIGNED (MDM-deployable)"
+          fi
+          # allow codesign/productsign to use the keys without an interactive prompt ("Always Allow")
+          security set-key-partition-list -S apple-tool:,apple:,codesign:,productsign: -s -k "$KC_PW" "$KC" >/dev/null
           # put our keychain first in the search list so find-identity/codesign see it
           security list-keychains -d user -s "$KC" $(security list-keychains -d user | sed 's/"//g')
-          rm -f "$RUNNER_TEMP/cert.p12"
-          security find-identity -v -p codesigning "$KC"
+          security find-identity -v "$KC"
 
       - name: Build patched Wine DLLs (ws2_32 redirect + wlanapi synthetic interface)
         run: |
@@ -172,12 +187,19 @@ jobs:
           set -euo pipefail
           xcrun stapler validate installer/dist/*.dmg
           spctl -a -t open --context context:primary-signature -v installer/dist/*.dmg || true
+          for p in installer/dist/*.pkg; do
+            [ -e "$p" ] || continue
+            xcrun stapler validate "$p" || echo "pkg not stapled (unsigned — expected without the Developer ID Installer cert)"
+            spctl -a -t install -v "$p" || true
+          done
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@5f0f3fdc3a02e5e3cb39e49fc23f14e01046e9d6  # v4.6.2
         with:
           name: RaceStudio-3-dmg
-          path: installer/dist/*.dmg
+          path: |
+            installer/dist/*.dmg
+            installer/dist/*.pkg
           if-no-files-found: error
 
       - name: Publish Release (tags only)
@@ -200,7 +222,7 @@ jobs:
           if [ "${IS_USB:-false}" = true ]; then
             install_line="RaceStudio 3 for macOS (experimental USB build) — drag the AiM folder to Applications. To test USB, install CLEAN (uninstall any existing RaceStudio 3 first), then open once to set up."
           else
-            install_line="RaceStudio 3 for macOS — drag the AiM folder to Applications, open once to set up. Connect AiM devices over Wi-Fi (USB unsupported)."
+            install_line="RaceStudio 3 for macOS — drag the AiM folder to Applications, open once to set up. Connect AiM devices over Wi-Fi or USB (USB support is new and tentative)."
           fi
           body="$(awk -v hdr="## [$ver]" 'index($0,hdr)==1{f=1;next} /^## \[/{if(f)exit} f{print}' CHANGELOG.md)"
           notes_file="$RUNNER_TEMP/relnotes.md"
@@ -211,6 +233,9 @@ jobs:
             printf '%s\n' "$install_line" > "$notes_file"
           fi
           dmg="$(ls installer/dist/*.dmg)"   # versioned name, e.g. RaceStudio3-3.83.20-2.dmg
+          # The .pkg is built alongside the DMG (component pkg → /Applications/AiM); ship it too.
+          pkg="$(ls installer/dist/*.pkg 2>/dev/null || true)"
+          assets="$dmg"; [ -n "$pkg" ] && assets="$assets $pkg"
           # Prerelease tags carry a suffix after the packaging rev (e.g. v3.83.20-5-usb1, -rc1,
           # -beta1, -test). They must NOT become "latest" — they ship experimental builds (e.g. the
           # gated USB support) to a tester, not to everyone.
@@ -219,7 +244,8 @@ jobs:
           prerelease_flag=""
           [ "${IS_PRERELEASE:-false}" = true ] && prerelease_flag="--prerelease"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$dmg" --clobber
+            # shellcheck disable=SC2086
+            gh release upload "$TAG" $assets --clobber
             gh release edit "$TAG" --notes-file "$notes_file"   # refresh notes on a rebuild/re-tag
             # Deleting a tag to re-point it (rebuilding the same version) silently converts its
             # published release into a draft; un-draft it so a re-pushed tag always ships publicly.
@@ -234,5 +260,6 @@ jobs:
               gh release edit "$TAG" --draft=false --prerelease=false --latest
             fi
           else
-            gh release create "$TAG" "$dmg" --title "RaceStudio 3 $TAG" --notes-file "$notes_file" $prerelease_flag
+            # shellcheck disable=SC2086
+            gh release create "$TAG" $assets --title "RaceStudio 3 $TAG" --notes-file "$notes_file" $prerelease_flag
           fi

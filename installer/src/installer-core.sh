@@ -363,9 +363,6 @@ write_uninstall_script() {
 #!/bin/bash
 # Removes the engine + launchers. Your telemetry in \$DATA is kept unless --remove-data is passed.
 ROOT="$INSTALL_ROOT"
-LAUNCH_APP="$LAUNCHER_APP"
-UNINST_APP="$UNINSTALL_APP"
-IMPORT_APP="$IMPORT_APP"
 APPS="$APPS_DIR"
 DATA="$DATA_DIR"
 REMOVE_DATA=0; [ "\${1:-}" = "--remove-data" ] && REMOVE_DATA=1
@@ -376,12 +373,15 @@ WS="\$(find "\$ROOT/wine" -type f -name wineserver -path '*/bin/*' 2>/dev/null |
 # aim-bridge-ctl unregister in the user context to clear the SMAppService record; this bootout
 # is the root-side belt-and-suspenders so nothing is left bound to loopback after removal.
 launchctl bootout system/com.rushautoworks.racestudio3.bridge 2>/dev/null || true
-rm -rf "\$ROOT" "\$LAUNCH_APP" "\$IMPORT_APP" "\$APPS/RaceStudio 3.command" 2>/dev/null || true
+# Remove the engine and the WHOLE /Applications/AiM folder synchronously — including the running
+# Uninstall app's own bundle. Safe: this script runs in a separate (admin) shell process, not from
+# inside the bundle, and macOS keeps the launched applet running off its open executable after the
+# bundle is unlinked. rm -rf (not rmdir) so a Finder-dropped .DS_Store / folder Icon can't keep
+# /Applications/AiM alive — the folder is exclusively ours (apps + .command). (A previous
+# `( sleep 2; rm -rf "\$APPS" ) &` was killed when the admin `do shell script` returned, so
+# /Applications/AiM was left behind.)
+rm -rf "\$ROOT" "\$APPS" 2>/dev/null || true
 [ "\$REMOVE_DATA" = 1 ] && rm -rf "\$DATA" 2>/dev/null || true
-# delete the uninstaller app last, detached (it can't delete itself mid-run), and take the whole
-# AiM folder with it. rm -rf (not rmdir) so a Finder-dropped .DS_Store / folder Icon can't keep
-# /Applications/AiM alive — the folder is exclusively ours (only our apps + .command ever live here).
-( sleep 2; rm -rf "\$APPS" ) >/dev/null 2>&1 &
 echo "Removed RaceStudio 3.\${REMOVE_DATA:+ (data removed)}"
 UNINST
   chmod +x "$f"
