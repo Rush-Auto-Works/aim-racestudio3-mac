@@ -12,6 +12,24 @@ only this installer is versioned here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.83.26-2] — 2026-06-23
+
+**Ships a `.pkg` installer (with auto-launch) and fixes the uninstaller.**
+
+- **Uninstaller now removes `/Applications/AiM`.** The generated `uninstall.sh` deferred the folder
+  removal with `( sleep 2; rm -rf "$APPS" ) &`, but that detached subshell is reaped when the admin
+  `do shell script` returns — so the AiM folder was left behind. Remove `$ROOT` and `$APPS`
+  synchronously instead (the `--remove-data` logic and the aim-bridge `launchctl bootout` are
+  preserved). Safe to delete the folder containing the running Uninstall app: the admin shell is a
+  separate root process, and macOS keeps the launched applet running off its open executable.
+- **New `.pkg` alongside the DMG.** `build-apps.sh` builds a component package
+  (`RaceStudio3-<ver>-<rev>.pkg`, the four apps → `/Applications/AiM`) for MDM deployment
+  (Mosyle/Jamf InstallApplication). A `postinstall` script auto-launches RaceStudio 3 in the console
+  user's session on interactive installs (silent for unattended/MDM pushes). Signed with a Developer
+  ID Installer cert + notarized when `DEVELOPER_ID_INSTALLER_CERT_P12` is configured; otherwise
+  emitted unsigned (still MDM-deployable). `release-dmg.yml` imports the optional Installer cert and
+  publishes the `.pkg` asset.
+
 ## [3.83.20-5-usb1] — 2026-06-17
 
 **Experimental prerelease — USB device support (Wi-Fi/SD users don't need this).** First build that
