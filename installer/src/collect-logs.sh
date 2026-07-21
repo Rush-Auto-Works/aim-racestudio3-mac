@@ -77,10 +77,12 @@ copy_if_present "$BRIDGE_LOG"                     "aim-bridge.log"
   WB="$BUNDLE/Contents/Resources/wine/lib/wine"
   chk_marker "$WB/x86_64-windows/ws2_32.dll"  "AiM: redirecting"   "bundle ws2_32  (WiFi redirect)"
   chk_marker "$WB/x86_64-windows/wlanapi.dll" "AiM synthetic"      "bundle wlanapi (WiFi interface)"
+  chk_marker "$WB/x86_64-windows/gdiplus.dll" "AiM flatten guard"  "bundle gdiplus (flatten-loop guard)"
   chk_marker "$WB/x86_64-unix/winemac.so"     "wine_rs3OpenAuxApp" "bundle winemac (menu + Cmd-Q)"
   PFX="$INSTALL_ROOT/prefix/drive_c/windows/system32"
-  chk_marker "$PFX/ws2_32.dll"  "AiM: redirecting" "prefix ws2_32  (what RS3 actually loads)"
-  chk_marker "$PFX/wlanapi.dll" "AiM synthetic"    "prefix wlanapi (what RS3 actually loads)"
+  chk_marker "$PFX/ws2_32.dll"  "AiM: redirecting"  "prefix ws2_32  (what RS3 actually loads)"
+  chk_marker "$PFX/wlanapi.dll" "AiM synthetic"     "prefix wlanapi (what RS3 actually loads)"
+  chk_marker "$PFX/gdiplus.dll" "AiM flatten guard" "prefix gdiplus (what RS3 actually loads)"
 
   if [ "$(uname)" = "Darwin" ]; then
     echo

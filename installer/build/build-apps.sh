@@ -174,6 +174,25 @@ if [ "$X64_SWAPPED" != 1 ] || [ "$WLAN64_SWAPPED" != 1 ]; then
   say "  (patched Wine DLLs incomplete — WiFi not applied; dev build only)"
 fi
 
+# ---- 1e2. GDI+ flatten-loop guard: swap in the patched gdiplus.dll ---------------------------
+# RS3's track-map view can draw a marker built from a degenerate (NaN/Infinity) ellipse
+# coordinate. Native Windows GDI+ tolerates that input; Wine's GdipFlattenPath bezier flattener
+# (flatten_bezier) never converges on a non-finite control point (its "<=" flatness checks are
+# always false against NaN), so it allocates subdivision nodes forever — RSS climbs ~300 MB/s
+# until the process is killed or the Mac runs out of memory (reads as a freeze). Fixes #29/#30.
+# Unrelated to the WiFi bridge above, but built by the same installer/bridge/wine-patch/
+# build-wine-dlls.sh pipeline (one patched Wine PE module, not a full rebuild) — reuses
+# $WINEDLL_DIR and swap_winedll() defined in 1e.
+swap_winedll gdiplus x86_64 'AiM flatten guard' && GDIPLUS64_SWAPPED=1 || GDIPLUS64_SWAPPED=0
+swap_winedll gdiplus i386   'AiM flatten guard' || true   # 32-bit is best-effort (RS3 main is 64-bit)
+if [ "$GDIPLUS64_SWAPPED" != 1 ]; then
+  if [ "${HARDENED_RUNTIME:-0}" = 1 ]; then
+    echo "missing patched x86_64 gdiplus.dll at $WINEDLL_DIR — the flatten-loop guard is REQUIRED for release."
+    echo "run: bash installer/bridge/wine-patch/build-wine-dlls.sh"; exit 1
+  fi
+  say "  (patched gdiplus.dll absent — flatten-loop guard not applied; dev build only)"
+fi
+
 # ---- 1f. USB (WinUSB) support: add the libusb-backed wineusb bus driver ----------------------
 # AiM devices (notably the USB-only PDM) are vendor-class WinUSB (Class=USBDevice, VID 0x11CC). RS3
 # opens them via WinUsb_Initialize -> winusb.dll (already bundled) -> wineusb.sys, the raw-USB *bus*

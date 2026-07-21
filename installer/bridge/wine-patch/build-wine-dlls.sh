@@ -1,29 +1,35 @@
 #!/bin/bash
-# build-wine-dlls.sh — build the patched Wine PE DLLs that make RaceStudio 3 reach an AiM dash
-# over WiFi under Wine on macOS 15+/26 (the Local Network gate). Two DLLs, both required:
+# build-wine-dlls.sh — build the patched Wine PE DLLs RaceStudio 3 needs under Wine on macOS.
+# The first two make RS3 reach an AiM dash over WiFi (the macOS 15+/26 Local Network gate; both
+# required); the third is an unrelated GDI+ crash-loop fix that rides the same pipeline:
 #
 #   ws2_32.dll  — redirects the dash subnet 10.0.0.0/24 AND the discovery target 0.0.0.0:36002
 #                 to 127.0.0.1 (port 36002->36003), and rewrites the relay's reply source back
 #                 to 10.0.0.1 so RS3 accepts it. (ws2_32-localnet.patch)
 #   wlanapi.dll — presents one synthetic, connected Wi-Fi interface so RS3 starts dash discovery
 #                 at all (Wine's wlanapi reports zero interfaces). (wlanapi-synth-iface.patch)
+#   gdiplus.dll — guards GDI+'s Bezier path flattener (flatten_bezier) against a degenerate
+#                 (NaN/Infinity) track-map marker coordinate, which otherwise loops forever
+#                 allocating subdivision nodes (unbounded RSS -> reads as a freeze). Unrelated
+#                 to the WiFi bridge above; it rides this same patched-DLL pipeline because it's
+#                 the same "one Wine PE module, not a full rebuild" shape. (gdiplus-flatten-guard.patch)
 #
-# Produces only these two PE DLLs — NOT a full Wine. They are swapped into the prebuilt Gcenx
+# Produces only these PE DLLs — NOT a full Wine. They are swapped into the prebuilt Gcenx
 # bundle (lib/wine/{x86_64,i386}-windows/) by build-apps.sh. ABI-compatible with the pinned
 # wine-staging build (same Wine version; the PE ABI is stable within a version).
 #
 # Deps: mingw-w64, bison, flex (brew). Usage: build-wine-dlls.sh [wine_version]
-# Output: $OUT/{x86_64,i386}-windows/{ws2_32,wlanapi}.dll  (OUT defaults to ./build/wine-dlls)
+# Output: $OUT/{x86_64,i386}-windows/{ws2_32,wlanapi,gdiplus}.dll  (OUT defaults to ./build/wine-dlls)
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC_PINS="$HERE/../../src/pins.env"
 
 # DLL -> patch file / patched source / marker string that must appear in the built DLL (drift
 # guard). macOS /bin/bash is 3.2 (no associative arrays), so map via case functions, not declare -A.
-DLLS=( ws2_32 wlanapi )
-dll_patch()  { case "$1" in ws2_32) echo "$HERE/ws2_32-localnet.patch";; wlanapi) echo "$HERE/wlanapi-synth-iface.patch";; esac; }
-dll_source() { case "$1" in ws2_32) echo "dlls/ws2_32/socket.c";;        wlanapi) echo "dlls/wlanapi/main.c";;            esac; }
-dll_marker() { case "$1" in ws2_32) echo "AiM: redirecting";;            wlanapi) echo "AiM synthetic";;                  esac; }
+DLLS=( ws2_32 wlanapi gdiplus )
+dll_patch()  { case "$1" in ws2_32) echo "$HERE/ws2_32-localnet.patch";; wlanapi) echo "$HERE/wlanapi-synth-iface.patch";; gdiplus) echo "$HERE/gdiplus-flatten-guard.patch";; esac; }
+dll_source() { case "$1" in ws2_32) echo "dlls/ws2_32/socket.c";;        wlanapi) echo "dlls/wlanapi/main.c";;            gdiplus) echo "dlls/gdiplus/graphicspath.c";;      esac; }
+dll_marker() { case "$1" in ws2_32) echo "AiM: redirecting";;            wlanapi) echo "AiM synthetic";;                  gdiplus) echo "AiM flatten guard";;                esac; }
 
 VER="${1:-}"
 if [ -z "$VER" ] && [ -f "$SRC_PINS" ]; then
