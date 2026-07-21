@@ -74,10 +74,12 @@ on launchRS3()
 	-- up must never kill the live session):
 	--  1. wineserver -k clears STALE Wine sessions (crash/force-quit leftovers hold the prefix
 	--     lock and make the next launch hang at graphics init — on-device finding 2026-06-08).
-	--  2. Refresh the prefix's copied ws2_32.dll AND wlanapi.dll from the bundle if they differ.
-	--     Wine copies builtins into the prefix at CREATION time only, so an upgraded app left the
-	--     OLD unpatched DLLs in system32/syswow64 and the WiFi redirect/synthetic-interface never
-	--     ran (2026-06-09 / 2026-06-11). RS3 loads from the prefix copy, so it must be refreshed.
+	--  2. Refresh the prefix's copied ws2_32.dll, wlanapi.dll AND gdiplus.dll from the bundle if
+	--     they differ. Wine copies builtins into the prefix at CREATION time only, so an upgraded
+	--     app left the OLD unpatched DLLs in system32/syswow64 and the WiFi redirect/synthetic-
+	--     interface never ran (2026-06-09 / 2026-06-11). RS3 loads from the prefix copy, so it
+	--     must be refreshed. gdiplus.dll (the flatten-loop guard, added 2026-07-21 for #29/#30)
+	--     is the same "builtin DLL copied at prefix creation" shape, so it rides the same loop.
 	--  3. Force VLC's software (wingdi) video output for the lap-compare videos. RS3 plays them
 	--     through an embedded libVLC; under Wine on Apple Silicon, wined3d can't create a D3D11
 	--     device, so VLC's direct3d11 vout never opens, the direct3d9 vout shrinks the 2nd compare
@@ -88,7 +90,7 @@ on launchRS3()
 		quoted form of (res & "/wine/bin/wineserver") & " -k 2>/dev/null; " & ¬
 		quoted form of (res & "/wine/bin/wineserver") & " -w 2>/dev/null; " & ¬
 		"for p in 'x86_64-windows system32' 'i386-windows syswow64'; do set -- $p; " & ¬
-		"for dll in ws2_32 wlanapi; do " & ¬
+		"for dll in ws2_32 wlanapi gdiplus; do " & ¬
 		"s=" & quoted form of (res & "/wine/lib/wine") & "/$1/$dll.dll; " & ¬
 		"d=" & quoted form of (root & "/prefix/drive_c/windows") & "/$2/$dll.dll; " & ¬
 		"if [ -f \"$s\" ] && [ -f \"$d\" ] && ! cmp -s \"$s\" \"$d\"; then cp -f \"$s\" \"$d\"; fi; done; done; " & ¬

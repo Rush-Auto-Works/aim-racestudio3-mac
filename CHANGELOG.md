@@ -12,6 +12,21 @@ only this installer is versioned here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.83.26-3] — 2026-07-21
+
+**Fixes a track-map freeze (unbounded memory growth) in RaceStudio 3.**
+
+- **GDI+ flatten-loop guard.** RS3's track-map view can draw a marker built from a degenerate
+  (NaN/Infinity) ellipse coordinate. Native Windows GDI+ tolerates that input; Wine's
+  `GdipFlattenPath` Bezier flattener (`flatten_bezier` in `dlls/gdiplus/graphicspath.c`) never
+  converges on a non-finite control point — its "flat enough" checks are `<=` comparisons, which
+  are always false against NaN — so it allocates subdivision nodes forever. RSS climbs roughly
+  300 MB/s to tens of GB with one CPU core pegged, which reads as a freeze until the process is
+  killed or the Mac runs out of memory. Fixed with a small patched `gdiplus.dll` (source patch,
+  same one-module pipeline as the WiFi bridge's `ws2_32`/`wlanapi` DLLs): a non-finite control
+  point is now treated as flat (straight line to the segment's existing endpoint, no
+  subdivision), plus a hard cap on total subdivision nodes as a second line of defense. Fixes #29.
+
 ## [3.83.26-2] — 2026-06-23
 
 **Ships a `.pkg` installer (with auto-launch) and fixes the uninstaller.**

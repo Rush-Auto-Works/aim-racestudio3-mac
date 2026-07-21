@@ -1,0 +1,69 @@
+--- a/dlls/gdiplus/graphicspath.c	2026-07-21 12:00:00
++++ b/dlls/gdiplus/graphicspath.c	2026-07-21 12:00:05
+@@ -33,6 +33,13 @@
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(gdiplus);
+ 
++/* RS3's launcher runs Wine with WINEDEBUG=-all, silencing FIXME/WARN, so AiM diagnostics never
++ * reach run.log. __wine_dbg_output writes straight to stderr (the run.log fd), ungated by
++ * WINEDEBUG; the static guard one-shots each call site so a repeatedly-degenerate path can't
++ * flood the log. */
++#define AIM_DIAG_ONCE(args) do { static int _aim_done; \
++    if (!_aim_done) { _aim_done = 1; __wine_dbg_output(wine_dbg_sprintf args); } } while(0)
++
+ #define SQRT3     1.73205080757
+ 
+ typedef struct path_list_node_t path_list_node_t;
+@@ -201,6 +208,11 @@
+     BOOL ret = TRUE;
+     struct list jobs;
+     struct flatten_bezier_job *current, *next;
++    /* AiM flatten guard (b): hard cap on total subdivision nodes, independent of the
++     * non-finite check below, so no input -- degenerate or otherwise -- can grow this job
++     * list without bound. */
++    unsigned int aim_node_count = 0;
++    static const unsigned int AIM_MAX_FLATTEN_NODES = 100000;
+ 
+     flatness = 0.62f * flatness;
+     list_init( &jobs );
+@@ -214,6 +226,29 @@
+         y3 = current->y3;
+         end = current->end;
+ 
++        /* AiM flatten guard (a): a degenerate track-map marker (e.g. a zero-size or invalid
++         * ellipse) can hand us a NaN/Infinity control point. Native Windows GDI+ tolerates
++         * this; Wine's "flat enough" checks below use "<=" comparisons, which are always
++         * false against NaN, so a non-finite point never converges and this loop runs
++         * forever, appending a node and queuing two more subdivisions every iteration
++         * (unbounded allocation -> OOM). Treat a non-finite point as flat: same as the
++         * closely-spaced-points check further down, i.e. add no extra point and let the
++         * existing `end` node (already linked as a straight line) stand for this segment. */
++        if (!isfinite(x2) || !isfinite(y2) || !isfinite(x3) || !isfinite(y3) ||
++            !isfinite(start->pt.X) || !isfinite(start->pt.Y) ||
++            !isfinite(end->pt.X) || !isfinite(end->pt.Y))
++        {
++            AIM_DIAG_ONCE(("AiM flatten guard: non-finite bezier control point, treating segment as flat\n"));
++            continue;
++        }
++
++        /* AiM flatten guard (b): belt-and-suspenders cap check. */
++        if (aim_node_count >= AIM_MAX_FLATTEN_NODES)
++        {
++            AIM_DIAG_ONCE(("AiM flatten guard: hit subdivision node cap, treating segment as flat\n"));
++            continue;
++        }
++
+         /* middle point between control points */
+         pt.X = (x2 + x3) / 2.0;
+         pt.Y = (y2 + y3) / 2.0;
+@@ -260,7 +295,9 @@
+             {
+                 ret = FALSE;
+                 break;
+-            };
++            }
++            else
++                aim_node_count++;
+ 
+         /* do the same with halves */
+         if (!flatten_bezier_add(&current->entry, node,  mp[3].X, mp[3].Y, mp[4].X, mp[4].Y, end))
