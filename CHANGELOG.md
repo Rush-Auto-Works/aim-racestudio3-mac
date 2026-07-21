@@ -25,7 +25,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   killed or the Mac runs out of memory. Fixed with a small patched `gdiplus.dll` (source patch,
   same one-module pipeline as the WiFi bridge's `ws2_32`/`wlanapi` DLLs): a non-finite control
   point is now treated as flat (straight line to the segment's existing endpoint, no
-  subdivision), plus a hard cap on total subdivision nodes as a second line of defense. Fixes #29.
+  subdivision), plus a hard cap on total subdivision nodes as a second line of defense.
+  Fixes #29 and #30.
 
 ## [3.83.26-2] — 2026-06-23
 
