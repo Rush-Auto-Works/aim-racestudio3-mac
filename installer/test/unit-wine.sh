@@ -32,5 +32,48 @@ grep -qF '"LeftOptionIsAlt"="y"' "$REG"    && ok "LeftOptionIsAlt set"    || bad
 [ "$(tail -c 2 "$REG" | od -An -tx1 | tr -d ' \n')" = "0d0a" ] \
   && ok "CRLF line endings" || bad "missing CRLF line endings"
 
+# --- drop_host_root_drive: removes Wine's `z: -> /` mapping (issue #32). Pure filesystem, so it is
+# testable against a fake prefix with no Wine involved.
+PFX="$SBX/prefix"
+mkdir -p "$PFX/dosdevices" "$PFX/drive_c"
+ln -s / "$PFX/dosdevices/z:"
+ln -s /dev/null "$PFX/dosdevices/z::"
+ln -s ../drive_c "$PFX/dosdevices/c:"
+ln -s /Volumes/SomeStick "$PFX/dosdevices/d:"        # dangling on purpose: an unplugged volume
+
+drop_host_root_drive "$PFX" && ok "returns 0 when it removed the drive" || bad "returned nonzero"
+
+[ ! -L "$PFX/dosdevices/z:" ]  && ok "z: mapping removed"        || bad "z: mapping still present"
+[ ! -L "$PFX/dosdevices/z::" ] && ok "z:: device link removed"   || bad "z:: device link still present"
+# Only Z: goes. C: is the prefix itself and D:/E:/… are how external volumes reach RS3, so removing
+# any of them would take away the host export path this fix is supposed to preserve.
+[ -L "$PFX/dosdevices/c:" ] && ok "c: left alone" || bad "c: was removed"
+[ -L "$PFX/dosdevices/d:" ] && ok "d: left alone (dangling volume link survives)" || bad "d: was removed"
+
+# Idempotent: the launchers re-run this on every start, so a second call must be a no-op, not an error.
+drop_host_root_drive "$PFX" && ok "second call succeeds (idempotent)" || bad "second call returned nonzero"
+
+# A z: aimed at something specific is a deliberate mapping, not the #32 bug. Only a root-mapped z:
+# hands RS3 the whole filesystem, so anything else must survive — otherwise this fix silently takes
+# away a working export path, which is the thing the CHANGELOG promises it does not do.
+ln -s /Volumes/SmartyCam "$PFX/dosdevices/z:"
+drop_host_root_drive "$PFX"
+[ "$(readlink "$PFX/dosdevices/z:")" = "/Volumes/SmartyCam" ] \
+  && ok "non-root z: mapping preserved" || bad "non-root z: mapping was destroyed"
+rm -f "$PFX/dosdevices/z:"
+
+# A dangling z: pointing at "/" cannot occur (/ always exists), but a dangling NON-root z: can, and
+# it must be preserved too — the guard reads the link text, so it must not depend on the target.
+ln -s /nonexistent-mount "$PFX/dosdevices/z:"
+drop_host_root_drive "$PFX"
+[ -L "$PFX/dosdevices/z:" ] && ok "dangling non-root z: preserved" || bad "dangling non-root z: removed"
+rm -f "$PFX/dosdevices/z:"
+
+# No z: at all: nothing to do, and it must not report failure.
+drop_host_root_drive "$PFX" && ok "absent z: is a no-op" || bad "absent z: returned nonzero"
+
+# Empty argument must be a safe no-op rather than an rm against /dosdevices/z:.
+drop_host_root_drive "" && ok "empty prefix arg is a no-op" || bad "empty prefix arg returned nonzero"
+
 echo "unit-wine: $P passed, $F failed"
 [ "$F" -eq 0 ]

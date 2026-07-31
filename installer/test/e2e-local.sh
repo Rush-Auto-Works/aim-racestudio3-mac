@@ -15,7 +15,12 @@ SRC_DIR="$HERE/../src"
 . "$SRC_DIR/pins.env"
 
 WINE_TARBALL="/tmp/claude/wine11.tar.xz"
-RS3_EXE="$HOME/Downloads/RaceStudio3-64_38320.exe"
+# Derive the fixture from the pin, never hardcode a version. This test pre-seeds the cache and then
+# asserts NO network is used, but download_verified checks size+sha256 against the CURRENT pin — so
+# a stale fixture doesn't skip, it fails verification and falls through to a real download, quietly
+# breaking the offline contract. Hardcoding left this on 3.83.20 across two version bumps, and
+# run-all.sh excludes this file, so CI never caught it. Override with RS3_E2E_EXE if needed.
+RS3_EXE="${RS3_E2E_EXE:-$HOME/Downloads/$RS3_PINNED_FILE}"
 
 SBX="$(mktemp -d "${TMPDIR:-/tmp}/rs3e2e.XXXXXX")"
 KEEP="${RS3_E2E_KEEP:-0}"

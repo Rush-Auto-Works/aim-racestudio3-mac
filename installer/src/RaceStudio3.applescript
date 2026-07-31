@@ -86,6 +86,12 @@ on launchRS3()
 	--     video on a shared fake device, and the OpenGL vout corrupts the frame — only wingdi (GDI)
 	--     renders correctly at the right size. Disable the GPU vout plugins so VLC falls to wingdi
 	--     (idempotent; re-applies after an RS3 in-app update re-adds them). 2026-06-13.
+	--  4. Delete Wine's default `z: -> /` drive. Z: hands RS3 the entire Mac as a fixed disk, and
+	--     RS3 recursively walks every fixed drive after a config clone/import — a directory-symlink
+	--     cycle anywhere on the Mac (e.g. calibre.app's nested Qt helper bundle) then hangs it
+	--     forever. Re-applied each launch so an already-installed prefix migrates without a
+	--     reinstall; only removed when it resolves to "/", so a deliberate z: mapping survives.
+	--     Full reasoning in drop_host_root_drive (lib/wine.sh). 2026-07-31, issue #32.
 	set hygiene to "if ! pgrep -f 'AiMRS3-64' >/dev/null 2>&1; then " & ¬
 		quoted form of (res & "/wine/bin/wineserver") & " -k 2>/dev/null; " & ¬
 		quoted form of (res & "/wine/bin/wineserver") & " -w 2>/dev/null; " & ¬
@@ -94,6 +100,8 @@ on launchRS3()
 		"s=" & quoted form of (res & "/wine/lib/wine") & "/$1/$dll.dll; " & ¬
 		"d=" & quoted form of (root & "/prefix/drive_c/windows") & "/$2/$dll.dll; " & ¬
 		"if [ -f \"$s\" ] && [ -f \"$d\" ] && ! cmp -s \"$s\" \"$d\"; then cp -f \"$s\" \"$d\"; fi; done; done; " & ¬
+		"dd=" & quoted form of (root & "/prefix/dosdevices") & "; " & ¬
+		"if [ -L \"$dd/z:\" ] && [ \"$(readlink \"$dd/z:\")\" = / ]; then rm -f \"$dd/z:\" \"$dd/z::\" 2>/dev/null; fi; " & ¬
 		"vp=" & quoted form of (root & "/prefix/drive_c/AIM_SPORT/RaceStudio3/64/plugins") & "; " & ¬
 		"if [ -d \"$vp\" ]; then for vplug in libdirect3d11_plugin libdirect3d9_plugin libgl_plugin libglwin32_plugin libwgl_plugin; do " & ¬
 		"[ -f \"$vp/$vplug.dll\" ] && mv -f \"$vp/$vplug.dll\" \"$vp/$vplug.dll.disabled\"; done; rm -f \"$vp/plugins.dat\" 2>/dev/null; fi; fi; "

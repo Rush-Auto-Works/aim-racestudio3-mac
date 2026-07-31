@@ -239,6 +239,9 @@ phase_make_prefix() {
     sleep 1
   done
   apply_macdrv_keys               # native keyboard feel (Cmd→Ctrl copy/paste/undo); best-effort
+  # delete `z: -> /`; RS3 walks fixed drives and hangs on symlink cycles. Warn rather than die: a
+  # prefix we can't write here is still a usable install, just one that can hit the #32 freeze.
+  drop_host_root_drive "$PREFIX" || ui_warn "couldn't remove the z: drive from the prefix; see issue #32"
   write_wineserver_pid
   wineserver_kill
   ledger_mark prefix
@@ -336,6 +339,15 @@ export WINEPREFIX="\$ROOT/prefix" WINEARCH=win64 WINEDEBUG=-all
 export WINEDLLOVERRIDES="mscoree=d;mshtml=d"
 export XDG_CACHE_HOME="\$ROOT/cache" XDG_CONFIG_HOME="\$ROOT/xdg-config" XDG_DATA_HOME="\$ROOT/xdg-data"
 mkdir -p "\$ROOT/logs" "\$ROOT/bin"
+# Delete Wine's default \`z: -> /\` drive. Z: hands RS3 the whole Mac as a fixed disk, and RS3
+# recursively walks every fixed drive after a config clone/import — a directory-symlink cycle
+# anywhere on the Mac then hangs it forever (see drop_host_root_drive in lib/wine.sh). Re-applied
+# every launch so an already-installed prefix migrates without a reinstall. Only removed when it
+# resolves to "/", so a deliberate z: mapping survives. Mirrors RaceStudio3.applescript's hygiene.
+zl="\$ROOT/prefix/dosdevices/z:"
+if [ -L "\$zl" ] && [ "\$(readlink "\$zl")" = "/" ]; then
+  rm -f "\$zl" "\$ROOT/prefix/dosdevices/z::" 2>/dev/null
+fi
 # Force VLC's software (wingdi) video output for the lap-compare videos. Under Wine on Apple
 # Silicon wined3d can't make a D3D11 device, and VLC's d3d9/OpenGL vouts mis-size or corrupt
 # the embedded video; wingdi (GDI) renders correctly at the right size. Disable the GPU vout
@@ -433,6 +445,9 @@ do_import() {
   local p="$IMPORT_DIR"
   [ -n "$p" ] || die "Import: nothing to import"
   mkdir -p "$DATA_DIR"
+  # The Import app is its own entry point and never runs the launcher's hygiene, so a prefix that
+  # still has `z: -> /` would keep it until RS3 is next launched. Drop it here too (issue #32).
+  [ -d "${PREFIX:-}" ] && { drop_host_root_drive "$PREFIX" || true; }
   case "$p" in
     *.zip|*.ZIP)
       [ -f "$p" ] || die "Import: zip not found: $p"

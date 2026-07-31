@@ -12,6 +12,33 @@ only this installer is versioned here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.83.39-1] — 2026-07-31
+
+**Fixes a freeze when you clone or import a configuration, and updates RaceStudio 3 to 3.83.39.**
+
+- **The Windows environment no longer has a `Z:` drive.** Wine points `Z:` at the root of your Mac
+  and reports it as a hard disk. After you clone or import a configuration, RaceStudio 3 scans every
+  hard disk it can find, and it follows folder aliases with no limit on depth. Plenty of Mac apps
+  ship an alias that points back up their own folder tree, and once the scan walks into one it never
+  walks back out. The path RS3 is building just keeps growing until it exceeds the length macOS
+  permits. Every file operation then fails, RS3 retries, and the app stops responding with a CPU
+  core pinned while `run.log` fills up with `wineserver: file_set_error() can't map error: File name
+  too long`. The one that caught us was `/Applications/calibre.app`: it bundles a Qt helper app
+  whose `Frameworks` alias points straight back at calibre's own `Frameworks` folder. New installs
+  never get the drive, and existing ones lose it the next time you launch RaceStudio 3 or import
+  data, so there's no need to reinstall. If you had deliberately pointed `Z:` at a specific folder,
+  that mapping is left alone; only the one aimed at the root of your Mac is removed. Fixes #32.
+
+  Nothing you can reach today goes away. Your home folders are already mounted in the Windows
+  environment as `C:\users\<you>\Desktop`, `Documents`, `Downloads` and so on, and every external
+  drive still gets its own letter, so exporting to the Mac and reading a SmartyCam card work the
+  same as before. What you lose is browsing to system paths like `/usr` from RaceStudio 3's file
+  picker, which isn't something you'd do with race data anyway.
+
+- **RaceStudio 3 updated to 3.83.39** (from 3.83.26). AiM had also quietly replaced the 3.83.26
+  installer at its original download URL with a different file, which broke our checksum check.
+  Moving to 3.83.39 sorts that out too.
+
 ## [3.83.26-3] — 2026-07-21
 
 **Fixes a track-map freeze (unbounded memory growth) in RaceStudio 3.**
