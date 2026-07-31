@@ -83,11 +83,14 @@ copy_if_present "$BRIDGE_LOG"                     "aim-bridge.log"
   chk_marker "$PFX/ws2_32.dll"  "AiM: redirecting"  "prefix ws2_32  (what RS3 actually loads)"
   chk_marker "$PFX/wlanapi.dll" "AiM synthetic"     "prefix wlanapi (what RS3 actually loads)"
   chk_marker "$PFX/gdiplus.dll" "AiM flatten guard" "prefix gdiplus (what RS3 actually loads)"
-  # `z: -> /` must NOT exist: it hands RS3 the whole Mac as a fixed disk, and RS3's post-clone
-  # drive walk then hangs on any directory-symlink cycle out there (issue #32). A Wine upgrade
-  # recreates it, so this is worth reporting when someone sends logs about a hang.
-  if [ -L "$INSTALL_ROOT/prefix/dosdevices/z:" ] || [ -e "$INSTALL_ROOT/prefix/dosdevices/z:" ]; then
+  # A z: pointing at "/" must NOT exist: it hands RS3 the whole Mac as a fixed disk, and RS3's
+  # post-clone drive walk then hangs on any directory-symlink cycle out there (issue #32). Only a
+  # root-mapped z: is a problem — a z: aimed somewhere specific is a deliberate mapping we keep.
+  zlink="$INSTALL_ROOT/prefix/dosdevices/z:"
+  if [ -L "$zlink" ] && [ "$(readlink "$zlink")" = "/" ]; then
     echo "  host-root drive z:                        PRESENT (should be absent — see issue #32)"
+  elif [ -L "$zlink" ]; then
+    echo "  host-root drive z:                        absent (z: -> $(readlink "$zlink"), not root)"
   else
     echo "  host-root drive z:                        absent (correct)"
   fi

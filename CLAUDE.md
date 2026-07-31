@@ -125,7 +125,11 @@ This file is constraints, conventions, and hard-won gotchas only.
   file_set_error() can't map error: File name too long`. Diagnosed 2026-07-31 (issue #32) on
   `/Applications/calibre.app`, whose `QtWebEngineCore.framework` helper app symlinks back up to
   `calibre.app/Contents/Frameworks`. `drop_host_root_drive` (`lib/wine.sh`) deletes the link at
-  prefix creation AND on every launch (a Wine upgrade's `wineboot --update` recreates it).
+  prefix creation, on every launch, and on import. It only removes a `z:` that resolves to `/`, so a
+  deliberate mapping survives. The per-launch repeat is what migrates an already-installed prefix
+  without a reinstall — **not** because `wineboot` recreates the link: `programs/wineboot/wineboot.c`
+  in Wine 11.9 contains no drive-symlink code at all (checked 2026-07-31, after a reviewer claimed
+  otherwise). `mountmgr` is what creates dosdevices entries for volumes it discovers at runtime.
   **Ruled out, don't retry:** typing the drive `"z:"="network"` in `Software\Wine\Drives` (RS3 walks
   it anyway — verified on device), and narrowing `z:` to some host subtree (every host-wide mount
   point reintroduces a cycle: `/Volumes` holds `Macintosh HD -> /`, and `~/Movies`/`~/Pictures` hold

@@ -25,7 +25,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   core pinned while `run.log` fills up with `wineserver: file_set_error() can't map error: File name
   too long`. The one that caught us was `/Applications/calibre.app`: it bundles a Qt helper app
   whose `Frameworks` alias points straight back at calibre's own `Frameworks` folder. New installs
-  never get the drive, and existing ones lose it the next time you launch RaceStudio 3. Fixes #32.
+  never get the drive, and existing ones lose it the next time you launch RaceStudio 3 or import
+  data, so there's no need to reinstall. If you had deliberately pointed `Z:` at a specific folder,
+  that mapping is left alone; only the one aimed at the root of your Mac is removed. Fixes #32.
 
   Nothing you can reach today goes away. Your home folders are already mounted in the Windows
   environment as `C:\users\<you>\Desktop`, `Documents`, `Downloads` and so on, and every external

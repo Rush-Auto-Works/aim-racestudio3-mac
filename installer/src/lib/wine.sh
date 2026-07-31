@@ -137,10 +137,24 @@ apply_macdrv_keys() {
 # .fcpcache links loop back). Re-typing the drive does not work either — verified on device
 # 2026-07-31 that RS3 still walks Z: when it is registered as "network" in Software\Wine\Drives.
 #
-# Pure filesystem and idempotent (no Wine required), so the launchers can re-run it on every start:
-# a Wine upgrade runs wineboot --update, which recreates the default z: link.
+# Only removes the link when it actually resolves to "/". A prefix where someone deliberately
+# pointed z: at, say, an external drive is left alone — that mapping is useful and is not the bug.
+#
+# Pure filesystem and idempotent (no Wine required), so the launchers re-run it on every start.
+# That repeat is what migrates an already-installed prefix (the user does not reinstall to get the
+# fix), and it is cheap insurance if anything ever re-adds a root mapping: mountmgr creates
+# dosdevices entries for volumes it discovers at runtime (that is where d:/e:/f: come from).
+# Note it is NOT wineboot that creates these — programs/wineboot/wineboot.c in the pinned Wine 11.9
+# contains no drive-symlink code at all, so do not justify the repeat by claiming otherwise.
+#
+# Returns nonzero if a root-mapped z: was found and could NOT be removed, so an installer caller can
+# report it. The launchers deliberately ignore the status: a prefix we cannot write is not a reason
+# to refuse to start RS3.
 drop_host_root_drive() {
-  local prefix="$1"
+  local prefix="$1" link="$1/dosdevices/z:"
   [ -n "$prefix" ] || return 0
-  rm -f "$prefix/dosdevices/z:" "$prefix/dosdevices/z::" 2>/dev/null || true
+  [ -L "$link" ] || return 0
+  [ "$(readlink "$link")" = "/" ] || return 0     # deliberate non-root mapping: leave it
+  rm -f "$link" "$prefix/dosdevices/z::" 2>/dev/null
+  [ ! -L "$link" ]
 }

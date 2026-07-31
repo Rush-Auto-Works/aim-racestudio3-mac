@@ -41,7 +41,7 @@ ln -s /dev/null "$PFX/dosdevices/z::"
 ln -s ../drive_c "$PFX/dosdevices/c:"
 ln -s /Volumes/SomeStick "$PFX/dosdevices/d:"        # dangling on purpose: an unplugged volume
 
-drop_host_root_drive "$PFX"
+drop_host_root_drive "$PFX" && ok "returns 0 when it removed the drive" || bad "returned nonzero"
 
 [ ! -L "$PFX/dosdevices/z:" ]  && ok "z: mapping removed"        || bad "z: mapping still present"
 [ ! -L "$PFX/dosdevices/z::" ] && ok "z:: device link removed"   || bad "z:: device link still present"
@@ -53,14 +53,24 @@ drop_host_root_drive "$PFX"
 # Idempotent: the launchers re-run this on every start, so a second call must be a no-op, not an error.
 drop_host_root_drive "$PFX" && ok "second call succeeds (idempotent)" || bad "second call returned nonzero"
 
-# A dangling z: (target unmounted) must still be removed — `[ -e ]` is false for those, so the
-# implementation must not gate on the target existing.
-# rm first: if the fix ever regresses, z: is still a live symlink to / and `ln -s` would follow it
-# and try to create the link on the real root filesystem instead of inside the sandbox.
+# A z: aimed at something specific is a deliberate mapping, not the #32 bug. Only a root-mapped z:
+# hands RS3 the whole filesystem, so anything else must survive — otherwise this fix silently takes
+# away a working export path, which is the thing the CHANGELOG promises it does not do.
+ln -s /Volumes/SmartyCam "$PFX/dosdevices/z:"
+drop_host_root_drive "$PFX"
+[ "$(readlink "$PFX/dosdevices/z:")" = "/Volumes/SmartyCam" ] \
+  && ok "non-root z: mapping preserved" || bad "non-root z: mapping was destroyed"
 rm -f "$PFX/dosdevices/z:"
+
+# A dangling z: pointing at "/" cannot occur (/ always exists), but a dangling NON-root z: can, and
+# it must be preserved too — the guard reads the link text, so it must not depend on the target.
 ln -s /nonexistent-mount "$PFX/dosdevices/z:"
 drop_host_root_drive "$PFX"
-[ ! -L "$PFX/dosdevices/z:" ] && ok "dangling z: removed" || bad "dangling z: survived"
+[ -L "$PFX/dosdevices/z:" ] && ok "dangling non-root z: preserved" || bad "dangling non-root z: removed"
+rm -f "$PFX/dosdevices/z:"
+
+# No z: at all: nothing to do, and it must not report failure.
+drop_host_root_drive "$PFX" && ok "absent z: is a no-op" || bad "absent z: returned nonzero"
 
 # Empty argument must be a safe no-op rather than an rm against /dosdevices/z:.
 drop_host_root_drive "" && ok "empty prefix arg is a no-op" || bad "empty prefix arg returned nonzero"
