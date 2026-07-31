@@ -33,7 +33,10 @@ if [ -f "$WT" ]; then
   assert_eq "$(file_size "$WT")" "$WINE_PINNED_SIZE" "wine tarball size matches pin"
   assert_eq "$(sha256 "$WT")" "$WINE_PINNED_SHA256"  "wine tarball sha matches pin"
 fi
-RS="$HOME/Downloads/RaceStudio3-64_38320.exe"
+# Derive from the pin. Hardcoding the filename made this assertion unable to pass on purpose: with
+# no such file it silently skips, and with the OLD 3.83.20 installer present it compares those bytes
+# against the CURRENT pin and fails. Same defect as the one fixed in e2e-local.sh.
+RS="$HOME/Downloads/$RS3_PINNED_FILE"
 if [ -f "$RS" ]; then
   assert_eq "$(file_size "$RS")" "$RS3_PINNED_SIZE"  "rs3 installer size matches pin"
   assert_eq "$(sha256 "$RS")" "$RS3_PINNED_SHA256"   "rs3 installer sha matches pin"
