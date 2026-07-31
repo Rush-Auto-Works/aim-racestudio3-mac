@@ -239,6 +239,7 @@ phase_make_prefix() {
     sleep 1
   done
   apply_macdrv_keys               # native keyboard feel (Cmd→Ctrl copy/paste/undo); best-effort
+  drop_host_root_drive "$PREFIX"  # delete `z: -> /`; RS3 walks fixed drives and hangs on symlink cycles
   write_wineserver_pid
   wineserver_kill
   ledger_mark prefix
@@ -336,6 +337,12 @@ export WINEPREFIX="\$ROOT/prefix" WINEARCH=win64 WINEDEBUG=-all
 export WINEDLLOVERRIDES="mscoree=d;mshtml=d"
 export XDG_CACHE_HOME="\$ROOT/cache" XDG_CONFIG_HOME="\$ROOT/xdg-config" XDG_DATA_HOME="\$ROOT/xdg-data"
 mkdir -p "\$ROOT/logs" "\$ROOT/bin"
+# Delete Wine's default \`z: -> /\` drive. Z: hands RS3 the whole Mac as a fixed disk, and RS3
+# recursively walks every fixed drive after a config clone/import — a directory-symlink cycle
+# anywhere on the Mac then hangs it forever (see drop_host_root_drive in lib/wine.sh). Re-applied
+# on every launch because a Wine upgrade's wineboot --update recreates the link. Mirrors the same
+# step in RaceStudio3.applescript's launch hygiene.
+rm -f "\$ROOT/prefix/dosdevices/z:" "\$ROOT/prefix/dosdevices/z::" 2>/dev/null
 # Force VLC's software (wingdi) video output for the lap-compare videos. Under Wine on Apple
 # Silicon wined3d can't make a D3D11 device, and VLC's d3d9/OpenGL vouts mis-size or corrupt
 # the embedded video; wingdi (GDI) renders correctly at the right size. Disable the GPU vout

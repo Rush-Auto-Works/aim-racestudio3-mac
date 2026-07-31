@@ -113,3 +113,34 @@ apply_macdrv_keys() {
     >> "${LOG:-/dev/null}" 2>&1 || true
   wineserver_wait
 }
+
+# drop_host_root_drive <prefix> : delete Wine's default `z: -> /` drive mapping.
+#
+# Z: exposes the ENTIRE Mac filesystem as a fixed disk, and RaceStudio 3 recursively walks every
+# fixed drive after a configuration clone or import. Any directory-symlink cycle anywhere on the
+# Mac traps that walk forever — RS3 has no depth cap, so the path grows without bound until it
+# passes macOS's PATH_MAX (1024), after which every syscall returns ENAMETOOLONG. Wine maps that
+# errno in neither server/file.c::file_set_error() nor ntdll's errno_to_status(), so both fall
+# through to STATUS_UNSUCCESSFUL and RS3 just retries; the visible symptoms are a hung app and
+# wineserver spamming "file_set_error() can't map error: File name too long" into run.log.
+# Such cycles are ordinary in third-party bundles: the reported case (issue #32) was
+# /Applications/calibre.app, whose QtWebEngineCore.framework helper app links back up to
+# calibre.app/Contents/Frameworks, and macOS ships another via /Volumes/Macintosh HD -> /.
+#
+# Nothing the user needs disappears. Home folders are already mounted inside the prefix as
+# C:\users\<user>\{Desktop,Documents,Downloads,Music,Pictures,Videos} (drive_c symlinks pointing at
+# the real ones), and external volumes each get their own letter, so export to the host still
+# works. Only browsing arbitrary system paths from RS3's file picker goes away.
+#
+# Narrowing Z: instead of removing it does NOT work: every host-wide mount point reintroduces a
+# cycle (/Volumes contains "Macintosh HD" -> /; ~/Movies and ~/Pictures hold iMovie libraries whose
+# .fcpcache links loop back). Re-typing the drive does not work either — verified on device
+# 2026-07-31 that RS3 still walks Z: when it is registered as "network" in Software\Wine\Drives.
+#
+# Pure filesystem and idempotent (no Wine required), so the launchers can re-run it on every start:
+# a Wine upgrade runs wineboot --update, which recreates the default z: link.
+drop_host_root_drive() {
+  local prefix="$1"
+  [ -n "$prefix" ] || return 0
+  rm -f "$prefix/dosdevices/z:" "$prefix/dosdevices/z::" 2>/dev/null || true
+}

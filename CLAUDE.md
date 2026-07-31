@@ -116,3 +116,19 @@ This file is constraints, conventions, and hard-won gotchas only.
   process can't inject the broadcast (only the mountmgr driver host can), and the only Wine lever
   (assign a fresh letter per card) is invasive + leaky. **Don't re-litigate.** Full detail: memory
   `smartycam-sd-import-works`.
+- **The prefix must NOT have a `z:` drive.** Wine's default `z: -> /` hands RS3 the whole Mac as a
+  fixed disk, and RS3 recursively walks every fixed drive after a config clone/import with no depth
+  cap. Any directory-symlink cycle out there traps it forever: the path grows past macOS `PATH_MAX`
+  (1024), every syscall then returns `ENAMETOOLONG`, and since Wine maps that errno in neither
+  `server/file.c::file_set_error()` nor ntdll's `errno_to_status()`, RS3 only ever sees
+  `STATUS_UNSUCCESSFUL` and retries. Symptom: RS3 hangs and `run.log` fills with `wineserver:
+  file_set_error() can't map error: File name too long`. Diagnosed 2026-07-31 (issue #32) on
+  `/Applications/calibre.app`, whose `QtWebEngineCore.framework` helper app symlinks back up to
+  `calibre.app/Contents/Frameworks`. `drop_host_root_drive` (`lib/wine.sh`) deletes the link at
+  prefix creation AND on every launch (a Wine upgrade's `wineboot --update` recreates it).
+  **Ruled out, don't retry:** typing the drive `"z:"="network"` in `Software\Wine\Drives` (RS3 walks
+  it anyway — verified on device), and narrowing `z:` to some host subtree (every host-wide mount
+  point reintroduces a cycle: `/Volumes` holds `Macintosh HD -> /`, and `~/Movies`/`~/Pictures` hold
+  iMovie libraries whose `.fcpcache` links loop back). Nothing is lost by removing it: home folders
+  are already `C:\users\<user>\{Desktop,Documents,Downloads,…}` and external volumes get their own
+  letters, so host export still works. `collect-logs.sh` reports the drive's presence.

@@ -28,6 +28,13 @@ grep -q 'AiMRS3-64-ReleaseU.exe' "$LS" && ok "launch.sh runs the RS3 exe" || bad
 grep -q 'WINEPREFIX=' "$LS" && ok "launch.sh exports WINEPREFIX" || bad "launch.sh no WINEPREFIX"
 ! grep -q '/.wine' "$LS" && ok "launch.sh never uses ~/.wine" || bad "launch.sh references ~/.wine"
 
+# Every launch must re-drop Wine's `z: -> /` drive: a Wine upgrade runs wineboot --update, which
+# recreates it, and with it back RS3's post-clone drive walk hangs again (issue #32). Assert the
+# heredoc emitted a live `$ROOT` reference rather than expanding it at generation time.
+grep -qF 'dosdevices/z:' "$LS" && ok "launch.sh drops the z: drive" || bad "launch.sh missing z: removal"
+grep -qF '"$ROOT/prefix/dosdevices/z:"' "$LS" \
+  && ok "z: removal resolves \$ROOT at runtime" || bad "z: removal path expanded too early"
+
 # make-launcher copies the bundled Import/Uninstall apps into the AiM apps dir when *_SRC is set.
 IMP_SRC="$SBX/embed/Import RaceStudio 3 Data.app"; UNI_SRC="$SBX/embed/Uninstall RaceStudio 3.app"
 mkdir -p "$IMP_SRC/Contents" "$UNI_SRC/Contents"
