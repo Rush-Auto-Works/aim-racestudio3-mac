@@ -67,6 +67,32 @@ grep -qxF 'RS3_PINNED_VER="3.83.26"' "$SBX/pins.env" \
 # No .bak left behind (it would get committed by the workflow's `git add`).
 [ ! -f "$SBX/pins.env.bak" ] && ok "removes the sed .bak file" || bad ".bak file left behind"
 
+# sed replacement metacharacters must survive intact. `&` means "the whole match" to sed, `\`
+# escapes, and `|` is the delimiter, so an unescaped replacement writes something other than what
+# was asked for while sed still exits 0. A pinned URL with a query string is the realistic case.
+fresh_pins
+url='RS3_PINNED_URL="https://example.test/get?file=RS3.exe&ver=1|2\3"'
+printf 'RS3_PINNED_URL="https://old.example/x.exe"\n' >> "$SBX/pins.env"
+PINS="$SBX/pins.env" bash "$SBX/harness.sh" "RS3_PINNED_URL" "$url" >/dev/null 2>&1
+rc=$?
+[ "$rc" -eq 0 ] && grep -qxF "$url" "$SBX/pins.env" \
+  && ok "& \\ and | in a value round-trip literally" || bad "metacharacters were mangled (rc=$rc)"
+
+# A replacement that assigns a DIFFERENT key must be rejected. Otherwise ed_pins "A" "B=1" rewrites
+# A's line to B=1 and the postcondition still passes, because it only checks the line is present —
+# so a caller typo would silently rename a pin and drop the real one.
+fresh_pins
+before="$(cat "$SBX/pins.env")"
+PINS="$SBX/pins.env" bash "$SBX/harness.sh" "RS3_PINNED_SIZE" "RS3_WRONG_KEY=1" >/dev/null 2>&1
+rc=$?
+[ "$rc" -ne 0 ] && ok "replacement assigning a different key is fatal" || bad "key/line mismatch was accepted"
+[ "$(cat "$SBX/pins.env")" = "$before" ] \
+  && ok "pins.env untouched after a rejected key/line mismatch" || bad "pins.env was modified"
+[ ! -f "$SBX/pins.env.bak" ] && ok "no .bak left behind" || bad ".bak left behind"
+# Note: the restore-from-backup branch is defensive and not exercised here. With the replacement
+# escaped and the key/line agreement enforced, there is no input that reaches sed and then fails the
+# postcondition. It stays as insurance, not as tested behavior — don't claim coverage it lacks.
+
 # THE #34 CASE: a key that does not exist must be fatal, not a silent no-op. This is the exact
 # shape of the original bug — sed matched nothing and the script reported success anyway.
 fresh_pins

@@ -102,10 +102,28 @@ ed_pins() { # <key> <new-value-line>
   case "$line" in
     *$'\n'*) die "internal: multi-line replacement for $key" ;;
   esac
+  # The replacement must actually be an assignment to this key. Without this, ed_pins "A" "B=1"
+  # happily rewrites A's line to B=1 and the postcondition below still passes, because it only
+  # checks that the line is present — so a caller typo would silently rename a pin.
+  case "$line" in
+    "$key="*) ;;
+    *) die "internal: replacement for $key does not assign $key (got: $line)" ;;
+  esac
   grep -qE "^${key}=" "$PINS" || die "pins.env has no '${key}=' line to update"
-  sed -i.bak -E "s|^${key}=.*$|${line}|" "$PINS" || die "sed failed rewriting $key in pins.env"
+  # Escape the replacement side: & means "the whole match" to sed, \ escapes, and | is our
+  # delimiter. A pinned URL with a query string would otherwise rewrite to something other than
+  # what we asked for while sed still exits 0. Escape for sed, but verify against the ORIGINAL
+  # $line, since that is the literal text sed should have written.
+  local escaped
+  escaped="$(printf '%s' "$line" | sed 's/[\\&|]/\\&/g')" || die "couldn't escape replacement for $key"
+  sed -i.bak -E "s|^${key}=.*$|${escaped}|" "$PINS" || die "sed failed rewriting $key in pins.env"
+  # Keep the backup until the postcondition passes, then restore from it on failure — otherwise a
+  # bad rewrite leaves pins.env mangled with no way back.
+  if ! grep -qxF "$line" "$PINS"; then
+    mv -f "$PINS.bak" "$PINS" || die "rewrite of $key failed AND pins.env could not be restored"
+    die "rewrite of $key did not take effect in pins.env (restored from backup)"
+  fi
   rm -f "$PINS.bak"
-  grep -qxF "$line" "$PINS" || die "rewrite of $key did not take effect in pins.env"
 }
 ed_pins "RS3_PINNED_VER"  "RS3_PINNED_VER=\"$latest_ver\""
 ed_pins "RS3_PINNED_FILE" "RS3_PINNED_FILE=\"$latest_file\""
