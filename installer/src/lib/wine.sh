@@ -158,3 +158,61 @@ drop_host_root_drive() {
   rm -f "$link" "$prefix/dosdevices/z::" 2>/dev/null
   [ ! -L "$link" ]
 }
+
+# _ver_fields <ver> : print a version's numeric fields, space-separated. Accepts every shape this
+# repo ships: "3.83.39" (pins.env), "3.83.26.0" (RaceStudio3.xmv), "v3.83.39-1" (release tag,
+# build-apps.sh:44) and "3.83.39.1" (CFBundleVersion, build-apps.sh:295). The tag's "-<rev>" and
+# the bundle's ".<rev>" are the same field, so both collapse to a separator.
+_ver_fields() {
+  local v="${1#v}"
+  printf '%s' "${v//-/.}" | tr '.' ' '
+}
+
+# ver_cmp <a> <b> : print lt | eq | gt. Missing trailing fields count as zero, so 3.83.39 and
+# 3.83.39.0 are equal. Returns 1 printing NOTHING when either side has a non-numeric field, so a
+# caller can tell "older" apart from "unparseable" and refuse to guess.
+ver_cmp() {
+  local -a A B
+  A=($(_ver_fields "$1")); B=($(_ver_fields "$2"))
+  local n="${#A[@]}" i x y
+  [ "${#B[@]}" -gt "$n" ] && n="${#B[@]}"
+  [ "$n" -gt 0 ] || return 1
+  for (( i = 0; i < n; i++ )); do
+    x="${A[i]:-0}"; y="${B[i]:-0}"
+    case "$x$y" in ''|*[!0-9]*) return 1 ;; esac
+    x=$((10#$x)); y=$((10#$y))          # base-10: "08" is not octal here
+    if [ "$x" -gt "$y" ]; then printf 'gt'; return 0; fi
+    if [ "$x" -lt "$y" ]; then printf 'lt'; return 0; fi
+  done
+  printf 'eq'
+}
+
+# rs3_installed_ver [xmv_path] : print the RaceStudio 3 version AiM's installer recorded in its
+# own manifest (default: the one inside our prefix). That file is the source of truth because AiM
+# writes it — a marker of ours would go stale the moment RS3's in-app updater ran.
+#
+# The manifest is CRLF; the capture stops at '<' so the \r never reaches the value. Returns 1
+# printing nothing when the file is absent, the tag is absent, or the value isn't a plausible
+# version — callers must treat that as "unknown", never as "up to date".
+rs3_installed_ver() {
+  local xmv="${1:-$PREFIX/drive_c/$RS3_REL_XMV}" v
+  [ -f "$xmv" ] || return 1
+  v="$(sed -nE 's|.*<p n="VERSION">([^<]*)</p>.*|\1|p' "$xmv" 2>/dev/null | head -1)"
+  [ -n "$v" ] || return 1
+  printf '%s' "$v" | grep -Eq '^[0-9]+(\.[0-9]+){2,3}$' || return 1
+  printf '%s' "$v"
+}
+
+# rs3_installed_at_least <want> : true when the installed RaceStudio 3 is >= <want>.
+#
+# ">=" and not "==" on purpose. If RS3's in-app updater has moved the user to 3.84.0 and our pin
+# still says 3.83.39, equality would call the install unsatisfied and reinstall the older build
+# over the newer one. ledger_skip_if_done returns a boolean, so it has no way to express "newer
+# than expected" — ">=" is what makes "never downgrade a user automatically" actually true.
+rs3_installed_at_least() {
+  local have; have="$(rs3_installed_ver)" || return 1
+  case "$(ver_cmp "$have" "$1")" in
+    eq|gt) return 0 ;;
+    *)     return 1 ;;
+  esac
+}
