@@ -61,15 +61,23 @@ copy_if_present "$BRIDGE_LOG"                     "aim-bridge.log"
   # lib/wine.sh::rs3_installed_ver is the same one-liner and the same fixture covers both.
   xmv="$INSTALL_ROOT/prefix/drive_c/AIM_SPORT/RaceStudio3/RaceStudio3.xmv"
   inst="$(sed -nE 's|.*<p n="VERSION">([^<]*)</p>.*|\1|p' "$xmv" 2>/dev/null | head -1)"
-  echo "RS3 version (installed): ${inst:-unknown (no $xmv)}"
+  # Same acceptance boundary as rs3_installed_ver: a value that is not a plausible three- or
+  # four-field AiM version is UNKNOWN. Printing it verbatim turned a corrupt manifest into a
+  # confident wrong answer AND a false "differs from pinned" diagnosis.
+  printf '%s' "$inst" | grep -Eq '^[0-9]{1,9}(\.[0-9]{1,9}){2,3}$' || inst=""
+  echo "RS3 version (installed): ${inst:-unknown (no readable version in $xmv)}"
+  # Both lines always print. A missing input is noted here, never dropped — a support log that is
+  # silent about the pin reads as "there is no pin", which is a different and wrong story.
+  pinned=""; pkgrev=""
   if [ -f "$PINS" ]; then
     pinned="$(sed -nE 's/^RS3_PINNED_VER="(.*)"/\1/p' "$PINS")"
-    echo "RS3 version (pinned):    $pinned"
-    echo "pkg rev:     $(sed -nE 's/^RS3_PKG_REV="(.*)"/\1/p' "$PINS")"
-    # A trailing ".0" is AiM's fourth field, not a different build, so don't cry mismatch over it.
-    if [ -n "$inst" ] && [ -n "$pinned" ] && [ "${inst%.0}" != "$pinned" ]; then
-      echo "  ^ installed differs from pinned — the upgrade never ran, or RS3 updated itself"
-    fi
+    pkgrev="$(sed -nE 's/^RS3_PKG_REV="(.*)"/\1/p' "$PINS")"
+  fi
+  echo "RS3 version (pinned):    ${pinned:-unknown (no RS3_PINNED_VER in $PINS)}"
+  echo "pkg rev:     ${pkgrev:-unknown}"
+  # A trailing ".0" is AiM's fourth field, not a different build, so don't cry mismatch over it.
+  if [ -n "$inst" ] && [ -n "$pinned" ] && [ "${inst%.0}" != "$pinned" ]; then
+    echo "  ^ installed differs from pinned — the upgrade never ran, or RS3 updated itself"
   fi
   os_major="$(sw_vers -productVersion 2>/dev/null | cut -d. -f1)"
   if [ -x "$CTL" ]; then
