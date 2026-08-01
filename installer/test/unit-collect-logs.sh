@@ -41,4 +41,29 @@ assert_true "grep -q 'install.log' '$OUT/README.txt'" "README notes the missing 
 assert_true "grep -q 'aim-bridge.log' '$OUT/README.txt'" "README notes the missing aim-bridge.log"
 assert_true "[ \"\$(cat '$OPENLOG' 2>/dev/null)\" = '$OUT' ]" "open was called on the output folder"
 
+# --- version reporting ----------------------------------------------------------------------
+# The old report printed only RS3_PINNED_VER, so a support log claimed the pinned version no
+# matter what was installed. That is what hid the "DMG upgrade doesn't update RS3" bug.
+FIX="$HERE/fixtures/RaceStudio3-3.83.26.xmv"
+mkdir -p "$ROOT/prefix/drive_c/AIM_SPORT/RaceStudio3"
+ditto "$FIX" "$ROOT/prefix/drive_c/AIM_SPORT/RaceStudio3/RaceStudio3.xmv"
+
+DESK2="$SANDBOX/desktop2"; mkdir -p "$DESK2"
+RS3_APP_SUPPORT="$ROOT" RS3_DESKTOP_DIR="$DESK2" RS3_OPEN_CMD="$SANDBOX/fake-open.sh" \
+  bash "$SCRIPT"
+OUT2="$(find "$DESK2" -maxdepth 1 -type d -name 'AiM-Logs-*' | head -1)"
+SI="$OUT2/system-info.txt"
+assert_true "grep -q 'RS3 version (installed): 3.83.26.0' '$SI'" "reports the INSTALLED version"
+assert_true "grep -q 'RS3 version (pinned):' '$SI'"               "reports the pinned version too"
+assert_true "grep -q 'installed differs from pinned' '$SI'"       "flags the mismatch"
+
+# With no manifest, it says unknown — it must never fall back to claiming the pin.
+ROOT3="$SANDBOX/appsupport3"; mkdir -p "$ROOT3/logs"
+DESK3="$SANDBOX/desktop3"; mkdir -p "$DESK3"
+RS3_APP_SUPPORT="$ROOT3" RS3_DESKTOP_DIR="$DESK3" RS3_OPEN_CMD="$SANDBOX/fake-open.sh" \
+  bash "$SCRIPT"
+OUT3="$(find "$DESK3" -maxdepth 1 -type d -name 'AiM-Logs-*' | head -1)"
+assert_true "grep -q 'RS3 version (installed): unknown' '$OUT3/system-info.txt'" \
+  "no manifest reports unknown, not the pin"
+
 finish
