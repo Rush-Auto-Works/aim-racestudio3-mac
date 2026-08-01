@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<info_version_sw>
+  <e c="InfoSW" i="InfoSW.1">
+    <p n="BUILD_DATE_TIME">20260613_071826</p>
+    <p n="BUILD_NUMBER">20260613.1</p>
+    <p n="VERSION">3.83.26.0</p>
+    <p n="EXE_NAME">RaceStudio3-64_38326_000000_000000_20260613_071826.exe</p>
+    <p n="PRODUCT_NAME">RaceStudio3</p>
+    <p n="MAJOR">3</p>
+    <p n="MINOR">83</p>
+    <p n="REVISION">26</p>
+    <p n="SVN_FWSW2">000000</p>
+    <p n="SVN_SOFTWARE">000000</p>
+    <p n="TYPE">release</p>
+  </e>
+</info_version_sw>

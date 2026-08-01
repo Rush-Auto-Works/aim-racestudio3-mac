@@ -1,0 +1,6 @@
+# AiM writes RaceStudio3.xmv with CRLF line endings. The fixture under installer/test/fixtures is
+# a byte-for-byte capture of a real one, and its whole value is being exactly what the parser meets
+# on a user's Mac. This repo is cloned with core.autocrlf=input on at least one dev machine, which
+# rewrote the stored blob to LF and left the working copy CRLF — so the committed fixture stopped
+# matching the file it is supposed to stand in for. `-text` disables all end-of-line conversion.
+installer/test/fixtures/*.xmv -text
