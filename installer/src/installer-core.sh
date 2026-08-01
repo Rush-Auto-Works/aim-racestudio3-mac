@@ -143,11 +143,21 @@ phase_preflight() {
 
 phase_acquire_installer() {
   ui_progress 2 8 "Getting the RaceStudio 3 installer…"
-  # Already have a usable installer (verified earlier, or one the user picked via the GUI)?
-  local pre; pre="$(ui_recall INSTALLER_EXE || true)"
-  if [ -n "$pre" ] && [ -f "$pre" ] && [ "$DRY_RUN" != 1 ]; then ui_say "Installer ready."; return 0; fi
   local want="$INSTALLER_CACHE/$RS3_PINNED_FILE"
   validate_rs3_asset "$RS3_PINNED_FILE" || die "internal: bad pinned RS3 filename"
+
+  # A remembered installer counts only if it IS the pinned one. This used to be `[ -f "$pre" ]`,
+  # which meant a config.env written by an older version of this app kept pointing at the previous
+  # RaceStudio 3 — so installing a newer DMG downloaded nothing, installed nothing, and left the
+  # user on the old build while the CHANGELOG claimed otherwise. The size+sha check also covers the
+  # GUI "choose file" path (RaceStudio3.applescript), which copies whatever the user picks.
+  local pre; pre="$(ui_recall INSTALLER_EXE || true)"
+  if [ -n "$pre" ] && [ "$DRY_RUN" != 1 ]; then
+    if verify_local_asset "$pre" "$RS3_PINNED_FILE" "$RS3_PINNED_SIZE" "$RS3_PINNED_SHA256"; then
+      ui_say "Installer ready."; return 0
+    fi
+    log "ignoring remembered installer (wrong name, size or sha): $pre"
+  fi
 
   if [ "$DRY_RUN" = 1 ]; then
     https_guard "$RS3_PINNED_URL" || die "RS3 URL not HTTPS"
@@ -171,20 +181,19 @@ phase_acquire_installer() {
     fi
   fi
 
-  # Fallback 2: a matching file already in ~/Downloads (size match preferred).
-  local d
-  for d in "$HOME/Downloads"/RaceStudio3-64_*.exe; do
-    [ -e "$d" ] || continue
-    if [ "$(file_size "$d")" = "$RS3_PINNED_SIZE" ]; then
-      ditto "$d" "$want"; ui_persist INSTALLER_EXE "$want"
-      ui_say "Using the installer you already have in Downloads."
-      return 0
-    fi
-  done
+  # Fallback 2: the pinned installer already sitting in ~/Downloads. Name AND bytes must match —
+  # the old size-only check on a `RaceStudio3-64_*.exe` glob would happily install a different
+  # build that happened to be the same length.
+  local d="$HOME/Downloads/$RS3_PINNED_FILE"
+  if verify_local_asset "$d" "$RS3_PINNED_FILE" "$RS3_PINNED_SIZE" "$RS3_PINNED_SHA256"; then
+    ditto "$d" "$want"; ui_persist INSTALLER_EXE "$want"
+    ui_say "Using the installer you already have in Downloads."
+    return 0
+  fi
 
   # Fallback 3: ask the user to download it from AiM, then re-detect.
   if [ "$UI_MODE" = applet ]; then
-    printf 'NEEDS_INSTALLER\n'; exit "$SIG_NEEDS"
+    printf 'NEEDS_INSTALLER: %s\n' "$RS3_PINNED_FILE"; exit "$SIG_NEEDS"
   fi
   ui_say "Couldn't download automatically. Opening the AiM download page — save the file to Downloads, then re-run."
   open "$RS3_DOWNLOAD_PAGE" 2>/dev/null || true

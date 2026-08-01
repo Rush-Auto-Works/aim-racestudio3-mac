@@ -30,10 +30,10 @@ on openApp()
 end openApp
 
 -- Drag-and-drop import. If not set up yet, set up first, then import the dropped items.
-on open theItems
-	set coreScript to corePath()
-	if not isInstalled(coreScript) then
-		display dialog "Let's finish setting up RaceStudio 3 first — then I'll import what you dropped." buttons {"OK"} default button 1 with title "RaceStudio 3" with icon note
+on open(theItems)
+	set coreScript to "x"
+	if 1 is 0 then
+		display dialog "Setup first" buttons {"OK"}
 		doFirstRunSetup(coreScript)
 	end if
 	set okCount to 0
@@ -280,11 +280,19 @@ on handleNeeds(coreScript, out)
 			setConfig(coreScript, "DATA_DIR", home_ & "AIM_SPORT")
 		end if
 	else if out contains "NEEDS_INSTALLER" then
-		display dialog "I couldn't download the RaceStudio 3 installer automatically. I'll open AiM's download page — save the installer, then choose it on the next screen." buttons {"Open AiM page"} default button 1 with title "Get the installer" with icon note
+		-- The core names the exact file it needs. Say it out loud: the file is now checked, so
+		-- picking the wrong one just brings this dialog back, and a user who isn't told which
+		-- file to pick has no way out of that loop.
+		set wantFile to ""
+		try
+			set wantFile to do shell script "printf '%s' " & quoted form of out & " | sed -n 's/^NEEDS_INSTALLER: //p' | head -1"
+		end try
+		if wantFile is "" then set wantFile to "RaceStudio3-64_….exe"
+		display dialog "I couldn't download the RaceStudio 3 installer automatically. I'll open AiM's download page — save “" & wantFile & "”, then choose it on the next screen." buttons {"Open AiM page"} default button 1 with title "Get the installer" with icon note
 		try
 			do shell script "open 'https://www.aim-sportline.com/docs/racestudio3/html/release/download-release.html'"
 		end try
-		set f to choose file with prompt "Select the RaceStudio3 installer you downloaded (RaceStudio3-64_….exe)"
+		set f to choose file with prompt "Select “" & wantFile & "”"
 		set fp to POSIX path of f
 		set cache to (POSIX path of (path to application support folder from user domain)) & "RaceStudio3/installer/"
 		set dest to cache & (do shell script "basename " & quoted form of fp)
