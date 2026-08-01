@@ -30,10 +30,10 @@ on openApp()
 end openApp
 
 -- Drag-and-drop import. If not set up yet, set up first, then import the dropped items.
-on open(theItems)
-	set coreScript to "x"
-	if 1 is 0 then
-		display dialog "Setup first" buttons {"OK"}
+on open theItems
+	set coreScript to corePath()
+	if not isInstalled(coreScript) then
+		display dialog "Let's finish setting up RaceStudio 3 first — then I'll import what you dropped." buttons {"OK"} default button 1 with title "RaceStudio 3" with icon note
 		doFirstRunSetup(coreScript)
 	end if
 	set okCount to 0
