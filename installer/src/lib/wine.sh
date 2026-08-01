@@ -173,8 +173,13 @@ _ver_fields() {
 # overflows and REVERSES the comparison. Validating the whole string here, before it is split
 # into fields, is what rejects an empty field ("3..8"), embedded whitespace and a trailing
 # separator: word splitting would collapse all three into a valid-looking field list.
+#
+# Matched with bash's own =~ rather than `grep -Eq`, because grep anchors ^ and $ per LINE: a
+# two-line value whose FIRST line parsed would pass, and the array build then split on the
+# newline and merged fields from both lines. =~ anchors against the whole string.
 _ver_ok() {
-  printf '%s' "${1#v}" | grep -Eq '^[0-9]{1,9}([.-][0-9]{1,9}){2,3}$'
+  local v="${1#v}" re='^[0-9]{1,9}([.-][0-9]{1,9}){2,3}$'
+  [[ $v =~ $re ]]
 }
 
 # ver_cmp <a> <b> : print lt | eq | gt. Missing trailing fields count as zero, so 3.83.39 and
