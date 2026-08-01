@@ -1,7 +1,7 @@
 # RS3 self-update: version detection, channels, and an updater surface
 
 Date: 2026-08-01
-Status: **Part A ready to plan. Part B blocked on two open decisions.**
+Status: **Part A ready to plan. Part B unblocked 2026-08-01 — both open decisions answered.**
 Revised after review round 1 (executor / auditor / antigravity, all REVISE).
 
 ## Split: A is a bugfix, B is a feature
@@ -102,10 +102,9 @@ MSI. That is the cost of the CHANGELOG claim being true.
 
 # Part B: channels and an updater surface
 
-Blocked. The review found one hole that invalidates the original approach and one finding
-that contradicts an earlier decision. Both need answers before planning.
+Unblocked 2026-08-01. Both decisions below are settled; Part B can be planned after A ships.
 
-## OPEN 1 — `latest` has no verified-download contract
+## DECIDED 1 — `latest` resolves through a CI-published `latest.json`
 
 All three reviewers, independently. `download_verified` requires an expected size
 (`lib/net.sh:58`) and rejects a mismatch (`net.sh:88`). `check-rs3-update.sh` emits only
@@ -116,22 +115,18 @@ cannot call the existing verified-acquisition path at all.
 Antigravity added the reliability argument: a client that scrapes AiM's page breaks for every
 `latest` user at once the day AiM changes their markup.
 
-**Proposed resolution (needs approval):** clients never scrape and never download unverified.
-CI publishes a static, schema-controlled `latest.json` (version, file, url, size, sha256) as a
+**Decided (user, 2026-08-01):** clients never scrape and never download unverified. CI
+publishes a static, schema-controlled `latest.json` (version, file, url, size, sha256) as a
 release asset; the client reads that and feeds it to the unchanged `download_verified`. This
 keeps the integrity chain intact and moves the fragile scraping to CI where a break is visible
 to us, not to users.
 
-## OPEN 2 — killing a running RS3 may corrupt the config database
+## DECIDED 2 — keep kill-and-relaunch
 
-You chose "quit RS3, update, relaunch". Antigravity argues against it on data-integrity
-grounds: `wineserver_kill` is a hard kill, and if RS3 is mid-write to its config database in
-`~/AIM_SPORT` the database can be corrupted. A confirmation dialog does not prove RS3 is idle.
-
-This is the same data-safety concern the `data_relocate_safe` hard rule exists to protect, so
-it deserves an explicit decision rather than my quietly overriding either way. Options: keep
-kill-and-relaunch, or block with "Please quit RaceStudio 3 to continue" and proceed only once
-`wineserver` has exited.
+**Decided (user, 2026-08-01):** confirm, then `wineserver_kill`, update, relaunch. The user
+reaffirmed this after antigravity's data-integrity objection (a hard kill mid-write can corrupt
+the config database in `~/AIM_SPORT`, and a confirmation dialog does not prove RS3 is idle).
+The objection is recorded, not adopted.
 
 Independently of that choice, the reviewers were right that the **order was wrong**: the draft
 killed RS3 *before* acquiring the installer, so a failed download would destroy a live session
@@ -175,4 +170,4 @@ Part A: `rs3_installed_ver` + `ver_cmp` and tests → `collect-logs` reporting �
 short-circuit fixes → `scenarios.md` + CHANGELOG. Independently shippable; fixes the
 reported bug.
 
-Part B: unblock OPEN 1 and OPEN 2, then re-plan.
+Part B: plan after A ships, against the two decisions above.
