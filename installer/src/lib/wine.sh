@@ -168,10 +168,22 @@ _ver_fields() {
   printf '%s' "${v//-/.}" | tr '.' ' '
 }
 
+# _ver_ok <ver> : true when <ver> is a version we are willing to compare. Bounded digit runs
+# (max 9 per field) keep every field inside bash's arithmetic range — an unbounded run silently
+# overflows and REVERSES the comparison. Validating the whole string here, before it is split
+# into fields, is what rejects an empty field ("3..8"), embedded whitespace and a trailing
+# separator: word splitting would collapse all three into a valid-looking field list.
+_ver_ok() {
+  printf '%s' "${1#v}" | grep -Eq '^[0-9]{1,9}([.-][0-9]{1,9}){2,3}$'
+}
+
 # ver_cmp <a> <b> : print lt | eq | gt. Missing trailing fields count as zero, so 3.83.39 and
-# 3.83.39.0 are equal. Returns 1 printing NOTHING when either side has a non-numeric field, so a
-# caller can tell "older" apart from "unparseable" and refuse to guess.
+# 3.83.39.0 are equal. Returns 1 printing NOTHING when either side has a malformed or out-of-range
+# version or when called with the wrong argument count, so a caller can tell "older" apart from
+# "unparseable" and refuse to guess.
 ver_cmp() {
+  [ $# -eq 2 ] || return 1
+  _ver_ok "$1" && _ver_ok "$2" || return 1
   local -a A B
   A=($(_ver_fields "$1")); B=($(_ver_fields "$2"))
   local n="${#A[@]}" i x y
@@ -199,7 +211,7 @@ rs3_installed_ver() {
   [ -f "$xmv" ] || return 1
   v="$(sed -nE 's|.*<p n="VERSION">([^<]*)</p>.*|\1|p' "$xmv" 2>/dev/null | head -1)"
   [ -n "$v" ] || return 1
-  printf '%s' "$v" | grep -Eq '^[0-9]+(\.[0-9]+){2,3}$' || return 1
+  printf '%s' "$v" | grep -Eq '^[0-9]{1,9}(\.[0-9]{1,9}){2,3}$' || return 1
   printf '%s' "$v"
 }
 
@@ -210,6 +222,7 @@ rs3_installed_ver() {
 # over the newer one. ledger_skip_if_done returns a boolean, so it has no way to express "newer
 # than expected" — ">=" is what makes "never downgrade a user automatically" actually true.
 rs3_installed_at_least() {
+  [ $# -eq 1 ] || return 1
   local have; have="$(rs3_installed_ver)" || return 1
   case "$(ver_cmp "$have" "$1")" in
     eq|gt) return 0 ;;
