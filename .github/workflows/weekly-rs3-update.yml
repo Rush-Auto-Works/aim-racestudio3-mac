@@ -34,6 +34,16 @@ jobs:
         id: check
         run: bash installer/build/check-rs3-update.sh --apply
 
+      # Gate the commit on the rewritten pins actually matching what AiM serves. check-rs3-update.sh
+      # is now strict enough that a bad rewrite should die on the spot, but this is the check that
+      # does not depend on the rewrite being self-aware: it re-fetches each pinned URL and compares
+      # the live Content-Length against the pin. #34 shipped a half-updated pins.env that looked
+      # like a clean bump, and download_verified rejects on size before it ever reaches sha256, so
+      # a wrong size breaks every install. Fail here rather than commit and tag it.
+      - name: Verify the bumped pins against the live downloads
+        if: steps.check.outputs.updated == 'true'
+        run: bash installer/test/unit-pins-online.sh
+
       - name: Bump pins, tag, and trigger the release build
         if: steps.check.outputs.updated == 'true'
         env:

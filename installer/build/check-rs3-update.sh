@@ -68,9 +68,17 @@ echo "downloading $best_url …" >&2
 curl -fSL --proto '=https' -o "$dest" "$best_url" || die "download failed: $best_url"
 [ -r "$dest" ] || die "downloaded installer not readable: $dest"
 
-# size: BSD stat (-f, macOS) then GNU stat (-c, Linux).
-size="$(stat -f %z "$dest" 2>/dev/null || stat -c %s "$dest" 2>/dev/null)" || true
-[ -n "$size" ] || die "couldn't read size of $dest (no working 'stat')"
+# size: `wc -c` is identical on BSD and GNU, so there is no platform branch to get wrong.
+# It replaced `stat -f %z … || stat -c %s …`, which looked portable and was not: GNU coreutils
+# reads -f as --file-system and treats %z and the path as two file operands, then EXITS 0. The ||
+# fallback therefore never ran on the Linux CI runner, $size became a multi-line filesystem report,
+# the sed below choked on the multi-line replacement, and RS3_PINNED_SIZE silently kept the previous
+# version's value. download_verified checks size before sha256 and bails, so every install and
+# release build off main broke until someone noticed. See issue #34.
+size="$(wc -c < "$dest" | tr -d '[:space:]')"
+case "$size" in
+  ''|*[!0-9]*) die "couldn't read a numeric size for $dest (got: '$size')" ;;
+esac
 
 # sha256: shasum (macOS/perl) or sha256sum (Linux) — report which tool is missing.
 if command -v shasum >/dev/null 2>&1; then
@@ -83,9 +91,39 @@ fi
 [ -n "$sha" ] || die "sha256 computation failed for $dest"
 
 # Rewrite the five pinned fields in place (anchored, one per line).
+# Every step is checked. A silent no-match is exactly how #34 shipped a half-updated pins.env: the
+# key must exist before the edit, the replacement must be a single line (a multi-line one makes sed
+# fail), and the new line must actually be present afterwards. Any of those failing is fatal — a
+# partially-rewritten pin file is worse than no update, because it looks like a successful bump.
 ed_pins() { # <key> <new-value-line>
   local key="$1" line="$2"
-  sed -i.bak -E "s|^${key}=.*$|${line}|" "$PINS" && rm -f "$PINS.bak"
+  # Note $'\n', not "$(printf '\n')" — command substitution strips trailing newlines, so the latter
+  # expands to an empty string and the pattern matches every input.
+  case "$line" in
+    *$'\n'*) die "internal: multi-line replacement for $key" ;;
+  esac
+  # The replacement must actually be an assignment to this key. Without this, ed_pins "A" "B=1"
+  # happily rewrites A's line to B=1 and the postcondition below still passes, because it only
+  # checks that the line is present — so a caller typo would silently rename a pin.
+  case "$line" in
+    "$key="*) ;;
+    *) die "internal: replacement for $key does not assign $key (got: $line)" ;;
+  esac
+  grep -qE "^${key}=" "$PINS" || die "pins.env has no '${key}=' line to update"
+  # Escape the replacement side: & means "the whole match" to sed, \ escapes, and | is our
+  # delimiter. A pinned URL with a query string would otherwise rewrite to something other than
+  # what we asked for while sed still exits 0. Escape for sed, but verify against the ORIGINAL
+  # $line, since that is the literal text sed should have written.
+  local escaped
+  escaped="$(printf '%s' "$line" | sed 's/[\\&|]/\\&/g')" || die "couldn't escape replacement for $key"
+  sed -i.bak -E "s|^${key}=.*$|${escaped}|" "$PINS" || die "sed failed rewriting $key in pins.env"
+  # Keep the backup until the postcondition passes, then restore from it on failure — otherwise a
+  # bad rewrite leaves pins.env mangled with no way back.
+  if ! grep -qxF "$line" "$PINS"; then
+    mv -f "$PINS.bak" "$PINS" || die "rewrite of $key failed AND pins.env could not be restored"
+    die "rewrite of $key did not take effect in pins.env (restored from backup)"
+  fi
+  rm -f "$PINS.bak"
 }
 ed_pins "RS3_PINNED_VER"  "RS3_PINNED_VER=\"$latest_ver\""
 ed_pins "RS3_PINNED_FILE" "RS3_PINNED_FILE=\"$latest_file\""
