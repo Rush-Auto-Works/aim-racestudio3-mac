@@ -54,9 +54,22 @@ copy_if_present "$BRIDGE_LOG"                     "aim-bridge.log"
   echo "macOS: $(sw_vers -productVersion 2>/dev/null) ($(sw_vers -buildVersion 2>/dev/null))"
   echo "arch:  $(uname -m)"
   echo "install root: $INSTALL_ROOT"
+  # Report what is INSTALLED and what this app PINS as two separate facts. Reporting only the pin
+  # (what this did before) made every support log claim the pinned version regardless of what the
+  # user was actually running, which is exactly how the "a DMG upgrade doesn't update RS3" bug
+  # stayed invisible. Parsed inline because this script embeds no lib/ (build-apps.sh:326-331);
+  # lib/wine.sh::rs3_installed_ver is the same one-liner and the same fixture covers both.
+  xmv="$INSTALL_ROOT/prefix/drive_c/AIM_SPORT/RaceStudio3/RaceStudio3.xmv"
+  inst="$(sed -nE 's|.*<p n="VERSION">([^<]*)</p>.*|\1|p' "$xmv" 2>/dev/null | head -1)"
+  echo "RS3 version (installed): ${inst:-unknown (no $xmv)}"
   if [ -f "$PINS" ]; then
-    echo "RS3 version: $(sed -nE 's/^RS3_PINNED_VER="(.*)"/\1/p' "$PINS")"
+    pinned="$(sed -nE 's/^RS3_PINNED_VER="(.*)"/\1/p' "$PINS")"
+    echo "RS3 version (pinned):    $pinned"
     echo "pkg rev:     $(sed -nE 's/^RS3_PKG_REV="(.*)"/\1/p' "$PINS")"
+    # A trailing ".0" is AiM's fourth field, not a different build, so don't cry mismatch over it.
+    if [ -n "$inst" ] && [ -n "$pinned" ] && [ "${inst%.0}" != "$pinned" ]; then
+      echo "  ^ installed differs from pinned — the upgrade never ran, or RS3 updated itself"
+    fi
   fi
   os_major="$(sw_vers -productVersion 2>/dev/null | cut -d. -f1)"
   if [ -x "$CTL" ]; then
