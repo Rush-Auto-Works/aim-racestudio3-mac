@@ -32,6 +32,11 @@ assert_false "ver_cmp 3..8 3.8"          "empty field is refused"
 assert_eq "$(ver_cmp 3..8 3.8)" ""       "empty field prints nothing"
 assert_false "ver_cmp '3.83. 8' 3.83.8"  "whitespace inside a field is refused"
 assert_false "ver_cmp 3.83.39. 3.83.39"  "trailing separator is refused"
+# grep anchors ^/$ per line, so a two-line value whose first line parsed used to validate and
+# then get merged with the second line's fields. Must be refused outright.
+MULTILINE="$(printf '3.83.39\n9.9.9')"
+assert_false "ver_cmp \"\$MULTILINE\" 3.83.39"    "multi-line version is refused"
+assert_eq "$(ver_cmp "$MULTILINE" 3.83.39)" ""    "multi-line version prints nothing"
 assert_false "ver_cmp 3.83 3.83"         "one-field-too-few is refused"
 # An unbounded digit run overflows bash arithmetic and reverses the answer, so it is refused
 # rather than compared.
