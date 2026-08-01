@@ -82,12 +82,15 @@ rc=$?
 # A's line to B=1 and the postcondition still passes, because it only checks the line is present —
 # so a caller typo would silently rename a pin and drop the real one.
 fresh_pins
-before="$(cat "$SBX/pins.env")"
+# Compare with cmp against a copy, not "$(cat …)" = "$(cat …)": command substitution strips trailing
+# newlines, so a rejected rewrite that ate the final newline would slip through a string compare.
+before="$SBX/pins.env.before"
+cp "$SBX/pins.env" "$before"
 PINS="$SBX/pins.env" bash "$SBX/harness.sh" "RS3_PINNED_SIZE" "RS3_WRONG_KEY=1" >/dev/null 2>&1
 rc=$?
 [ "$rc" -ne 0 ] && ok "replacement assigning a different key is fatal" || bad "key/line mismatch was accepted"
-[ "$(cat "$SBX/pins.env")" = "$before" ] \
-  && ok "pins.env untouched after a rejected key/line mismatch" || bad "pins.env was modified"
+cmp -s "$SBX/pins.env" "$before" \
+  && ok "pins.env byte-identical after a rejected key/line mismatch" || bad "pins.env was modified"
 [ ! -f "$SBX/pins.env.bak" ] && ok "no .bak left behind" || bad ".bak left behind"
 # Note: the restore-from-backup branch is defensive and not exercised here. With the replacement
 # escaped and the key/line agreement enforced, there is no input that reaches sed and then fails the
@@ -96,17 +99,21 @@ rc=$?
 # THE #34 CASE: a key that does not exist must be fatal, not a silent no-op. This is the exact
 # shape of the original bug — sed matched nothing and the script reported success anyway.
 fresh_pins
+cp "$SBX/pins.env" "$before"
 PINS="$SBX/pins.env" bash "$SBX/harness.sh" "RS3_NOT_A_KEY" "RS3_NOT_A_KEY=1" >/dev/null 2>&1
 [ $? -ne 0 ] && ok "missing key is fatal (the #34 silent no-op)" || bad "missing key silently succeeded"
+cmp -s "$SBX/pins.env" "$before" \
+  && ok "pins.env byte-identical after a missing key" || bad "pins.env was modified on a missing key"
 
 # A multi-line replacement is what the broken stat produced. It must be rejected outright rather
 # than fed to sed, where it produces an unterminated s command and leaves the pin stale.
 fresh_pins
+cp "$SBX/pins.env" "$before"
 PINS="$SBX/pins.env" bash "$SBX/harness.sh" "RS3_PINNED_SIZE" "$(printf 'RS3_PINNED_SIZE=1\nBlock size: 4096')" >/dev/null 2>&1
 rc=$?
 [ "$rc" -ne 0 ] && ok "multi-line replacement is fatal" || bad "multi-line replacement was accepted"
-grep -qxF 'RS3_PINNED_SIZE=345795344' "$SBX/pins.env" \
-  && ok "pins.env untouched after a rejected rewrite" || bad "pins.env was modified by a rejected rewrite"
+cmp -s "$SBX/pins.env" "$before" \
+  && ok "pins.env byte-identical after a rejected rewrite" || bad "pins.env was modified by a rejected rewrite"
 
 echo "unit-update-pins: $P passed, $F failed"
 [ "$F" -eq 0 ]
