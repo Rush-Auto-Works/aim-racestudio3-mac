@@ -26,6 +26,20 @@ assert_eq "$(ver_cmp 3.83.08 3.83.7)" gt "leading zero compares base-10"
 # garbage is refused, not guessed
 assert_false "ver_cmp 3.83.x 3.83.39" "non-numeric field returns nonzero"
 assert_eq "$(ver_cmp 3.83.x 3.83.39)" "" "non-numeric field prints nothing"
+# Malformed input must be refused, not guessed at. Word splitting used to collapse an empty or
+# whitespace field into a valid-looking one, so these all silently compared equal.
+assert_false "ver_cmp 3..8 3.8"          "empty field is refused"
+assert_eq "$(ver_cmp 3..8 3.8)" ""       "empty field prints nothing"
+assert_false "ver_cmp '3.83. 8' 3.83.8"  "whitespace inside a field is refused"
+assert_false "ver_cmp 3.83.39. 3.83.39"  "trailing separator is refused"
+assert_false "ver_cmp 3.83 3.83"         "one-field-too-few is refused"
+# An unbounded digit run overflows bash arithmetic and reverses the answer, so it is refused
+# rather than compared.
+assert_false "ver_cmp 999999999999999999999999999.0.0 1.0.0" "oversized field is refused"
+assert_eq "$(ver_cmp 999999999999999999999999999.0.0 1.0.0)" "" "oversized field prints nothing"
+# A wrong argument count must fail, not return a comparison against nothing.
+assert_false "ver_cmp 3.83.39"           "one argument is refused"
+assert_false "ver_cmp"                   "no arguments is refused"
 
 # ---- rs3_installed_ver ---------------------------------------------------------------------
 assert_eq "$(rs3_installed_ver "$FIX")" "3.83.26.0" "reads VERSION from the real manifest"
@@ -37,10 +51,16 @@ assert_eq "$(rs3_installed_ver "$MISSING")" "" "missing file prints nothing"
 NOTAG="$SANDBOX/notag.xmv"
 printf '<?xml version="1.0"?>\r\n<info_version_sw>\r\n</info_version_sw>' > "$NOTAG"
 assert_false "rs3_installed_ver '$NOTAG'" "manifest without a VERSION tag returns nonzero"
+assert_eq "$(rs3_installed_ver "$NOTAG")" "" "tagless manifest prints nothing"
 
 JUNK="$SANDBOX/junk.xmv"
 printf '<p n="VERSION">not.a.version</p>\r\n' > "$JUNK"
 assert_false "rs3_installed_ver '$JUNK'" "non-version value is refused"
+assert_eq "$(rs3_installed_ver "$JUNK")"  "" "implausible value prints nothing"
+
+OVER="$SANDBOX/over.xmv"
+printf '<p n="VERSION">999999999999999999999999999.0.0</p>\r\n' > "$OVER"
+assert_false "rs3_installed_ver '$OVER'" "oversized version is refused"
 
 TRUNC="$SANDBOX/trunc.xmv"
 printf '<p n="VERSION">3.83</p>\r\n' > "$TRUNC"
@@ -52,6 +72,7 @@ assert_eq "$(rs3_installed_ver "$THREE")" "3.83.26" "three-field value is accept
 
 # ---- rs3_installed_at_least (reads $PREFIX/drive_c/$RS3_REL_XMV) ----------------------------
 mkdir -p "$PREFIX/drive_c/$(dirname "$RS3_REL_XMV")"
+assert_false "rs3_installed_at_least" "no argument is refused"
 assert_false "rs3_installed_at_least 3.83.39" "unknown install is NOT satisfied"
 
 ditto "$FIX" "$PREFIX/drive_c/$RS3_REL_XMV"
