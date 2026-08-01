@@ -98,3 +98,17 @@ download_verified() {
   fi
   mv -f "$part" "$dest"
 }
+
+# verify_local_asset <path> <want_name> <want_size> [want_sha256]
+# True only when the file on disk IS the asset we mean to install. Every path that produces an
+# installer WITHOUT downloading it — a filename remembered in config.env, a file the user picked in
+# the GUI, one found in ~/Downloads — goes through this, so none of them can smuggle in a different
+# (or corrupt) build than download_verified would have accepted. Name is checked as well as bytes:
+# a correct-looking file of the WRONG VERSION is the failure this exists to stop.
+verify_local_asset() {
+  local p="$1" name="$2" want_size="$3" want_sha="${4:-}"
+  [ -f "$p" ] || return 1
+  [ "$(basename "$p")" = "$name" ] || return 1
+  [ "$(file_size "$p")" = "$want_size" ] || return 1
+  [ -z "$want_sha" ] || [ "$(sha256 "$p")" = "$want_sha" ]
+}

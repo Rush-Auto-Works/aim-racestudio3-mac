@@ -67,4 +67,30 @@ assert_false "rs3_url_from_page 'http://nope.invalid/page.html' \"\$RS3_PINNED_F
 assert_eq "$(printf '%s' "$RS3_PINNED_URL" | sed 's#.*/##')" "$RS3_PINNED_FILE" "pinned URL ends in pinned filename"
 assert_true "https_guard \"\$RS3_PINNED_URL\"" "pinned URL is https"
 
+# --- verify_local_asset -----------------------------------------------------------------------
+# Every locally-sourced installer (a config.env path, a GUI-picked file, one found in ~/Downloads)
+# must clear the same bar a download does: right name, right size, right bytes.
+VLA="$SANDBOX/vla"; mkdir -p "$VLA"
+GOOD="$VLA/RaceStudio3-64_39999_000000_000000_20260101_000000.exe"
+printf 'payload' > "$GOOD"
+GSIZE="$(file_size "$GOOD")"; GSHA="$(sha256 "$GOOD")"
+GNAME="$(basename "$GOOD")"
+
+assert_true  "verify_local_asset '$GOOD' '$GNAME' '$GSIZE' '$GSHA'" "accepts the real asset"
+assert_true  "verify_local_asset '$GOOD' '$GNAME' '$GSIZE'"          "sha is optional"
+assert_false "verify_local_asset '$VLA/absent.exe' '$GNAME' '$GSIZE' '$GSHA'" "rejects a missing file"
+
+STALE="$VLA/RaceStudio3-64_38326_000000_000000_20260613_071826.exe"
+printf 'payload' > "$STALE"
+assert_false "verify_local_asset '$STALE' '$GNAME' '$GSIZE' '$GSHA'" \
+  "rejects a stale basename even when the bytes match"
+
+SHORT="$VLA/short/$GNAME"; mkdir -p "$VLA/short"; printf 'pay' > "$SHORT"
+assert_false "verify_local_asset '$SHORT' '$GNAME' '$GSIZE' '$GSHA'" "rejects a truncated file"
+
+TAMPER="$VLA/tamper/$GNAME"; mkdir -p "$VLA/tamper"; printf 'payloaD' > "$TAMPER"
+assert_eq "$(file_size "$TAMPER")" "$GSIZE" "tampered file is the same size"
+assert_false "verify_local_asset '$TAMPER' '$GNAME' '$GSIZE' '$GSHA'" \
+  "rejects a same-name same-size file with different bytes"
+
 finish
