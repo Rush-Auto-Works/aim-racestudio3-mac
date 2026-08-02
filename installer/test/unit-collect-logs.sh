@@ -119,6 +119,32 @@ assert_false "grep -q 'not-a-version' '$SIPIN'" \
 assert_false "grep -q 'installed differs from pinned' '$SIPIN'" \
   "malformed pinned version has no mismatch warning"
 
+# Zero-padded fields are numerically equal to the same version — not a mismatch.
+printf 'RS3_PINNED_VER="3.83.8"\nRS3_PKG_REV="1"\n' > "$SANDBOX/pins.env"
+ROOTZ="$SANDBOX/appsupport-z"; mkdir -p "$ROOTZ/prefix/drive_c/AIM_SPORT/RaceStudio3"
+sed 's|3\.83\.26\.0|3.83.08.0|' "$FIX" > "$ROOTZ/prefix/drive_c/AIM_SPORT/RaceStudio3/RaceStudio3.xmv"
+DESKZ="$SANDBOX/desktop-z"; mkdir -p "$DESKZ"
+RS3_APP_SUPPORT="$ROOTZ" RS3_DESKTOP_DIR="$DESKZ" RS3_OPEN_CMD="$SANDBOX/fake-open.sh" \
+  bash "$CONTROLLED_SCRIPT"
+OUTZ="$(find "$DESKZ" -maxdepth 1 -type d -name 'AiM-Logs-*' | head -1)"
+SIZ="$OUTZ/system-info.txt"
+assert_true "grep -q 'RS3 version (installed): 3.83.08.0' '$SIZ'" \
+  "zero-padded installed version is reported as-is"
+assert_false "grep -q 'installed differs from pinned' '$SIZ'" \
+  "zero-padded equal version has no mismatch warning"
+
+# A 4-field pin equal to the installed 4-field manifest is not a mismatch either.
+printf 'RS3_PINNED_VER="3.83.26.0"\nRS3_PKG_REV="1"\n' > "$SANDBOX/pins.env"
+ROOT4P="$SANDBOX/appsupport-4p"; mkdir -p "$ROOT4P/prefix/drive_c/AIM_SPORT/RaceStudio3"
+cp "$FIX" "$ROOT4P/prefix/drive_c/AIM_SPORT/RaceStudio3/RaceStudio3.xmv"
+DESK4P="$SANDBOX/desktop-4p"; mkdir -p "$DESK4P"
+RS3_APP_SUPPORT="$ROOT4P" RS3_DESKTOP_DIR="$DESK4P" RS3_OPEN_CMD="$SANDBOX/fake-open.sh" \
+  bash "$CONTROLLED_SCRIPT"
+OUT4P="$(find "$DESK4P" -maxdepth 1 -type d -name 'AiM-Logs-*' | head -1)"
+SI4P="$OUT4P/system-info.txt"
+assert_false "grep -q 'installed differs from pinned' '$SI4P'" \
+  "4-field pin equal to 4-field installed has no mismatch warning"
+
 # A malformed VERSION is unknown and cannot trigger a mismatch diagnosis.
 ROOTB="$SANDBOX/appsupport-b"; mkdir -p "$ROOTB/prefix/drive_c/AIM_SPORT/RaceStudio3"
 printf '%s\n' '<p n="VERSION">not-a-version</p>' > \

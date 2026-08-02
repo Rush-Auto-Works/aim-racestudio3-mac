@@ -23,6 +23,9 @@ assert_eq "$(ver_cmp v3.83.39-1 3.83.39.1)" eq "release tag == CFBundleVersion"
 assert_eq "$(ver_cmp v3.83.39-2 v3.83.39-1)" gt "pkg rev is a real field"
 # leading zeros must not be read as octal
 assert_eq "$(ver_cmp 3.83.08 3.83.7)" gt "leading zero compares base-10"
+# A single trailing newline is normalized by _ver_ok (regex `$` matches just before it), so it
+# does not silently change the verdict; an inner newline is still refused outright.
+assert_eq "$(ver_cmp "$(printf '3.83.39\n')" 3.83.39)" eq "trailing newline is normalized"
 # garbage is refused, not guessed
 assert_false "ver_cmp 3.83.x 3.83.39" "non-numeric field returns nonzero"
 assert_eq "$(ver_cmp 3.83.x 3.83.39)" "" "non-numeric field prints nothing"

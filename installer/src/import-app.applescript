@@ -51,9 +51,13 @@ on needSetup()
 end needSetup
 
 on isInstalled(core)
+	-- Mirror RaceStudio 3.app: importing only needs a set-up prefix, so an OLDER RaceStudio 3 is
+	-- fine too. The strict "is-installed" action reports RS3_ABSENT for an outdated build (it
+	-- means "satisfies the pin"), which would wrongly refuse the import — ask install-state and
+	-- accept anything except a genuinely-absent install.
 	try
-		set out to do shell script "UI_MODE=applet " & quoted form of core & " is-installed 2>/dev/null"
-		return (out contains "RS3_INSTALLED")
+		set out to do shell script "UI_MODE=applet " & quoted form of core & " install-state 2>/dev/null"
+		return (out does not contain "RS3_ABSENT")
 	on error
 		return false
 	end try

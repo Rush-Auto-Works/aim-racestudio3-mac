@@ -34,6 +34,21 @@ chk_marker() {  # $1=file  $2=marker  $3=label
   else echo "  $3: not found"; fi
 }
 
+# _ver_same <a> <b> : true when two already-validated versions are numerically equal — the same
+# rule as lib/wine.sh::ver_cmp (each field base-10, missing trailing fields count as zero), so
+# "3.83.08.0" == "3.83.8" and "3.83.26.0" == "3.83.26". Inlined because this script embeds no
+# lib/. Both inputs must have passed the version boundary above.
+_ver_same() {
+  local i x y
+  local -a a b
+  a=(${1//./ }); b=(${2//./ })
+  for (( i = 0; i < 4; i++ )); do
+    x="${a[i]:-0}"; y="${b[i]:-0}"
+    [ $((10#$x)) -eq $((10#$y)) ] || return 1
+  done
+  return 0
+}
+
 ts="$(date '+%Y%m%d-%H%M%S')"
 OUT="$DESKTOP/AiM-Logs-$ts"
 mkdir -p "$OUT" || { echo "failed to create output folder: $OUT" >&2; exit 1; }
@@ -70,7 +85,9 @@ copy_if_present "$BRIDGE_LOG"                     "aim-bridge.log"
   # silent about the pin reads as "there is no pin", which is a different and wrong story.
   pinned=""; pkgrev=""
   if [ -f "$PINS" ]; then
-    pinned="$(sed -nE 's/^RS3_PINNED_VER="(.*)"/\1/p' "$PINS")"
+    # head -1: a duplicated RS3_PINNED_VER line (botched update edit) must not become a
+    # multi-line value that grep -Eq then accepts per-line.
+    pinned="$(sed -nE 's/^RS3_PINNED_VER="(.*)"/\1/p' "$PINS" | head -1)"
     pkgrev="$(sed -nE 's/^RS3_PKG_REV="(.*)"/\1/p' "$PINS")"
   fi
   # Same acceptance boundary as the installed version above: a malformed RS3_PINNED_VER is UNKNOWN
@@ -78,8 +95,9 @@ copy_if_present "$BRIDGE_LOG"                     "aim-bridge.log"
   printf '%s' "$pinned" | grep -Eq '^[0-9]{1,9}(\.[0-9]{1,9}){2,3}$' || pinned=""
   echo "RS3 version (pinned):    ${pinned:-unknown (no RS3_PINNED_VER in $PINS)}"
   echo "pkg rev:     ${pkgrev:-unknown}"
-  # A trailing ".0" is AiM's fourth field, not a different build, so don't cry mismatch over it.
-  if [ -n "$inst" ] && [ -n "$pinned" ] && [ "${inst%.0}" != "$pinned" ]; then
+  # Numeric equal-fields compare (see _ver_same): "3.83.26.0" and "3.83.26" are the same build,
+  # so don't cry mismatch over it.
+  if [ -n "$inst" ] && [ -n "$pinned" ] && ! _ver_same "$inst" "$pinned"; then
     echo "  ^ installed differs from pinned — the upgrade never ran, or RS3 updated itself"
   fi
   os_major="$(sw_vers -productVersion 2>/dev/null | cut -d. -f1)"
