@@ -12,6 +12,27 @@ only this installer is versioned here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.83.39-2] — 2026-08-02
+
+**Installing a newer version of this app now actually updates RaceStudio 3.**
+
+- **A newer DMG now replaces the RaceStudio 3 you already have.** Before this, it didn't. The
+  installer remembered the file it downloaded the first time and never checked which version that
+  file was, so it reinstalled the copy you already had. If you installed 3.83.39-1 over an older
+  setup, you are still on the older RaceStudio 3. Open the app once and it offers to bring you up
+  to date.
+- **You get an update prompt instead of the first-run welcome.** It says the download is about
+  350 MB and that your settings and telemetry are left alone. "Not Now" just opens RaceStudio 3.
+- **Nothing ever puts RaceStudio 3 back to an older version.** If RaceStudio 3 updated itself past
+  the version this app ships, it stays where it is.
+- **"Show RaceStudio 3 Logs" now reports the version you are running.** It used to report the
+  version this app expected rather than the one installed, which is how this went unnoticed. It
+  shows both now, and flags a mismatch.
+- **"Reinstall" reinstalls the current version**, not the one it had cached.
+- **If you download the installer yourself, it gets checked first.** Whether you pick it in the
+  dialog or leave it in your Downloads folder, it is used only if it is exactly the file this app
+  expects.
+
 ## [3.83.39-1] — 2026-07-31
 
 **Fixes a freeze when you clone or import a configuration, and updates RaceStudio 3 to 3.83.39.**

@@ -23,6 +23,21 @@ mostly the GUI and the live-hardware paths.
 2. Install. Confirm afterwards every pre-existing file is byte-identical (nothing overwritten) and
    `…/prefix/drive_c/AIM_SPORT/RaceStudio3/user` is a symlink to `~/Documents/AIM_SPORT`.
 
+## Manual — upgrading to a DMG that ships a newer RaceStudio 3
+1. Start from a Mac with an older RS3 installed (check with
+   `sed -n 's|.*<p n="VERSION">\(.*\)</p>.*|\1|p' ~/Library/Application\ Support/RaceStudio3/prefix/drive_c/AIM_SPORT/RaceStudio3/RaceStudio3.xmv`).
+2. Quit RaceStudio 3. Install the newer DMG over the top (drag, replace).
+3. Launch `RaceStudio 3.app`. Expect the **"This version of the app installs a newer RaceStudio 3"**
+   dialog — NOT the first-run welcome, and NOT a straight launch of the old version.
+4. Click Update. Expect a real ~350 MB download, then the RS3 install, then "RaceStudio 3 is up to date."
+5. Re-run the command from step 1: it must now report the version in `pins.env`.
+6. Open "Show RaceStudio 3 Logs" and confirm `system-info.txt` reports `RS3 version (installed):`
+   matching `RS3 version (pinned):` with no mismatch warning.
+7. Confirm the data folder is untouched: sessions and configs are all still listed in RS3.
+8. Launch the app once more — it must go straight to RaceStudio 3 with no dialog.
+9. Repeat from step 3 and choose **Not Now** instead: it must open the RaceStudio 3 you already
+   have, not leave the app unusable.
+
 ## Manual — interrupts
 1. Quit the installer (or pull the network) mid-Wine-download → re-run → resumes, no corruption.
 2. Force-quit during `wineboot` → re-run → prefix redone.
