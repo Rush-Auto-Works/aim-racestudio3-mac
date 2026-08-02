@@ -99,6 +99,26 @@ assert_true "grep -q 'RS3 version (installed): 3.83.26.0$' '$SIA4'" \
 assert_false "grep -q 'installed differs from pinned' '$SIA4'" \
   "four-field .0 equivalent has no mismatch warning"
 
+# A malformed RS3_PINNED_VER is unknown even when the installed manifest is valid.
+printf 'RS3_PINNED_VER="not-a-version"\nRS3_PKG_REV="1"\n' > "$SANDBOX/pins.env"
+ROOTPIN="$SANDBOX/appsupport-pin"; mkdir -p "$ROOTPIN/prefix/drive_c/AIM_SPORT/RaceStudio3"
+cp "$FIX" "$ROOTPIN/prefix/drive_c/AIM_SPORT/RaceStudio3/RaceStudio3.xmv"
+DESKPIN="$SANDBOX/desktop-pin"; mkdir -p "$DESKPIN"
+RS3_APP_SUPPORT="$ROOTPIN" RS3_DESKTOP_DIR="$DESKPIN" RS3_OPEN_CMD="$SANDBOX/fake-open.sh" \
+  bash "$CONTROLLED_SCRIPT"
+rc=$?
+OUTPIN="$(find "$DESKPIN" -maxdepth 1 -type d -name 'AiM-Logs-*' | head -1)"
+SIPIN="$OUTPIN/system-info.txt"
+assert_true "[ $rc -eq 0 ]" "malformed pinned version still exits 0"
+assert_true "grep -q 'RS3 version (installed): 3.83.26.0' '$SIPIN'" \
+  "malformed pin scenario has a valid installed version"
+assert_true "grep -q 'RS3 version (pinned):    unknown' '$SIPIN'" \
+  "malformed pinned version reports unknown"
+assert_false "grep -q 'not-a-version' '$SIPIN'" \
+  "malformed pinned version is not printed"
+assert_false "grep -q 'installed differs from pinned' '$SIPIN'" \
+  "malformed pinned version has no mismatch warning"
+
 # A malformed VERSION is unknown and cannot trigger a mismatch diagnosis.
 ROOTB="$SANDBOX/appsupport-b"; mkdir -p "$ROOTB/prefix/drive_c/AIM_SPORT/RaceStudio3"
 printf '%s\n' '<p n="VERSION">not-a-version</p>' > \

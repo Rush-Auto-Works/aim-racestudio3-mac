@@ -26,17 +26,34 @@ mostly the GUI and the live-hardware paths.
 ## Manual — upgrading to a DMG that ships a newer RaceStudio 3
 1. Start from a Mac with an older RS3 installed (check with
    `sed -n 's|.*<p n="VERSION">\(.*\)</p>.*|\1|p' ~/Library/Application\ Support/RaceStudio3/prefix/drive_c/AIM_SPORT/RaceStudio3/RaceStudio3.xmv`).
+   Identify the data folder — it may be `~/Documents/AIM_SPORT` or `~/AIM_SPORT` — and capture
+   its file hashes before upgrading: set `DATA_DIR` to whichever folder exists, then run
+   `find "$DATA_DIR" -type f -exec shasum {} + | sort > /tmp/before.txt`.
 2. Quit RaceStudio 3. Install the newer DMG over the top (drag, replace).
 3. Launch `RaceStudio 3.app`. Expect the **"This version of the app installs a newer RaceStudio 3"**
    dialog — NOT the first-run welcome, and NOT a straight launch of the old version.
-4. Click Update. Expect a real ~350 MB download, then the RS3 install, then "RaceStudio 3 is up to date."
-5. Re-run the command from step 1: it must now report the version in `pins.env`.
+4. Click Update. Expect the installer to be acquired (downloaded, or reused from the cache if a
+   verified copy is already there), then RS3 to install, followed by "RaceStudio 3 is up to date."
+   To specifically exercise the download path, first remove
+   `~/Library/Application Support/RaceStudio3/installer/RaceStudio3-64_*.exe`.
+5. Re-run the command from step 1 and compare it with `RS3_PINNED_VER` in
+   `installer/src/pins.env`. This prints a concrete yes/no result (AiM's equivalent trailing
+   `.0` is accepted):
+   `installed="$(sed -n 's|.*<p n="VERSION">\(.*\)</p>.*|\1|p' ~/Library/Application\ Support/RaceStudio3/prefix/drive_c/AIM_SPORT/RaceStudio3/RaceStudio3.xmv)"; pinned="$(sed -n 's/^RS3_PINNED_VER="\(.*\)"/\1/p' installer/src/pins.env)"; if [ "$installed" = "$pinned" ] || [ "${installed%.0}" = "$pinned" ]; then echo YES; else echo NO; fi`
 6. Open "Show RaceStudio 3 Logs" and confirm `system-info.txt` reports `RS3 version (installed):`
    matching `RS3 version (pinned):` with no mismatch warning.
-7. Confirm the data folder is untouched: sessions and configs are all still listed in RS3.
+7. Confirm the data folder is byte-identical: with the same `DATA_DIR` as step 1, run
+   `find "$DATA_DIR" -type f -exec shasum {} + | sort > /tmp/after.txt; if diff -q /tmp/before.txt /tmp/after.txt >/dev/null; then echo YES; else echo NO; fi`.
+   The result must be YES; sessions and configs should also still be listed in RS3.
 8. Launch the app once more — it must go straight to RaceStudio 3 with no dialog.
-9. Repeat from step 3 and choose **Not Now** instead: it must open the RaceStudio 3 you already
-   have, not leave the app unusable.
+
+## Manual — declining an available RS3 update
+1. Restore the older RS3 installation (or reinstall the older DMG) so its manifest is older than
+   `RS3_PINNED_VER` in the newer DMG's `installer/src/pins.env`. Quit RaceStudio 3.
+2. Launch the newer DMG's `RaceStudio 3.app`. Expect the **"This version of the app installs a
+   newer RaceStudio 3"** dialog.
+3. Click **Not Now**. It must open the RaceStudio 3 already installed, and that app must remain
+   usable; do not click Update in this scenario.
 
 ## Manual — interrupts
 1. Quit the installer (or pull the network) mid-Wine-download → re-run → resumes, no corruption.
