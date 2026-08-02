@@ -179,6 +179,10 @@ _ver_fields() {
 # newline and merged fields from both lines. =~ anchors against the whole string.
 _ver_ok() {
   local v="${1#v}" re='^[0-9]{1,9}([.-][0-9]{1,9}){2,3}$'
+  # `$` in the regex can also match just before a trailing newline, so "3.83.39\n" would pass
+  # as-is. Callers normally get versions via $(), which strips the newline — strip it here too
+  # so the accept/reject decision is explicit rather than an accident of how the value was read.
+  v="${v%$'\n'}"
   [[ $v =~ $re ]]
 }
 
@@ -193,10 +197,10 @@ ver_cmp() {
   A=($(_ver_fields "$1")); B=($(_ver_fields "$2"))
   local n="${#A[@]}" i x y
   [ "${#B[@]}" -gt "$n" ] && n="${#B[@]}"
-  [ "$n" -gt 0 ] || return 1
+  # A and B hold only _ver_ok-validated fields ([0-9]{1,9}, 3-4 of them), so no per-iteration
+  # guard is needed; the :-0 defaults below fill missing trailing fields as zero.
   for (( i = 0; i < n; i++ )); do
     x="${A[i]:-0}"; y="${B[i]:-0}"
-    case "$x$y" in ''|*[!0-9]*) return 1 ;; esac
     x=$((10#$x)); y=$((10#$y))          # base-10: "08" is not octal here
     if [ "$x" -gt "$y" ]; then printf 'gt'; return 0; fi
     if [ "$x" -lt "$y" ]; then printf 'lt'; return 0; fi

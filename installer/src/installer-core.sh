@@ -186,7 +186,12 @@ phase_acquire_installer() {
   # build that happened to be the same length.
   local d="$HOME/Downloads/$RS3_PINNED_FILE"
   if verify_local_asset "$d" "$RS3_PINNED_FILE" "$RS3_PINNED_SIZE" "$RS3_PINNED_SHA256"; then
-    ditto "$d" "$want"; ui_persist INSTALLER_EXE "$want"
+    ditto "$d" "$want" || die "Couldn't copy the installer from Downloads: $d"
+    # Verify the COPY, not the source: ditto can truncate it (full cache volume, etc), and a
+    # truncated exe would otherwise fail deep inside the MSI instead of here at the source.
+    verify_local_asset "$want" "$RS3_PINNED_FILE" "$RS3_PINNED_SIZE" "$RS3_PINNED_SHA256" \
+      || { rm -f "$want" 2>/dev/null || true; die "Installer copied from Downloads failed verification."; }
+    ui_persist INSTALLER_EXE "$want"
     ui_say "Using the installer you already have in Downloads."
     return 0
   fi
@@ -269,7 +274,12 @@ phase_silent_install() {
   [ "$DRY_RUN" = 1 ] && { ui_say "[dry-run] would run: wine <installer> /exenoui /qn"; return 0; }
 
   local exe; exe="$(ui_recall INSTALLER_EXE || echo "$INSTALLER_CACHE/$RS3_PINNED_FILE")"
-  [ -f "$exe" ] || die "internal: installer exe missing: $exe"
+  # Verify, not just existence: a stale INSTALLER_EXE persisted by an older config.env (or a
+  # direct `silent-install` phase invocation that skipped acquire-installer) would otherwise
+  # install a different build. acquire-installer always re-persists a verified path, so this
+  # only fires on those stale/direct paths — which is exactly when it should refuse.
+  verify_local_asset "$exe" "$RS3_PINNED_FILE" "$RS3_PINNED_SIZE" "$RS3_PINNED_SHA256" \
+    || die "Installer failed verification: $exe (re-run to re-acquire it)."
 
   # copy installer into the prefix so it runs from C: (avoids odd Z: path quoting)
   local cexe="$PREFIX/drive_c/rs3-installer.exe"
@@ -455,9 +465,15 @@ do_reinstall() {
   # version this app ships. Record it: a support log should show why RS3 went backwards.
   local reinstall_ver reinstall_cmp
   reinstall_ver="$(rs3_installed_ver 2>/dev/null || true)"
-  reinstall_cmp="$(ver_cmp "$reinstall_ver" "$RS3_PINNED_VER" 2>/dev/null || true)"
-  if [ "$reinstall_cmp" = gt ]; then
-    ui_warn "Reinstall will replace RaceStudio 3 $reinstall_ver with the version this app ships ($RS3_PINNED_VER)."
+  if [ -z "$reinstall_ver" ]; then
+    # Unreadable manifest: we can't know the installed version, so say so instead of silently
+    # proceeding with no warning (a wipe + reinstall could be replacing a NEWER build).
+    ui_warn "Reinstall will replace the installed RaceStudio 3 (version could not be read) with the version this app ships ($RS3_PINNED_VER)."
+  else
+    reinstall_cmp="$(ver_cmp "$reinstall_ver" "$RS3_PINNED_VER" 2>/dev/null || true)"
+    if [ "$reinstall_cmp" = gt ]; then
+      ui_warn "Reinstall will replace RaceStudio 3 $reinstall_ver with the version this app ships ($RS3_PINNED_VER)."
+    fi
   fi
   rm -rf "$WINE_ROOT" "$PREFIX" 2>/dev/null || true
   ledger_reset_for_reinstall
@@ -541,9 +557,13 @@ case "$ACTION" in
   install-state)
     # Three states, because "not launchable" has two very different causes and the app says a
     # different thing for each. OUTDATED = a RaceStudio 3 is there but not the one this app ships,
-    # so the install phases need to run again (they no-op for everything already done).
+    # so the install phases need to run again (they no-op for everything already done). An
+    # UNREADABLE manifest is "unknown", not outdated: routing it into the update flow reinstalls
+    # the pin over a version we couldn't read, which could downgrade a newer build — so treat it
+    # as installed and leave it alone.
     if ledger_verify installed && [ -x "$INSTALL_ROOT/bin/launch.sh" ]; then echo RS3_INSTALLED
-    elif [ -f "$PREFIX/drive_c/$RS3_REL_EXE" ] && [ -x "$INSTALL_ROOT/bin/launch.sh" ]; then echo RS3_OUTDATED
+    elif [ -f "$PREFIX/drive_c/$RS3_REL_EXE" ] && [ -x "$INSTALL_ROOT/bin/launch.sh" ]; then
+      if rs3_installed_ver >/dev/null 2>&1; then echo RS3_OUTDATED; else echo RS3_INSTALLED; fi
     else echo RS3_ABSENT; fi ;;
   help)              usage ;;
   *) die "unknown action: $ACTION" ;;

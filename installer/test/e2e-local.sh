@@ -69,6 +69,15 @@ core silent-install || bad "silent-install failed"
 EXE="$APPSUP/prefix/drive_c/AIM_SPORT/RaceStudio3/64/AiMRS3-64-ReleaseU.exe"
 [ -f "$EXE" ] && ok "RS3 exe installed" || bad "RS3 exe missing"
 file "$EXE" | grep -q 'PE32+ executable' && ok "RS3 exe valid PE32+" || bad "RS3 exe bad header"
+# The postcondition phase_silent_install gates on: RaceStudio3.xmv present, parseable, >= pin.
+# Assert it on the REAL prefix (not just "silent-install exited 0") so a future AiM build that
+# writes the manifest later — or in an unrecognized format — is caught here, not on a user's Mac.
+echo "==> postcondition: ledger_verify installed holds on the real prefix (xmv >= pin)"
+if PREFIX="$APPSUP/prefix" bash -c ". '$SRC_DIR/lib/wine.sh'; . '$SRC_DIR/pins.env'; rs3_installed_at_least \"\$RS3_PINNED_VER\""; then
+  ok "RaceStudio3.xmv present + parseable + >= pin"
+else
+  bad "RaceStudio3.xmv missing, unparseable, or < pin — fresh install would be reported as broken"
+fi
 
 echo "==> phase: relocate-data (atomic, into $DATA)"
 core relocate-data || bad "relocate-data failed"
