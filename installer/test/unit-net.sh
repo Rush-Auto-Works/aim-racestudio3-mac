@@ -85,6 +85,13 @@ printf 'payload' > "$STALE"
 assert_false "verify_local_asset '$STALE' '$GNAME' '$GSIZE' '$GSHA'" \
   "rejects a stale basename even when the bytes match"
 
+WRONG_NEWLINE="$VLA/$GNAME"$'\n'
+printf 'payload' > "$WRONG_NEWLINE"
+assert_false 'verify_local_asset "$WRONG_NEWLINE" "$GNAME" "$GSIZE" "$GSHA"' \
+  "rejects a basename with a trailing newline with sha"
+assert_false 'verify_local_asset "$WRONG_NEWLINE" "$GNAME" "$GSIZE"' \
+  "rejects a basename with a trailing newline without sha"
+
 SHORT="$VLA/short/$GNAME"; mkdir -p "$VLA/short"; printf 'pay' > "$SHORT"
 assert_false "verify_local_asset '$SHORT' '$GNAME' '$GSIZE' '$GSHA'" "rejects a truncated file"
 

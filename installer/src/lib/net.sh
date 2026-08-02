@@ -107,6 +107,7 @@ download_verified() {
 # a correct-looking file of the WRONG VERSION is the failure this exists to stop.
 verify_local_asset() {
   local p="$1" name="$2" want_size="$3" want_sha="${4:-}"
+  case "$p" in *$'\n'*) return 1 ;; esac
   [ -f "$p" ] || return 1
   [ "$(basename "$p")" = "$name" ] || return 1
   [ "$(file_size "$p")" = "$want_size" ] || return 1
