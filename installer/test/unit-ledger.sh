@@ -51,4 +51,29 @@ WINE_BIN=""
 assert_false "ledger_skip_if_done wine" "skip_if_done: returns do-the-work when postcondition fails"
 assert_false "ledger_has wine"          "skip_if_done: cleared the stale marker"
 
+# --- ui_forget --------------------------------------------------------------------------------
+ui_persist DATA_DIR "$DATA_DIR"
+ui_persist INSTALLER_EXE "/some/old/RaceStudio3-64_38326_000000_000000_20260613_071826.exe"
+assert_eq "$(ui_recall INSTALLER_EXE)" "/some/old/RaceStudio3-64_38326_000000_000000_20260613_071826.exe" "persisted"
+ui_forget INSTALLER_EXE
+assert_false "ui_recall INSTALLER_EXE" "ui_forget drops the key"
+assert_eq "$(ui_recall DATA_DIR)" "$DATA_DIR" "ui_forget keeps every OTHER key"
+
+# --- ledger_reset_for_reinstall -----------------------------------------------------------------
+# A reinstall that keeps the remembered installer and the cached exe reinstalls exactly the version
+# the user is trying to get off.
+ledger_mark installed; ledger_mark wine
+ui_persist INSTALLER_EXE "$INSTALLER_CACHE/RaceStudio3-64_38326_000000_000000_20260613_071826.exe"
+: > "$INSTALLER_CACHE/RaceStudio3-64_38326_000000_000000_20260613_071826.exe"
+: > "$INSTALLER_CACHE/wine-staging-11.9-osx64.tar.xz"
+
+ledger_reset_for_reinstall
+
+assert_false "ledger_has installed" "reset: cleared the installed marker"
+assert_false "ledger_has wine"      "reset: cleared the wine marker"
+assert_false "ui_recall INSTALLER_EXE" "reset: forgot the remembered installer"
+assert_absent "$INSTALLER_CACHE/RaceStudio3-64_38326_000000_000000_20260613_071826.exe"
+assert_file   "$INSTALLER_CACHE/wine-staging-11.9-osx64.tar.xz"
+assert_eq "$(ui_recall DATA_DIR)" "$DATA_DIR" "reset: kept the user's chosen data folder"
+
 finish

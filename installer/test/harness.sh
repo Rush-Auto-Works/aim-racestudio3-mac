@@ -23,8 +23,9 @@ PREFIX="$INSTALL_ROOT/prefix"
 WINE_ROOT="$INSTALL_ROOT/wine"
 STATE_DIR="$INSTALL_ROOT/state"
 CONFIG_ENV="$STATE_DIR/config.env"
+INSTALLER_CACHE="$INSTALL_ROOT/installer"
 DATA_DIR="$SANDBOX/Documents/AIM_SPORT"
-mkdir -p "$STATE_DIR"
+mkdir -p "$STATE_DIR" "$INSTALLER_CACHE"
 
 # ---- assertions ----------------------------------------------------------------------------
 _T_PASS=0; _T_FAIL=0; _T_NAME="${_T_NAME:-test}"

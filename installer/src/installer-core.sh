@@ -445,7 +445,8 @@ do_reinstall() {
   ui_confirm reinstall_confirm no "This wipes the Wine engine and Windows environment (your data in $DATA_DIR is kept). Continue?" \
     || die "Reinstall cancelled."
   wineserver_kill 2>/dev/null || true
-  rm -rf "$WINE_ROOT" "$PREFIX" "$STATE_DIR"/*.ok 2>/dev/null || true
+  rm -rf "$WINE_ROOT" "$PREFIX" 2>/dev/null || true
+  ledger_reset_for_reinstall
   WINE_BIN=""
   run_all
 }
