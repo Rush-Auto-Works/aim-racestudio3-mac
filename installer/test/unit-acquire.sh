@@ -39,6 +39,11 @@ run_acquire() {   # -> prints output, returns the phase's exit code
       HOME="$SANDBOX/fakehome" RS3_APP_SUPPORT="$ROOT" UI_MODE=applet \
       bash "$SRC/installer-core.sh" acquire-installer 2>&1 )
 }
+run_silent_install() {   # -> prints output, returns the real phase's exit code
+  ( cd "$SANDBOX" && http_proxy= https_proxy= HTTP_PROXY= HTTPS_PROXY= ALL_PROXY= all_proxy= no_proxy='*' \
+      HOME="$SANDBOX/fakehome" RS3_APP_SUPPORT="$ROOT" UI_MODE=applet \
+      bash "$SRC/installer-core.sh" silent-install 2>&1 )
+}
 mkdir -p "$SANDBOX/fakehome/Downloads"
 
 # --- case 1: remembered installer IS the pinned one -> accepted, no network ------------------
@@ -81,6 +86,37 @@ rm -f "$ROOT/state/config.env" "$CACHE/$FILE" "$SANDBOX/fakehome/Downloads/$FILE
 ditto "$ASSET" "$SANDBOX/fakehome/Downloads/$STALE"
 out="$(run_acquire)"; rc=$?
 assert_true "[ $rc -eq 10 ]" "wrong build in Downloads: not accepted"
+
+# --- installed-state: a satisfying newer RS3 must skip even without our marker ---------------
+# This exercises phase_silent_install itself. Before the fix, the missing marker sends the phase
+# past the valid installed postcondition and into the installer-exe check below.
+REFEXE="$HOME/.rs3-w11-test/drive_c/$RS3_REL_EXE"
+if [ -f "$REFEXE" ]; then
+  mkdir -p "$ROOT/prefix/drive_c/$(dirname "$RS3_REL_EXE")"
+  ditto "$REFEXE" "$ROOT/prefix/drive_c/$RS3_REL_EXE"
+  mkdir -p "$ROOT/prefix/drive_c/$(dirname "$RS3_REL_XMV")"
+
+  printf '<p n="VERSION">99.0.0</p>\r\n' > "$ROOT/prefix/drive_c/$RS3_REL_XMV"
+  rm -f "$ROOT/state/installed.ok"
+  assert_absent "$ROOT/state/installed.ok"
+  out="$(run_silent_install)"; rc=$?
+  assert_true "[ $rc -eq 0 ]" "newer RS3 without marker: phase succeeds"
+  assert_true "printf '%s' \"\$out\" | grep -qi 'already installed'" \
+    "newer RS3 without marker: phase skips"
+  assert_file "$ROOT/state/installed.ok"
+
+  # Mirror the real upgrade path: an older installed build is not satisfying, so it must try the
+  # pinned installer. No installer is staged in this case; its internal missing-installer error is
+  # the expected proof that it proceeded instead of printing the skip message.
+  printf '<p n="VERSION">3.83.26.0</p>\r\n' > "$ROOT/prefix/drive_c/$RS3_REL_XMV"
+  rm -f "$ROOT/state/installed.ok"
+  out="$(run_silent_install)"; rc=$?
+  assert_true "[ $rc -ne 0 ]" "older RS3 without marker: phase attempts install"
+  assert_false "printf '%s' \"\$out\" | grep -qi 'already installed'" \
+    "older RS3 without marker: phase does not skip"
+else
+  echo "NOTE: skipped newer/older silent-install marker cases; reference PE is absent: $REFEXE"
+fi
 
 # --- install-state ------------------------------------------------------------------------------
 # The launcher needs three states, not two: a prefix holding an OLDER RaceStudio 3 is neither

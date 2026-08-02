@@ -259,7 +259,13 @@ phase_make_prefix() {
 
 phase_silent_install() {
   ui_progress 5 8 "Installing RaceStudio 3 (this can take several minutes)…"
-  if ledger_skip_if_done installed; then ui_say "RaceStudio 3 already installed."; return 0; fi
+  # The marker is only a cache; the POSTCONDITION is the truth. If a satisfying RaceStudio 3 is
+  # already in the prefix — including one NEWER than our pin, put there by RS3's own in-app
+  # updater — skip and re-mark even when the marker is missing. Without this, a lost marker
+  # (--repair, or this app meeting an existing prefix) reinstalls the pinned build OVER a newer
+  # RaceStudio 3, which is exactly the downgrade the ">=" comparison exists to prevent.
+  if ledger_verify installed; then ledger_mark installed; ui_say "RaceStudio 3 already installed."; return 0; fi
+  ledger_clear installed
   [ "$DRY_RUN" = 1 ] && { ui_say "[dry-run] would run: wine <installer> /exenoui /qn"; return 0; }
 
   local exe; exe="$(ui_recall INSTALLER_EXE || echo "$INSTALLER_CACHE/$RS3_PINNED_FILE")"
@@ -445,6 +451,14 @@ do_reinstall() {
   ui_confirm reinstall_confirm no "This wipes the Wine engine and Windows environment (your data in $DATA_DIR is kept). Continue?" \
     || die "Reinstall cancelled."
   wineserver_kill 2>/dev/null || true
+  # --reinstall is a confirmed, destructive action, so it is allowed to move a user back to the
+  # version this app ships. Record it: a support log should show why RS3 went backwards.
+  local reinstall_ver reinstall_cmp
+  reinstall_ver="$(rs3_installed_ver 2>/dev/null || true)"
+  reinstall_cmp="$(ver_cmp "$reinstall_ver" "$RS3_PINNED_VER" 2>/dev/null || true)"
+  if [ "$reinstall_cmp" = gt ]; then
+    ui_warn "Reinstall will replace RaceStudio 3 $reinstall_ver with the version this app ships ($RS3_PINNED_VER)."
+  fi
   rm -rf "$WINE_ROOT" "$PREFIX" 2>/dev/null || true
   ledger_reset_for_reinstall
   WINE_BIN=""
