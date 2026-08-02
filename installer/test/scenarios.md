@@ -28,22 +28,48 @@ mostly the GUI and the live-hardware paths.
    `sed -n 's|.*<p n="VERSION">\(.*\)</p>.*|\1|p' ~/Library/Application\ Support/RaceStudio3/prefix/drive_c/AIM_SPORT/RaceStudio3/RaceStudio3.xmv`).
    Identify the data folder — it may be `~/Documents/AIM_SPORT` or `~/AIM_SPORT` — and capture
    its file hashes before upgrading: set `DATA_DIR` to whichever folder exists, then run
-   `find "$DATA_DIR" -type f -exec shasum {} + | sort > /tmp/before.txt`.
+   `( set -o pipefail; find "$DATA_DIR" -type f -exec shasum {} + | sort > /tmp/before.txt ) || echo "hash capture FAILED — do not proceed"`.
+   The capture fails closed: an unreadable or missing file makes the pipeline exit non-zero (and
+   prints the `shasum` error), so a broken manifest can never pass the step 7 comparison.
 2. Quit RaceStudio 3. Install the newer DMG over the top (drag, replace).
 3. Launch `RaceStudio 3.app`. Expect the **"This version of the app installs a newer RaceStudio 3"**
    dialog — NOT the first-run welcome, and NOT a straight launch of the old version.
 4. Click Update. Expect the installer to be acquired (downloaded, or reused from the cache if a
    verified copy is already there), then RS3 to install, followed by "RaceStudio 3 is up to date."
+   Before it installs, verify the acquired file against the pin — filename, size and SHA-256 must
+   match `RS3_PINNED_FILE`, `RS3_PINNED_SIZE`, `RS3_PINNED_SHA256` in `installer/src/pins.env`:
+
+   ```bash
+   . installer/src/pins.env
+   I="$(ls ~/Library/Application\ Support/RaceStudio3/installer/RaceStudio3-64_*.exe | head -1)"
+   [ "$(basename "$I")" = "$RS3_PINNED_FILE" ] \
+     && [ "$(stat -f '%z' "$I")" = "$RS3_PINNED_SIZE" ] \
+     && [ "$(shasum -a 256 "$I" | cut -d' ' -f1)" = "$RS3_PINNED_SHA256" ] \
+     && echo "installer verified" \
+     || echo "INSTALLER MISMATCH"
+   ```
+
    To specifically exercise the download path, first remove
    `~/Library/Application Support/RaceStudio3/installer/RaceStudio3-64_*.exe`.
-5. Re-run the command from step 1 and compare it with `RS3_PINNED_VER` in
-   `installer/src/pins.env`. This prints a concrete yes/no result (AiM's equivalent trailing
-   `.0` is accepted):
-   `installed="$(sed -n 's|.*<p n="VERSION">\(.*\)</p>.*|\1|p' ~/Library/Application\ Support/RaceStudio3/prefix/drive_c/AIM_SPORT/RaceStudio3/RaceStudio3.xmv)"; pinned="$(sed -n 's/^RS3_PINNED_VER="\(.*\)"/\1/p' installer/src/pins.env)"; if [ "$installed" = "$pinned" ] || [ "${installed%.0}" = "$pinned" ]; then echo YES; else echo NO; fi`
+5. Re-run the version check with the production semantics (run in bash — it sources the
+   installer's own comparator). A newer installed version still counts as YES (never a downgrade),
+   and an unparseable value reports unknown instead of a silent yes/no:
+
+   ```bash
+   . installer/src/lib/wine.sh
+   installed="$(sed -n 's|.*<p n="VERSION">\(.*\)</p>.*|\1|p' ~/Library/Application\ Support/RaceStudio3/prefix/drive_c/AIM_SPORT/RaceStudio3/RaceStudio3.xmv)"
+   pinned="$(sed -n 's/^RS3_PINNED_VER="\(.*\)"/\1/p' installer/src/pins.env)"
+   case "$(ver_cmp "$installed" "$pinned")" in
+     eq|gt) echo "YES — at or above the pin" ;;
+     lt)    echo "NO — older than the pin" ;;
+     *)     echo "unknown — could not parse installed or pinned" ;;
+   esac
+   ```
 6. Open "Show RaceStudio 3 Logs" and confirm `system-info.txt` reports `RS3 version (installed):`
    matching `RS3 version (pinned):` with no mismatch warning.
-7. Confirm the data folder is byte-identical: with the same `DATA_DIR` as step 1, run
-   `find "$DATA_DIR" -type f -exec shasum {} + | sort > /tmp/after.txt; if diff -q /tmp/before.txt /tmp/after.txt >/dev/null; then echo YES; else echo NO; fi`.
+7. Confirm the data folder is byte-identical: with the same `DATA_DIR` as step 1, capture the
+   after-manifest the same fail-closed way, then compare:
+   `( set -o pipefail; find "$DATA_DIR" -type f -exec shasum {} + | sort > /tmp/after.txt ) || echo "hash capture FAILED — cannot compare"; if diff -q /tmp/before.txt /tmp/after.txt >/dev/null; then echo YES; else echo NO; fi`.
    The result must be YES; sessions and configs should also still be listed in RS3.
 8. Launch the app once more — it must go straight to RaceStudio 3 with no dialog.
 
