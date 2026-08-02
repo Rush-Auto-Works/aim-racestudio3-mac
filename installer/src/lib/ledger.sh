@@ -21,8 +21,15 @@ ledger_verify() {
     prefix)
       [ -f "$PREFIX/system.reg" ] && [ -d "$PREFIX/drive_c/windows" ] ;;
     installed)
+      # Structural AND version. The old check was "the exe exists and is a PE32+", which is true
+      # of any RaceStudio 3 — so after a DMG upgrade phase_silent_install saw the marker satisfied,
+      # skipped, and left the user on the old build. ">=" not "==": if RS3's own updater has moved
+      # the user ahead of our pin, that is satisfied too, so nothing here downgrades anyone.
+      # An unreadable version counts as NOT satisfied — reinstalling the pinned build over an
+      # unknown one is safe (user data lives outside the prefix, symlinked to $DATA_DIR).
       [ -f "$PREFIX/drive_c/$RS3_REL_EXE" ] \
-        && file "$PREFIX/drive_c/$RS3_REL_EXE" | grep -q 'PE32+ executable' ;;
+        && file "$PREFIX/drive_c/$RS3_REL_EXE" | grep -q 'PE32+ executable' \
+        && rs3_installed_at_least "$RS3_PINNED_VER" ;;
     data)
       # the user dir inside the prefix is a symlink to the chosen DATA_DIR, which exists
       local src="$PREFIX/drive_c/$RS3_REL_USER"
