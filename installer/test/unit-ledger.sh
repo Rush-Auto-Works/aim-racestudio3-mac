@@ -18,7 +18,20 @@ assert_false "ledger_verify installed" "installed: rejects non-PE file"
 REFEXE="$HOME/.rs3-w11-test/drive_c/$RS3_REL_EXE"
 if [ -f "$REFEXE" ]; then
   ditto "$REFEXE" "$PREFIX/drive_c/$RS3_REL_EXE"
-  assert_true "ledger_verify installed" "installed: accepts real PE32+ exe"
+  # A valid PE is no longer enough: the version AiM recorded must be >= the pin, or an upgrade
+  # would see "already installed" and skip the install that IS the upgrade.
+  mkdir -p "$PREFIX/drive_c/$(dirname "$RS3_REL_XMV")"
+  ditto "$(dirname "${BASH_SOURCE[0]}")/fixtures/RaceStudio3-3.83.26.xmv" "$PREFIX/drive_c/$RS3_REL_XMV"
+  assert_false "ledger_verify installed" "installed: real exe but OLDER version is not satisfied"
+
+  printf '<p n="VERSION">%s</p>\r\n' "$RS3_PINNED_VER" > "$PREFIX/drive_c/$RS3_REL_XMV"
+  assert_true  "ledger_verify installed" "installed: real exe at the pinned version is satisfied"
+
+  printf '<p n="VERSION">99.0.0</p>\r\n' > "$PREFIX/drive_c/$RS3_REL_XMV"
+  assert_true  "ledger_verify installed" "installed: a NEWER version is satisfied (never downgrade)"
+
+  rm -f "$PREFIX/drive_c/$RS3_REL_XMV"
+  assert_false "ledger_verify installed" "installed: unknown version is not satisfied"
 fi
 
 # prefix postcondition
