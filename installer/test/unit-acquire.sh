@@ -130,6 +130,14 @@ assert_eq "$(state_of)" "RS3_ABSENT" "no prefix at all: absent"
 mkdir -p "$ROOT/prefix/drive_c/AIM_SPORT/RaceStudio3/64" "$ROOT/bin"
 : > "$ROOT/bin/launch.sh"; chmod +x "$ROOT/bin/launch.sh"
 : > "$ROOT/prefix/drive_c/AIM_SPORT/RaceStudio3/64/AiMRS3-64-ReleaseU.exe"
+# "Outdated" needs a READABLE manifest older than the pin; write one explicitly so this case does
+# not depend on a leftover xmv from an earlier (REFEXE-gated) scenario that CI never runs.
+printf '<p n="VERSION">3.83.26.0</p>\r\n' > "$ROOT/prefix/drive_c/$RS3_REL_XMV"
 assert_eq "$(state_of)" "RS3_OUTDATED" "RS3 present but not at the pinned version: outdated"
+
+# An install whose manifest is unreadable is UNKNOWN, not outdated: routing it into the update
+# flow could downgrade a newer build, so install-state must not claim OUTDATED without evidence.
+rm -f "$ROOT/prefix/drive_c/$RS3_REL_XMV"
+assert_eq "$(state_of)" "RS3_INSTALLED" "exe present but unreadable manifest: unknown, not outdated"
 
 finish
