@@ -73,6 +73,9 @@ copy_if_present "$BRIDGE_LOG"                     "aim-bridge.log"
     pinned="$(sed -nE 's/^RS3_PINNED_VER="(.*)"/\1/p' "$PINS")"
     pkgrev="$(sed -nE 's/^RS3_PKG_REV="(.*)"/\1/p' "$PINS")"
   fi
+  # Same acceptance boundary as the installed version above: a malformed RS3_PINNED_VER is UNKNOWN
+  # too, so it can neither masquerade as a real pinned version nor trigger a false mismatch.
+  printf '%s' "$pinned" | grep -Eq '^[0-9]{1,9}(\.[0-9]{1,9}){2,3}$' || pinned=""
   echo "RS3 version (pinned):    ${pinned:-unknown (no RS3_PINNED_VER in $PINS)}"
   echo "pkg rev:     ${pkgrev:-unknown}"
   # A trailing ".0" is AiM's fourth field, not a different build, so don't cry mismatch over it.
