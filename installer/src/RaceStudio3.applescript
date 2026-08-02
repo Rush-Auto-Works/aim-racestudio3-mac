@@ -285,7 +285,12 @@ on handleNeeds(coreScript, out)
 		-- file to pick has no way out of that loop.
 		set wantFile to ""
 		try
-			set wantFile to do shell script "printf '%s' " & quoted form of out & " | sed -n 's/^NEEDS_INSTALLER: //p' | head -1"
+			-- Backslashes are DOUBLED because this is an AppleScript string literal: `\(` is not a
+			-- valid AppleScript escape and makes the whole file fail to compile. `\\(` is what
+			-- puts a literal `\(` in front of sed. Matched unanchored, because `do shell script`
+			-- hands back CR-separated lines and the core prints PROGRESS:/WARN: before this one,
+			-- so a `^`-anchored pattern never fires.
+			set wantFile to do shell script "printf '%s' " & quoted form of out & " | sed -n 's|.*NEEDS_INSTALLER: \\([A-Za-z0-9._-]*\\).*|\\1|p' | head -1"
 		end try
 		if wantFile is "" then set wantFile to "RaceStudio3-64_….exe"
 		display dialog "I couldn't download the RaceStudio 3 installer automatically. I'll open AiM's download page — save “" & wantFile & "”, then choose it on the next screen." buttons {"Open AiM page"} default button 1 with title "Get the installer" with icon note

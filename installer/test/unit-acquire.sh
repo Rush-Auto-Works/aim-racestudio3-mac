@@ -25,15 +25,18 @@ sed -i '' -E \
   -e "s|^RS3_PINNED_SHA256=.*|RS3_PINNED_SHA256=\"$SHA\"|" \
   -e "s|^RS3_PINNED_URL=.*|RS3_PINNED_URL=\"$DEAD/$FILE\"|" \
   -e "s|^RS3_DOWNLOAD_PAGE=.*|RS3_DOWNLOAD_PAGE=\"$DEAD/page\"|" \
+  -e "s|^RS3_DOWNLOAD_TIMEOUT=.*|RS3_DOWNLOAD_TIMEOUT=5|" \
   "$SRC/pins.env"
-grep -q "^RS3_PINNED_FILE=\"$FILE\"$" "$SRC/pins.env" || { echo "pins rewrite failed"; exit 2; }
+grep -q "^RS3_PINNED_FILE=\"$FILE\"$" "$SRC/pins.env" && \
+grep -q '^RS3_DOWNLOAD_TIMEOUT=5$' "$SRC/pins.env" || { echo "pins rewrite failed"; exit 2; }
 
 ROOT="$SANDBOX/root"
 CACHE="$ROOT/installer"
 mkdir -p "$CACHE" "$ROOT/state"
 
 run_acquire() {   # -> prints output, returns the phase's exit code
-  ( cd "$SANDBOX" && HOME="$SANDBOX/fakehome" RS3_APP_SUPPORT="$ROOT" UI_MODE=applet \
+  ( cd "$SANDBOX" && http_proxy= https_proxy= HTTP_PROXY= HTTPS_PROXY= ALL_PROXY= all_proxy= no_proxy='*' \
+      HOME="$SANDBOX/fakehome" RS3_APP_SUPPORT="$ROOT" UI_MODE=applet \
       bash "$SRC/installer-core.sh" acquire-installer 2>&1 )
 }
 mkdir -p "$SANDBOX/fakehome/Downloads"
@@ -55,8 +58,8 @@ out="$(run_acquire)"; rc=$?
 assert_true "[ $rc -eq 10 ]" "stale basename: phase does NOT succeed (asks for the installer)"
 assert_true "printf '%s' \"\$out\" | grep -q 'NEEDS_INSTALLER: $FILE'" \
   "stale basename: names the file it needs"
-assert_absent "$CACHE/$FILE"
 
+assert_absent "$CACHE/$FILE"
 # --- case 3: right name, wrong size -> rejected ----------------------------------------------
 rm -f "$CACHE/$FILE"          # case 1 left a valid pinned installer here; download_verified
                                # would short-circuit on it and mask what this case tests

@@ -16,6 +16,15 @@ Source spec: `docs/superpowers/specs/2026-08-01-rs3-updater-design.md` (Part A o
 - **BSD userland.** `stat -f %z` (never `-c`). `sed -E` (never `-r`).
 - **No blanket `set -e`.** The engine is `set -uo pipefail`; callers check postconditions, not `$?`. Do not add `set -e` to any file.
 - **`$(...)` strips trailing newlines.** This bit three separate times in the previous session. Never use command substitution to compare file contents; use `cmp -s`.
+- **Never restore a mutation check with `git checkout -- <file>`.** Implementers here work on
+  UNCOMMITTED changes (the controller commits), so `git checkout --` throws the whole task away,
+  not just the mutation. It did exactly that to Task 3 once. Always back up and restore by copy:
+  ```bash
+  cp installer/src/lib/foo.sh /tmp/foo.sh.bak    # before mutating
+  # …mutate, run the test, observe the failure…
+  cp /tmp/foo.sh.bak installer/src/lib/foo.sh    # restore
+  ```
+  Then confirm the restore actually landed (re-run the test and see it pass) before moving on.
 - **Every commit goes through the `commit-and-verify` skill.** A PreToolUse hook hard-blocks a direct `git commit`. Invoke the skill; it owns the commit. Reference the task number in the message.
 - **Run `bash installer/test/run-all.sh` before every commit.** Baseline before this plan is 15 test files, all passing.
 - **Do not add a `z:` drive to the prefix** under any circumstances (issue #32, `CLAUDE.md`).
