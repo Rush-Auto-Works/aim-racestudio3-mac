@@ -71,6 +71,18 @@ ui_recall() {  # <key>  -> echoes value, returns 0 if present
   printf '%s' "$v"
 }
 
+# ui_forget <key> : drop one persisted decision, leaving the rest of config.env alone. Used by
+# --reinstall, which must not inherit a stale INSTALLER_EXE — and which must NOT just delete
+# config.env, because that file also holds DATA_DIR. Losing that would point a reinstall at the
+# default data folder and strand the user's telemetry in the one they chose.
+ui_forget() {
+  local key="$1" tmp
+  [ -n "${CONFIG_ENV:-}" ] && [ -f "$CONFIG_ENV" ] || return 0
+  tmp="$CONFIG_ENV.tmp.$$"
+  grep -v "^${key}=" "$CONFIG_ENV" > "$tmp" 2>/dev/null || true
+  mv -f "$tmp" "$CONFIG_ENV"
+}
+
 # ui_choice <key> <default> <prompt> <opt1> [opt2 ...]
 # Returns the chosen option on stdout via the CHOICE_RESULT variable.
 ui_choice() {

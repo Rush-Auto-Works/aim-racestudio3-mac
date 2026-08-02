@@ -50,3 +50,15 @@ ledger_skip_if_done() {
   if ledger_has "$1" && ledger_verify "$1"; then return 0; fi
   ledger_clear "$1"; return 1
 }
+
+# ledger_reset_for_reinstall : put the ledger back to "nothing done" for --reinstall.
+#
+# Clearing the markers alone was not enough: the remembered INSTALLER_EXE and the cached exe both
+# survived, so "reinstall" faithfully reinstalled the same old RaceStudio 3. Keeps the rest of
+# config.env (DATA_DIR above all) and keeps the Wine tarball, which is sha-verified on reuse —
+# no reason to make every reinstall re-download 190 MB.
+ledger_reset_for_reinstall() {
+  rm -f "$STATE_DIR"/*.ok 2>/dev/null || true
+  ui_forget INSTALLER_EXE
+  rm -f "$INSTALLER_CACHE"/RaceStudio3-64_*.exe 2>/dev/null || true
+}
