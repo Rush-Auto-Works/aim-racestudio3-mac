@@ -82,4 +82,18 @@ ditto "$ASSET" "$SANDBOX/fakehome/Downloads/$STALE"
 out="$(run_acquire)"; rc=$?
 assert_true "[ $rc -eq 10 ]" "wrong build in Downloads: not accepted"
 
+# --- install-state ------------------------------------------------------------------------------
+# The launcher needs three states, not two: a prefix holding an OLDER RaceStudio 3 is neither
+# "ready to launch" nor "never set up", and telling an upgrading user "the first time you open it…"
+# is wrong.
+state_of() { ( cd "$SANDBOX" && HOME="$SANDBOX/fakehome" RS3_APP_SUPPORT="$ROOT" UI_MODE=applet \
+                 bash "$SRC/installer-core.sh" install-state 2>/dev/null ); }
+
+assert_eq "$(state_of)" "RS3_ABSENT" "no prefix at all: absent"
+
+mkdir -p "$ROOT/prefix/drive_c/AIM_SPORT/RaceStudio3/64" "$ROOT/bin"
+: > "$ROOT/bin/launch.sh"; chmod +x "$ROOT/bin/launch.sh"
+: > "$ROOT/prefix/drive_c/AIM_SPORT/RaceStudio3/64/AiMRS3-64-ReleaseU.exe"
+assert_eq "$(state_of)" "RS3_OUTDATED" "RS3 present but not at the pinned version: outdated"
+
 finish
