@@ -524,6 +524,13 @@ case "$ACTION" in
   uninstall)         do_uninstall "${args[@]:1}" ;;
   set-config)        ui_persist "${args[1]:?key}" "${args[2]:-}" ;;
   is-installed)      if ledger_verify installed && [ -x "$INSTALL_ROOT/bin/launch.sh" ]; then echo RS3_INSTALLED; else echo RS3_ABSENT; fi ;;
+  install-state)
+    # Three states, because "not launchable" has two very different causes and the app says a
+    # different thing for each. OUTDATED = a RaceStudio 3 is there but not the one this app ships,
+    # so the install phases need to run again (they no-op for everything already done).
+    if ledger_verify installed && [ -x "$INSTALL_ROOT/bin/launch.sh" ]; then echo RS3_INSTALLED
+    elif [ -f "$PREFIX/drive_c/$RS3_REL_EXE" ] && [ -x "$INSTALL_ROOT/bin/launch.sh" ]; then echo RS3_OUTDATED
+    else echo RS3_ABSENT; fi ;;
   help)              usage ;;
   *) die "unknown action: $ACTION" ;;
 esac

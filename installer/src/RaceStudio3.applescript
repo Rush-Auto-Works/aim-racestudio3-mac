@@ -15,8 +15,13 @@ property barScale : 100 -- bar runs 0..100 so the subtitle can read "<n>% comple
 
 on run
 	set coreScript to corePath()
-	if isInstalled(coreScript) then
+	-- NOT named `st`: that is a reserved token in AppleScript (the ordinal suffix, as in "1st"), and
+	-- `set st to …` fails to compile with "Expected expression but found st".
+	set appState to installState(coreScript)
+	if appState is "RS3_INSTALLED" then
 		openApp()
+	else if appState is "RS3_OUTDATED" then
+		doUpdateSetup(coreScript)
 	else
 		doFirstRunSetup(coreScript)
 	end if
@@ -49,6 +54,29 @@ on doFirstRunSetup(coreScript)
 	set b to button returned of (display dialog "Welcome to RaceStudio 3 for Mac." & return & return & "The first time you open it, I'll set everything up — no Windows, no Parallels." & return & return & "• Takes about 10 minutes and needs an internet connection." & return & "• Your data goes in your Documents folder." & return & "• Connect AiM devices over Wi-Fi (USB isn't supported)." buttons {"Quit", "Set Up"} default button "Set Up" with title "RaceStudio 3" with icon note)
 	if b is "Quit" then return
 
+	runAllPhases(coreScript)
+
+	set b to button returned of (display dialog "RaceStudio 3 is ready! 🎉" & return & return & "• It's in your Applications folder for next time." & return & "• “Import RaceStudio 3 Data” and “Uninstall RaceStudio 3” are in Applications ▸ AiM." & return & "• Connect AiM devices over Wi-Fi (USB isn't supported under Wine)." & return & "• If macOS asks “Wine wants to access Documents”, click Allow." buttons {"Done", "Open RaceStudio 3"} default button "Open RaceStudio 3" with title "All set" with icon note)
+	if b is "Open RaceStudio 3" then openApp()
+end doFirstRunSetup
+
+-- This app ships a newer RaceStudio 3 than the one already set up. Same phases as a first run —
+-- everything already done verifies and skips — but the copy has to say "update", not "welcome",
+-- and it has to be honest that it's a full download.
+on doUpdateSetup(coreScript)
+	set b to button returned of (display dialog "This version of the app installs a newer RaceStudio 3." & return & return & "• It downloads about 350 MB and takes several minutes." & return & "• Your settings and telemetry are not touched." & return & "• Quit RaceStudio 3 first if it's open." buttons {"Not Now", "Update"} default button "Update" with title "Update RaceStudio 3" with icon note)
+	if b is "Not Now" then
+		openApp()
+		return
+	end if
+
+	runAllPhases(coreScript)
+
+	set b to button returned of (display dialog "RaceStudio 3 is up to date." buttons {"Done", "Open RaceStudio 3"} default button "Open RaceStudio 3" with title "Update complete" with icon note)
+	if b is "Open RaceStudio 3" then openApp()
+end doUpdateSetup
+
+on runAllPhases(coreScript)
 	set total to count of phaseList
 	set progress total steps to barScale
 	set progress additional description to "0% complete"
@@ -58,10 +86,7 @@ on doFirstRunSetup(coreScript)
 	end repeat
 	set progress completed steps to barScale
 	set progress additional description to "100% complete"
-
-	set b to button returned of (display dialog "RaceStudio 3 is ready! 🎉" & return & return & "• It's in your Applications folder for next time." & return & "• “Import RaceStudio 3 Data” and “Uninstall RaceStudio 3” are in Applications ▸ AiM." & return & "• Connect AiM devices over Wi-Fi (USB isn't supported under Wine)." & return & "• If macOS asks “Wine wants to access Documents”, click Allow." buttons {"Done", "Open RaceStudio 3"} default button "Open RaceStudio 3" with title "All set" with icon note)
-	if b is "Open RaceStudio 3" then openApp()
-end doFirstRunSetup
+end runAllPhases
 
 -- Launch RS3 by exec'ing the Wine bundled INSIDE this app, so macOS resolves Wine's main bundle
 -- to RaceStudio 3.app and the menu bar reads "RaceStudio 3" (not "Wine"). Runs detached.
@@ -186,13 +211,21 @@ on ensureBridge()
 	end if
 end ensureBridge
 
-on isInstalled(coreScript)
+on installState(coreScript)
 	try
-		set out to do shell script "UI_MODE=applet " & quoted form of coreScript & " is-installed 2>/dev/null"
-		return (out contains "RS3_INSTALLED")
+		set out to do shell script "UI_MODE=applet " & quoted form of coreScript & " install-state 2>/dev/null"
+		if out contains "RS3_INSTALLED" then return "RS3_INSTALLED"
+		if out contains "RS3_OUTDATED" then return "RS3_OUTDATED"
+		return "RS3_ABSENT"
 	on error
-		return false
+		return "RS3_ABSENT"
 	end try
+end installState
+
+-- Drag-and-drop import only needs a set-up prefix; importing into an older RaceStudio 3 is fine,
+-- so an upgrade is deliberately NOT forced here.
+on isInstalled(coreScript)
+	return (installState(coreScript) is not "RS3_ABSENT")
 end isInstalled
 
 on importOne(coreScript, p)
