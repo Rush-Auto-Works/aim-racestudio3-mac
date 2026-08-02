@@ -59,6 +59,25 @@ ui_forget INSTALLER_EXE
 assert_false "ui_recall INSTALLER_EXE" "ui_forget drops the key"
 assert_eq "$(ui_recall DATA_DIR)" "$DATA_DIR" "ui_forget keeps every OTHER key"
 
+ui_persist DATA_DIR_BACKUP "$DATA_DIR/backup"
+ui_forget DATA_DIR
+assert_eq "$(ui_recall DATA_DIR_BACKUP)" "$DATA_DIR/backup" "ui_forget keeps a longer key with the same prefix"
+
+ui_persist DATA_DIR "$DATA_DIR"
+ui_forget 'DATA.DIR'
+assert_eq "$(ui_recall DATA_DIR)" "$DATA_DIR" "ui_forget treats regex metacharacters literally"
+
+BEFORE_FORGET="$STATE_DIR/config-before-missing-key.env"
+cp "$CONFIG_ENV" "$BEFORE_FORGET"
+ui_forget NOT_PRESENT
+assert_true "cmp -s \"$CONFIG_ENV\" \"$BEFORE_FORGET\"" "ui_forget preserves bytes when the key is absent"
+
+MISSING_CONFIG_ENV="$STATE_DIR/missing-config.env"
+CONFIG_ENV="$MISSING_CONFIG_ENV"
+assert_true "ui_forget NOT_PRESENT" "ui_forget accepts a missing config.env"
+assert_absent "$MISSING_CONFIG_ENV"
+CONFIG_ENV="$STATE_DIR/config.env"
+
 # --- ledger_reset_for_reinstall -----------------------------------------------------------------
 # A reinstall that keeps the remembered installer and the cached exe reinstalls exactly the version
 # the user is trying to get off.

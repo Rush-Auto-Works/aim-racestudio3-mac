@@ -76,10 +76,18 @@ ui_recall() {  # <key>  -> echoes value, returns 0 if present
 # config.env, because that file also holds DATA_DIR. Losing that would point a reinstall at the
 # default data folder and strand the user's telemetry in the one they chose.
 ui_forget() {
-  local key="$1" tmp
+  local key="$1" tmp line
   [ -n "${CONFIG_ENV:-}" ] && [ -f "$CONFIG_ENV" ] || return 0
   tmp="$CONFIG_ENV.tmp.$$"
-  grep -v "^${key}=" "$CONFIG_ENV" > "$tmp" 2>/dev/null || true
+  : > "$tmp"
+  # Exact literal key match, never a pattern: grep would treat a key containing a regex
+  # metacharacter as an expression and could drop unrelated lines — and this file also holds
+  # DATA_DIR, the user's telemetry folder. `|| [ -n "$line" ]` keeps a final line that has no
+  # trailing newline.
+  while IFS= read -r line || [ -n "$line" ]; do
+    [ "${line%%=*}" = "$key" ] && continue
+    printf '%s\n' "$line" >> "$tmp"
+  done < "$CONFIG_ENV"
   mv -f "$tmp" "$CONFIG_ENV"
 }
 
