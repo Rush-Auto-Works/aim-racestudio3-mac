@@ -25,6 +25,13 @@ CMD="$SBX/Applications/RaceStudio 3.command"
 # launch.sh must reference the sandboxed install root and the RS3 exe, and never ~/.wine
 grep -q "$SBX/app-support" "$LS" && ok "launch.sh points at install root" || bad "launch.sh wrong root"
 grep -q 'AiMRS3-64-ReleaseU.exe' "$LS" && ok "launch.sh runs the RS3 exe" || bad "launch.sh missing exe"
+# Issue #37: without --disable-gpu-compositing the CEF web-maps track background renders white
+# under Wine. Both the applet and the generated launch.sh MUST carry the flag on the actual launch
+# command line (same line as the exe) — assert each separately so they can't drift apart.
+grep -qE 'AiMRS3-64-ReleaseU\.exe.*--disable-gpu-compositing' "$LS" \
+  && ok "launch.sh disables GPU compositing (web maps)" || bad "launch.sh missing --disable-gpu-compositing"
+grep -qE 'AiMRS3-64-ReleaseU\.exe.*--disable-gpu-compositing' "$SRC_DIR/RaceStudio3.applescript" \
+  && ok "applet disables GPU compositing (web maps)" || bad "applet missing --disable-gpu-compositing"
 grep -q 'WINEPREFIX=' "$LS" && ok "launch.sh exports WINEPREFIX" || bad "launch.sh no WINEPREFIX"
 ! grep -q '/.wine' "$LS" && ok "launch.sh never uses ~/.wine" || bad "launch.sh references ~/.wine"
 
