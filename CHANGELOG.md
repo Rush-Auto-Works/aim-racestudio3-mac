@@ -12,6 +12,15 @@ only this installer is versioned here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.83.39-3] — 2026-08-03
+
+**Fixes the satellite track map showing blank (white) in RaceStudio 3.**
+
+- **The track-view map background now renders.** RaceStudio 3's embedded browser (Chromium 66)
+  couldn't present its GPU-composited frames to the Wine window, so the map panel stayed white
+  even though the tiles were loading. Launching with GPU compositing disabled — rasterization
+  stays on — lets the frames through, and the map centers and pans normally. Fixes #37.
+
 ## [3.83.39-2] — 2026-08-02
 
 **Installing a newer version of this app now actually updates RaceStudio 3.**
