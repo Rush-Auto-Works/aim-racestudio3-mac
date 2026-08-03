@@ -160,6 +160,11 @@ _find_user_tree() {
   fi
 }
 
+# _dir_has_session_file <dir> : true if <dir> contains at least one AiM session file — .xrk or
+# .drk (recursive, case-insensitive). .drk is the older Race Studio data format (RS2-era); RS3's
+# own importer reads it fine, so a dropped .drk is a session file worth routing into the data tree.
+_dir_has_session_file() { [ -n "$(find "$1" -type f \( -iname '*.xrk' -o -iname '*.drk' \) -print -quit 2>/dev/null)" ]; }
+
 # _dir_has_xrk <dir> : true if <dir> contains at least one .xrk file (recursive, case-insensitive).
 _dir_has_xrk() { [ -n "$(find "$1" -type f -iname '*.xrk' -print -quit 2>/dev/null)" ]; }
 
@@ -178,13 +183,16 @@ import_merge() {
   ui_say "Imported (merged, nothing overwritten): $n files from $usr"
 }
 
-# import_xrk_dir <dir> : import a folder of loose .xrk sessions (no RaceStudio3 user tree). Copies
-# every .xrk found (recursively, preserving relative paths) into DATA_DIR/data/<dir-name>/, never
-# overwriting. Errors if the folder has no .xrk files.
-import_xrk_dir() {
+# import_session_dir <dir> : import a folder of loose AiM session files (.xrk / .drk — no
+# RaceStudio3 user tree). Copies every session file found (recursively, preserving relative
+# paths) into DATA_DIR/data/<dir-name>/, never overwriting. Errors if the folder has no session
+# files. .drk (the older Race Studio download format) is routed the same as .xrk. NOTE: RS3 does
+# not scan the data folder — the staged files only appear once the user runs RS3's own Import
+# (cogwheel → Import → Import Folder). The Import app guides them there.
+import_session_dir() {
   local in="${1%/}" dest n=0 f rel rc=0
   dest="$DATA_DIR/data/$(basename "$in")"
-  if ! _dir_has_xrk "$in"; then ui_error "no .xrk files found under: $in"; return 1; fi
+  if ! _dir_has_session_file "$in"; then ui_error "no .xrk or .drk files found under: $in"; return 1; fi
   while IFS= read -r f; do
     rel="${f#"$in"/}"
     mkdir -p "$dest/$(dirname "$rel")" || { ui_error "import failed creating $(dirname "$rel")"; rc=1; break; }
@@ -192,7 +200,11 @@ import_xrk_dir() {
       ditto "$f" "$dest/$rel" || { ui_error "import failed copying $rel"; rc=1; break; }
       n=$((n+1))
     fi
-  done < <(find "$in" -type f -iname '*.xrk')
+  done < <(find "$in" -type f \( -iname '*.xrk' -o -iname '*.drk' \))
   [ "$rc" -eq 0 ] || return 1
-  ui_say "Imported $n .xrk session file(s) into $dest (nothing overwritten)."
+  ui_say "Imported $n session file(s) -> $dest (nothing overwritten)."
 }
+
+# import_xrk_dir <dir> : back-compat wrapper for import_session_dir (historical name; a folder of
+# loose .xrk sessions).
+import_xrk_dir() { import_session_dir "$@"; }

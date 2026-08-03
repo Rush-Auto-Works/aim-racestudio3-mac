@@ -161,4 +161,30 @@ assert_file "$DATA_DIR/data/RUSH_SR_C0319/run1.xrk"     "xrk: top-level session 
 assert_file "$DATA_DIR/data/RUSH_SR_C0319/sub/run2.XRK" "xrk: nested session copied"
 assert_absent "$DATA_DIR/data/RUSH_SR_C0319/notes.txt"  "xrk: non-.xrk file not imported"
 
+# ---- 10c. import_session_dir: a folder mixing .xrk and .drk sessions --------------------------
+scenario import-drk-folder
+ddir="$SANDBOX/import/drk/OLD_DATA"
+mkdir -p "$ddir"
+printf 'LEGACY1\n' > "$ddir/session1.drk"
+printf 'MODERN\n'  > "$ddir/session2.xrk"
+printf 'junk\n'    > "$ddir/notes.txt"
+assert_true  "_dir_has_session_file \"$ddir\""          "drk: folder detected as having session files"
+assert_false "[ -n \"\$(_find_user_tree \"$ddir\")\" ]"  "drk: not mistaken for a user tree"
+import_session_dir "$ddir"
+assert_file "$DATA_DIR/data/OLD_DATA/session1.drk" "drk: .drk session copied"
+assert_file "$DATA_DIR/data/OLD_DATA/session2.xrk" "drk: .xrk session copied"
+assert_absent "$DATA_DIR/data/OLD_DATA/notes.txt"  "drk: non-session file not imported"
+
+# ---- 10d. single-file .drk routing (do_import *.drk branch) -----------------------------------
+# do_import lives in installer-core.sh (not sourced here), so exercise the single-file branch by
+# running the real engine via --import, exactly as the Import app does.
+scenario import-drk-file
+mkdir -p "$DATA_DIR"
+sf="$SANDBOX/import/drkfile/session.drk"
+mkdir -p "$(dirname "$sf")"
+printf 'LEGACY\n' > "$sf"
+RS3_APP_SUPPORT="$INSTALL_ROOT" RS3_DATA_DIR="$DATA_DIR" UI_MODE=dryrun \
+  bash "$SRC_DIR/installer-core.sh" --import "$sf" >/dev/null 2>&1
+assert_file "$DATA_DIR/data/dropped-"*/session.drk "drk: single .drk file routed to dropped-<date>/"
+
 finish

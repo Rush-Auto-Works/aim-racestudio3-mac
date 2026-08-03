@@ -504,7 +504,7 @@ do_import() {
       rm -rf "$tmp"
       [ "$rc" -eq 0 ] || die "Import failed."
       ;;
-    *.xrk|*.XRK)
+    *.xrk|*.XRK|*.drk|*.DRK)
       [ -f "$p" ] || die "Import: file not found: $p"
       local dest="$DATA_DIR/data/dropped-$(date +%Y%m%d)"
       mkdir -p "$dest"
@@ -513,13 +513,13 @@ do_import() {
       ;;
     *)
       [ -d "$p" ] || die "Import: folder not found: $p"
-      # A RaceStudio3 user tree merges; otherwise a folder of loose .xrk sessions is imported.
+      # A RaceStudio3 user tree merges; otherwise a folder of loose .xrk/.drk sessions is imported.
       if [ -n "$(_find_user_tree "$p")" ]; then
         import_merge "$p"
-      elif _dir_has_xrk "$p"; then
-        import_xrk_dir "$p"
+      elif _dir_has_session_file "$p"; then
+        import_session_dir "$p"
       else
-        die "Import: '$p' has no RaceStudio3 user folder and no .xrk files."
+        die "Import: '$p' has no RaceStudio3 user folder and no .xrk or .drk files."
       fi
       ;;
   esac

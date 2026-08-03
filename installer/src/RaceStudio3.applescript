@@ -2,7 +2,7 @@
 --   • First launch: sets up a pinned modern Wine + RaceStudio 3 (the 8-phase flow with a live
 --     progress bar), then opens RS3. No Terminal, no Parallels, no CrossOver.
 --   • Later launches: just opens RaceStudio 3.
---   • Drop an AIM_SPORT folder / .zip / .xrk onto the app to import data (never overwrites).
+--   • Drop an AIM_SPORT folder / .zip / .xrk / .drk onto the app to import data (never overwrites).
 -- The Wine engine + Windows prefix live in ~/Library/Application Support/RaceStudio3 (outside the
 -- signed app, as required), your data in ~/Documents/AIM_SPORT. Import / Uninstall are standalone
 -- apps that ship beside this one in /Applications/AiM (the DMG drops the whole AiM folder in).

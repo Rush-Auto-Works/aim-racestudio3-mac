@@ -93,7 +93,7 @@ mostly the GUI and the live-hardware paths.
 - Intel Mac → installs without the Rosetta step.
 
 ## Manual — import flows
-- Drag an `AIM_SPORT` folder (or a `.zip`, or loose `.xrk`) onto `Import RaceStudio 3 Data.app` →
+- Drag an `AIM_SPORT` folder (or a `.zip`, or loose `.xrk`/`.drk`) onto `Import RaceStudio 3 Data.app` →
   merges, never overwrites, shows a summary count.
 - Installer's optional "I have a folder" picker → same merge.
 - Auto-from-Parallels (`scripts/port-data-from-parallels.sh`) with a running VM.
