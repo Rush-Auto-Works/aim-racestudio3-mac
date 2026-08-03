@@ -492,7 +492,7 @@ do_import() {
   # The Import app is its own entry point and never runs the launcher's hygiene, so a prefix that
   # still has `z: -> /` would keep it until RS3 is next launched. Drop it here too (issue #32).
   [ -d "${PREFIX:-}" ] && { drop_host_root_drive "$PREFIX" || true; }
-  local plow; plow="${p,,}"   # lowercase for case-insensitive extension matching
+  local plow; plow="$(printf '%s' "$p" | tr '[:upper:]' '[:lower:]')"   # bash 3.2-safe lowercase (${p,,} needs bash 4+)
   case "$plow" in
     *.zip)
       [ -f "$p" ] || die "Import: zip not found: $p"
