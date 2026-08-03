@@ -64,7 +64,8 @@ dependency, so the direct download is simpler.)
 
 3. **Run it.**
    ```sh
-   "$WINE" "$WINEPREFIX/drive_c/AIM_SPORT/RaceStudio3/64/AiMRS3-64-ReleaseU.exe"
+   # --disable-gpu-compositing: without it the track-view web map renders white under Wine (issue #37)
+   "$WINE" "$WINEPREFIX/drive_c/AIM_SPORT/RaceStudio3/64/AiMRS3-64-ReleaseU.exe" --disable-gpu-compositing
    ```
    Renders clean. *(Verified: a deployed RS3 3.83.20 runs with correct text on Wine 11.9
    Staging.)*

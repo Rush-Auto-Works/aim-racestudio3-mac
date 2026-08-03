@@ -146,8 +146,8 @@ on launchRS3()
 	-- 5. CEF web maps (track-view satellite background): RS3 embeds Chromium 66; under Wine its GPU
 	--    compositor can't present frames to the winemac window, so the web-maps panel renders WHITE
 	--    (the renderer produces the map — tiles download, JS runs — but the surface never draws).
-	--    --disable-gpu-compositing keeps GPU rasterization but composites in software, so the frames
-	--    present and the satellite map shows. 2026-08-02, issue #37.
+	--    --disable-gpu-compositing disables only the GPU compositing step (compositing runs in
+	--    software), so the frames present and the satellite map shows. 2026-08-02, issue #37.
 	set bridgeWait to "self_asn=\"$(/usr/bin/lsappinfo front)\"; for _i in $(seq 1 32); do f=\"$(/usr/bin/lsappinfo front)\"; if [ \"$f\" != \"$self_asn\" ]; then case \"$(/usr/bin/lsappinfo info -only name \"$f\" 2>/dev/null)\" in *RaceStudio*) break ;; esac; fi; /bin/sleep 0.25; done; /usr/bin/pgrep -f AiMRS3-64 >/dev/null 2>&1 || exit 1"
 	set sh to "export WINEPREFIX=" & quoted form of (root & "/prefix") & " WINEARCH=win64 WINEDEBUG=-all; " & ¬
 		"export WINEDLLOVERRIDES=" & quoted form of "mscoree=d;mshtml=d" & "; " & ¬
