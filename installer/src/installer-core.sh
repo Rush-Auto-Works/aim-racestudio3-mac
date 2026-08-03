@@ -492,24 +492,48 @@ do_import() {
   # The Import app is its own entry point and never runs the launcher's hygiene, so a prefix that
   # still has `z: -> /` would keep it until RS3 is next launched. Drop it here too (issue #32).
   [ -d "${PREFIX:-}" ] && { drop_host_root_drive "$PREFIX" || true; }
-  case "$p" in
-    *.zip|*.ZIP)
+  local plow; plow="${p,,}"   # lowercase for case-insensitive extension matching
+  case "$plow" in
+    *.zip)
       [ -f "$p" ] || die "Import: zip not found: $p"
       local tmp; tmp="$(mktemp -d "${TMPDIR:-/tmp}/rs3import.XXXXXX")"
       ui_say "Unzipping…"
       ditto -x -k "$p" "$tmp" 2>/dev/null || unzip -q "$p" -d "$tmp" 2>/dev/null || { rm -rf "$tmp"; die "Import: couldn't unzip $p"; }
       local u; u="$(find "$tmp" -type d -name user -path '*RaceStudio3*' 2>/dev/null | head -1)"
-      [ -n "$u" ] || u="$tmp"
-      import_merge "$u"; local rc=$?
-      rm -rf "$tmp"
-      [ "$rc" -eq 0 ] || die "Import failed."
+      if [ -n "$u" ]; then
+        import_merge "$u"; local rc=$?
+        rm -rf "$tmp"
+        [ "$rc" -eq 0 ] || die "Import failed."
+      elif _dir_has_session_file "$tmp"; then
+        # a zip of loose .xrk/.drk sessions (no RaceStudio3 user tree)
+        local dest="$DATA_DIR/data/dropped-$(date +%Y%m%d)"
+        mkdir -p "$dest"
+        local n=0 f
+        while IFS= read -r f; do
+          local rel="${f#"$tmp"/}"
+          mkdir -p "$dest/$(dirname "$rel")" || { rm -rf "$tmp"; die "Import: failed creating $(dirname "$rel")"; }
+          [ -e "$dest/$rel" ] || ditto "$f" "$dest/$rel" || { rm -rf "$tmp"; die "Import: failed copying $rel"; }
+          n=$((n+1))
+        done < <(find "$tmp" -type f \( -iname '*.xrk' -o -iname '*.drk' \))
+        rm -rf "$tmp"
+        ui_say "Imported $n session file(s) from zip (nothing overwritten)."
+        ui_import_dest "$dest"
+      else
+        rm -rf "$tmp"
+        die "Import: zip has no RaceStudio3 user folder and no .xrk or .drk files."
+      fi
       ;;
-    *.xrk|*.XRK|*.drk|*.DRK)
+    *.xrk|*.drk)
+      # A single session file (case-insensitive via $plow). The copy is checked: a failed copy is
+      # an error, not a silent "Imported" success.
       [ -f "$p" ] || die "Import: file not found: $p"
       local dest="$DATA_DIR/data/dropped-$(date +%Y%m%d)"
       mkdir -p "$dest"
-      [ -e "$dest/$(basename "$p")" ] || ditto "$p" "$dest/$(basename "$p")"
-      ui_say "Imported session: $(basename "$p") -> $dest"
+      if ! { [ -e "$dest/$(basename "$p")" ] || ditto "$p" "$dest/$(basename "$p")"; }; then
+        ui_error "Import: failed to copy $(basename "$p")"; return 1
+      fi
+      ui_say "Imported session: $(basename "$p")"
+      ui_import_dest "$dest"
       ;;
     *)
       [ -d "$p" ] || die "Import: folder not found: $p"

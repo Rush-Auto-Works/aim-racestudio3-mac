@@ -52,15 +52,13 @@ on importOne(core, p)
 		with timeout of 1800 seconds
 			set out to do shell script "UI_MODE=applet RS3_SINGLE_APP=1 bash " & quoted form of core & " --import " & quoted form of p & " 2>&1"
 		end timeout
-		-- capture the staged destination from the engine's "STATUS: Imported ... -> <path>" line
+		-- capture the staged destination from the engine's machine-readable
+		-- "IMPORT_DEST: <path>" line (see ui_import_dest in lib/ui.sh). Nothing else
+		-- in the output is a reliable path — do NOT parse the human STATUS lines.
 		set dest to ""
 		repeat with aLine in paragraphs of out
-			if aLine contains "STATUS: Imported" then
-				set AppleScript's text item delimiters to " -> "
-				try
-					set dest to last text item of aLine
-				end try
-				set AppleScript's text item delimiters to ""
+			if aLine starts with "IMPORT_DEST: " then
+				set dest to (characters 14 thru -1 of aLine) as text
 			end if
 		end repeat
 		return {true, dest}

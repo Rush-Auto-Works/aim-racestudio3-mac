@@ -154,7 +154,7 @@ mkdir -p "$xdir/sub"
 printf 'LAP1\n' > "$xdir/run1.xrk"
 printf 'LAP2\n' > "$xdir/sub/run2.XRK"   # case-insensitive + nested
 printf 'junk\n' > "$xdir/notes.txt"      # non-.xrk ignored
-assert_true  "_dir_has_xrk \"$xdir\""                  "xrk: folder detected as having .xrk"
+assert_true  "_dir_has_session_file \"$xdir\""         "xrk: folder detected as having session files"
 assert_false "[ -n \"\$(_find_user_tree \"$xdir\")\" ]" "xrk: not mistaken for a user tree"
 import_xrk_dir "$xdir"
 assert_file "$DATA_DIR/data/RUSH_SR_C0319/run1.xrk"     "xrk: top-level session copied"

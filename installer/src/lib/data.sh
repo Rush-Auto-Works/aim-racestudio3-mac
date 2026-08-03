@@ -165,9 +165,6 @@ _find_user_tree() {
 # own importer reads it fine, so a dropped .drk is a session file worth routing into the data tree.
 _dir_has_session_file() { [ -n "$(find "$1" -type f \( -iname '*.xrk' -o -iname '*.drk' \) -print -quit 2>/dev/null)" ]; }
 
-# _dir_has_xrk <dir> : true if <dir> contains at least one .xrk file (recursive, case-insensitive).
-_dir_has_xrk() { [ -n "$(find "$1" -type f -iname '*.xrk' -print -quit 2>/dev/null)" ]; }
-
 # import_merge <source_dir> : public entry point for the Import droplet and the installer's
 # optional "I have a folder" step. Merges an external AIM_SPORT/user (or its parent) into the
 # live DATA_DIR using the SAME copy-if-absent engine — never overwrites existing user data.
@@ -202,7 +199,12 @@ import_session_dir() {
     fi
   done < <(find "$in" -type f \( -iname '*.xrk' -o -iname '*.drk' \))
   [ "$rc" -eq 0 ] || return 1
-  ui_say "Imported $n session file(s) -> $dest (nothing overwritten)."
+  if [ "$n" -eq 0 ]; then
+    ui_say "No new session files to import — everything is already in the data folder."
+    return 0
+  fi
+  ui_say "Imported $n session file(s) (nothing overwritten)."
+  ui_import_dest "$dest"
 }
 
 # import_xrk_dir <dir> : back-compat wrapper for import_session_dir (historical name; a folder of
