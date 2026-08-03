@@ -512,12 +512,18 @@ do_import() {
         while IFS= read -r f; do
           local rel="${f#"$tmp"/}"
           mkdir -p "$dest/$(dirname "$rel")" || { rm -rf "$tmp"; die "Import: failed creating $(dirname "$rel")"; }
-          [ -e "$dest/$rel" ] || ditto "$f" "$dest/$rel" || { rm -rf "$tmp"; die "Import: failed copying $rel"; }
-          n=$((n+1))
+          if [ ! -e "$dest/$rel" ]; then
+            ditto "$f" "$dest/$rel" || { rm -rf "$tmp"; die "Import: failed copying $rel"; }
+            n=$((n+1))
+          fi
         done < <(find "$tmp" -type f \( -iname '*.xrk' -o -iname '*.drk' \))
         rm -rf "$tmp"
-        ui_say "Imported $n session file(s) from zip (nothing overwritten)."
-        ui_import_dest "$dest"
+        if [ "$n" -eq 0 ]; then
+          ui_say "No new session files in zip — everything is already in the data folder."
+        else
+          ui_say "Imported $n session file(s) from zip (nothing overwritten)."
+          ui_import_dest "$dest"
+        fi
       else
         rm -rf "$tmp"
         die "Import: zip has no RaceStudio3 user folder and no .xrk or .drk files."
@@ -525,15 +531,20 @@ do_import() {
       ;;
     *.xrk|*.drk)
       # A single session file (case-insensitive via $plow). The copy is checked: a failed copy is
-      # an error, not a silent "Imported" success.
+      # an error, not a silent "Imported" success. If the file is already staged, say so and do
+      # not claim a staged destination.
       [ -f "$p" ] || die "Import: file not found: $p"
       local dest="$DATA_DIR/data/dropped-$(date +%Y%m%d)"
       mkdir -p "$dest"
-      if ! { [ -e "$dest/$(basename "$p")" ] || ditto "$p" "$dest/$(basename "$p")"; }; then
+      local target="$dest/$(basename "$p")"
+      if [ -e "$target" ]; then
+        ui_say "No new session staged — $(basename "$p") is already in the data folder."
+      elif ditto "$p" "$target"; then
+        ui_say "Imported session: $(basename "$p")"
+        ui_import_dest "$dest"
+      else
         ui_error "Import: failed to copy $(basename "$p")"; return 1
       fi
-      ui_say "Imported session: $(basename "$p")"
-      ui_import_dest "$dest"
       ;;
     *)
       [ -d "$p" ] || die "Import: folder not found: $p"

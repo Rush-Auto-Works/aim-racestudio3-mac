@@ -26,20 +26,26 @@ end open
 
 on importItems(core, theItems)
 	set okCount to 0
-	set dest to ""
+	set dests to {}
 	repeat with anItem in theItems
 		set importResult to importOne(core, POSIX path of anItem)
 		if item 1 of importResult is true then
 			set okCount to okCount + 1
-			if dest is "" and item 2 of importResult is not "" then set dest to item 2 of importResult
+			if item 2 of importResult is not "" and dests does not contain item 2 of importResult then
+				set end of dests to item 2 of importResult
+			end if
 		end if
 	end repeat
 	if okCount > 0 then
 		-- RS3 does not scan the data folder on its own: sessions only appear once imported
 		-- through RS3's own UI (cogwheel → Import → Import Folder/File(s)). Point the user at
 		-- where the files were staged so they can do that final step.
-		if dest is not "" then
-			set msg to "Imported " & okCount & " item(s) into your RaceStudio 3 data folder. Nothing existing was overwritten." & return & return & "RaceStudio 3 won't show these until you import them:" & return & "Open RaceStudio 3 → cogwheel (bottom-left) → Import → Import Folder, then pick:" & return & return & dest & return & return & "(Or Import File(s) for individual sessions.)"
+		if (count of dests) > 0 then
+			set destText to ""
+			repeat with d in dests
+				set destText to destText & return & d
+			end repeat
+			set msg to "Imported " & okCount & " item(s) into your RaceStudio 3 data folder. Nothing existing was overwritten." & return & return & "RaceStudio 3 won't show these until you import them:" & return & "Open RaceStudio 3 → cogwheel (bottom-left) → Import → Import Folder, then pick:" & destText & return & return & "(Or Import File(s) for individual sessions.)"
 		else
 			set msg to "Imported " & okCount & " item(s) into your RaceStudio 3 data folder. Nothing existing was overwritten."
 		end if
