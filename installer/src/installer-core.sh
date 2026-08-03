@@ -388,7 +388,11 @@ fi
 # The macOS app-menu name ("RaceStudio 3" vs "Wine") comes from the CFBundleName in each Wine
 # unix-loader's embedded __info_plist, which build-apps.sh patches at build time
 # (patch-wine-appname.py) — NOT from argv[0], which winemac.drv ignores. So just run Wine directly.
-nohup arch -x86_64 "\$WB" '$RS3_WIN_EXE' >> "\$ROOT/logs/run.log" 2>&1 &
+# --disable-gpu-compositing: RS3's embedded CEF (Chromium 66) can't present GPU-composited frames
+# to the winemac window under Wine, so the web-maps track background renders WHITE while the
+# renderer is actually producing the map. Software compositing keeps GPU raster but makes the
+# frames present — verified on-device 2026-08-02, issue #37. Mirrors RaceStudio3.applescript.
+nohup arch -x86_64 "\$WB" '$RS3_WIN_EXE' --disable-gpu-compositing >> "\$ROOT/logs/run.log" 2>&1 &
 disown
 LAUNCH
   chmod +x "$f"

@@ -143,12 +143,17 @@ on launchRS3()
 	-- Bounded ~8s (32 * 0.25) so a focus-steal can never hang the applet. The trailing pgrep makes
 	-- the launch's exit status reflect whether RS3 actually came up (the nohup'd wine is detached, so
 	-- without this the script would always exit 0 and the on-error dialog below could never fire).
+	-- 5. CEF web maps (track-view satellite background): RS3 embeds Chromium 66; under Wine its GPU
+	--    compositor can't present frames to the winemac window, so the web-maps panel renders WHITE
+	--    (the renderer produces the map — tiles download, JS runs — but the surface never draws).
+	--    --disable-gpu-compositing keeps GPU rasterization but composites in software, so the frames
+	--    present and the satellite map shows. 2026-08-02, issue #37.
 	set bridgeWait to "self_asn=\"$(/usr/bin/lsappinfo front)\"; for _i in $(seq 1 32); do f=\"$(/usr/bin/lsappinfo front)\"; if [ \"$f\" != \"$self_asn\" ]; then case \"$(/usr/bin/lsappinfo info -only name \"$f\" 2>/dev/null)\" in *RaceStudio*) break ;; esac; fi; /bin/sleep 0.25; done; /usr/bin/pgrep -f AiMRS3-64 >/dev/null 2>&1 || exit 1"
 	set sh to "export WINEPREFIX=" & quoted form of (root & "/prefix") & " WINEARCH=win64 WINEDEBUG=-all; " & ¬
 		"export WINEDLLOVERRIDES=" & quoted form of "mscoree=d;mshtml=d" & "; " & ¬
 		"export XDG_CACHE_HOME=" & quoted form of (root & "/cache") & " XDG_CONFIG_HOME=" & quoted form of (root & "/xdg-config") & " XDG_DATA_HOME=" & quoted form of (root & "/xdg-data") & "; " & ¬
 		"mkdir -p " & quoted form of (root & "/logs") & "; " & hygiene & ¬
-		"nohup arch -x86_64 " & quoted form of wb & " 'C:\\AIM_SPORT\\RaceStudio3\\64\\AiMRS3-64-ReleaseU.exe' >> " & quoted form of (root & "/logs/run.log") & " 2>&1 & " & bridgeWait
+		"nohup arch -x86_64 " & quoted form of wb & " 'C:\\AIM_SPORT\\RaceStudio3\\64\\AiMRS3-64-ReleaseU.exe' --disable-gpu-compositing >> " & quoted form of (root & "/logs/run.log") & " 2>&1 & " & bridgeWait
 	try
 		do shell script sh
 	on error
