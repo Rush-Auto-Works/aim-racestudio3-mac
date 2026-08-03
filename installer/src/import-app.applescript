@@ -1,8 +1,8 @@
 -- Import RaceStudio 3 Data — a standalone app (installed into /Applications/AiM). Brings your
 -- telemetry in: choose a folder, or drop an AIM_SPORT folder, a RaceStudio3 "user" folder, a
--- .zip of either, or loose .xrk files onto it. Everything is MERGED into your RaceStudio 3 data
--- folder and nothing you already have is overwritten. The install engine (installer-core.sh) is
--- embedded in this app's Resources so it works wherever the app is moved.
+-- .zip of either, or loose .xrk/.drk session files onto it. Everything is MERGED into your
+-- RaceStudio 3 data folder and nothing you already have is overwritten. The install engine
+-- (installer-core.sh) is embedded in this app's Resources so it works wherever the app is moved.
 
 on run
 	set core to corePath()
@@ -10,11 +10,11 @@ on run
 		needSetup()
 		return
 	end if
-	set f to choose folder with prompt "Choose an AIM_SPORT folder, a RaceStudio3 “user” folder, or a folder of .xrk files to import."
+	set f to choose folder with prompt "Choose an AIM_SPORT folder, a RaceStudio3 “user” folder, or a folder of .xrk/.drk files to import."
 	importItems(core, {f})
 end run
 
--- drag-and-drop: accept dropped folders / .zip / .xrk
+-- drag-and-drop: accept dropped folders / .zip / .xrk / .drk
 on open theItems
 	set core to corePath()
 	if not isInstalled(core) then
@@ -26,23 +26,51 @@ end open
 
 on importItems(core, theItems)
 	set okCount to 0
+	set dests to {}
 	repeat with anItem in theItems
-		if importOne(core, POSIX path of anItem) then set okCount to okCount + 1
+		set importResult to importOne(core, POSIX path of anItem)
+		if item 1 of importResult is true then
+			set okCount to okCount + 1
+			if item 2 of importResult is not "" and dests does not contain item 2 of importResult then
+				set end of dests to item 2 of importResult
+			end if
+		end if
 	end repeat
 	if okCount > 0 then
-		display dialog "Imported " & okCount & " item(s) into your RaceStudio 3 data folder. Nothing existing was overwritten." buttons {"OK"} default button 1 with title "Import complete" with icon note
+		-- RS3 does not scan the data folder on its own: sessions only appear once imported
+		-- through RS3's own UI (cogwheel → Import → Import Folder/File(s)). Point the user at
+		-- where the files were staged so they can do that final step.
+		if (count of dests) > 0 then
+			set destText to ""
+			repeat with d in dests
+				set destText to destText & return & d
+			end repeat
+			set msg to "Imported " & okCount & " item(s) into your RaceStudio 3 data folder. Nothing existing was overwritten." & return & return & "RaceStudio 3 won't show these until you import them:" & return & "Open RaceStudio 3 → cogwheel (bottom-left) → Import → Import Folder, then pick:" & destText & return & return & "(Or Import File(s) for individual sessions.)"
+		else
+			set msg to "Imported " & okCount & " item(s) into your RaceStudio 3 data folder. Nothing existing was overwritten."
+		end if
+		display dialog msg buttons {"OK"} default button 1 with title "Import complete" with icon note
 	end if
 end importItems
 
 on importOne(core, p)
 	try
 		with timeout of 1800 seconds
-			do shell script "UI_MODE=applet RS3_SINGLE_APP=1 bash " & quoted form of core & " --import " & quoted form of p & " 2>&1"
+			set out to do shell script "UI_MODE=applet RS3_SINGLE_APP=1 bash " & quoted form of core & " --import " & quoted form of p & " 2>&1"
 		end timeout
-		return true
+		-- capture the staged destination from the engine's machine-readable
+		-- "IMPORT_DEST: <path>" line (see ui_import_dest in lib/ui.sh). Nothing else
+		-- in the output is a reliable path — do NOT parse the human STATUS lines.
+		set dest to ""
+		repeat with aLine in paragraphs of out
+			if aLine starts with "IMPORT_DEST: " then
+				set dest to (characters 14 thru -1 of aLine) as text
+			end if
+		end repeat
+		return {true, dest}
 	on error errMsg
 		display dialog "Couldn't import “" & p & "”:" & return & return & errMsg buttons {"OK"} default button 1 with title "Import problem" with icon stop
-		return false
+		return {false, ""}
 	end try
 end importOne
 

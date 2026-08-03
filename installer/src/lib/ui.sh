@@ -26,6 +26,17 @@ ui_say() {  # informational line
   esac
 }
 
+# ui_import_dest <path> : machine-readable "where the staged session files went", emitted ONLY
+# when there is a real folder the applet should point the user at for RS3's own Import step. This
+# is the applet contract for the guidance dialog (like NEEDS_CHOICE / PROGRESS / ERROR), NOT
+# human-readable prose — the applet parses exactly "IMPORT_DEST: <path>" and nothing else.
+ui_import_dest() {
+  case "$UI_MODE" in
+    applet) printf 'IMPORT_DEST: %s\n' "$1" ;;
+    *)      ui_say "staged into $1" ;;
+  esac
+}
+
 ui_progress() {  # <step> <total> <description>
   case "$UI_MODE" in
     applet) printf 'PROGRESS: %s %s %s\n' "$1" "$2" "$3" ;;

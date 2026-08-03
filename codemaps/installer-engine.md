@@ -43,8 +43,12 @@ forward: disk-check → _merge_copy_if_absent(SRC→DST) → _verify_merge → m
 ```
 Invariants: DST made complete+verified BEFORE SRC touched · MERGE = copy-if-absent (user's file wins, never overwrite) · only the disposable GONE is deleted · symlink installed via atomic rename.
 
-Import routing (`do_import`): RS3 user-tree → `import_merge`; folder of loose `.xrk` → `import_xrk_dir`
-(copies into `$DATA_DIR/data/<folder>/`, never overwriting); `.zip` → unzip then merge; single `.xrk` → `$DATA_DIR/data/dropped-<date>/`.
+Import routing (`do_import`): RS3 user-tree → `import_merge`; folder of loose `.xrk`/`.drk` →
+`import_session_dir` (copies into `$DATA_DIR/data/<folder>/`, never overwriting); `.zip` → user-tree
+merge OR loose-session copy; single `.xrk`/`.drk` → `$DATA_DIR/data/dropped-<date>/`. NOTE: RS3 does
+not scan the data folder — staged sessions only appear after the user runs RS3's own Import
+(cogwheel → Import → Import Folder); the engine emits `IMPORT_DEST: <path>` for the applet to guide
+them. `.drk` is the legacy RS2-era format; RS3's importer reads it natively.
 
 ## launch.sh (generated)
 

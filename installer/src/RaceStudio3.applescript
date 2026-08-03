@@ -2,7 +2,7 @@
 --   • First launch: sets up a pinned modern Wine + RaceStudio 3 (the 8-phase flow with a live
 --     progress bar), then opens RS3. No Terminal, no Parallels, no CrossOver.
 --   • Later launches: just opens RaceStudio 3.
---   • Drop an AIM_SPORT folder / .zip / .xrk onto the app to import data (never overwrites).
+--   • Drop an AIM_SPORT folder / .zip / .xrk / .drk onto the app to import data (never overwrites).
 -- The Wine engine + Windows prefix live in ~/Library/Application Support/RaceStudio3 (outside the
 -- signed app, as required), your data in ~/Documents/AIM_SPORT. Import / Uninstall are standalone
 -- apps that ship beside this one in /Applications/AiM (the DMG drops the whole AiM folder in).
@@ -42,11 +42,30 @@ on open theItems
 		doFirstRunSetup(coreScript)
 	end if
 	set okCount to 0
+	set dests to {}
 	repeat with anItem in theItems
-		if importOne(coreScript, POSIX path of anItem) then set okCount to okCount + 1
+		set importResult to importOne(coreScript, POSIX path of anItem)
+		if item 1 of importResult is true then
+			set okCount to okCount + 1
+			if item 2 of importResult is not "" and dests does not contain item 2 of importResult then
+				set end of dests to item 2 of importResult
+			end if
+		end if
 	end repeat
 	if okCount > 0 then
-		display dialog "Imported " & okCount & " item(s) into your RaceStudio 3 data folder. Nothing existing was overwritten." buttons {"OK"} default button 1 with title "Import complete" with icon note
+		-- RS3 does not scan the data folder on its own: sessions only appear once imported
+		-- through RS3's own UI (cogwheel → Import → Import Folder/File(s)). Point the user at
+		-- where the files were staged so they can do that final step.
+		if (count of dests) > 0 then
+			set destText to ""
+			repeat with d in dests
+				set destText to destText & return & d
+			end repeat
+			set msg to "Imported " & okCount & " item(s) into your RaceStudio 3 data folder. Nothing existing was overwritten." & return & return & "RaceStudio 3 won't show these until you import them:" & return & "Open RaceStudio 3 → cogwheel (bottom-left) → Import → Import Folder, then pick:" & destText & return & return & "(Or Import File(s) for individual sessions.)"
+		else
+			set msg to "Imported " & okCount & " item(s) into your RaceStudio 3 data folder. Nothing existing was overwritten."
+		end if
+		display dialog msg buttons {"OK"} default button 1 with title "Import complete" with icon note
 	end if
 end open
 
@@ -236,12 +255,21 @@ end isInstalled
 on importOne(coreScript, p)
 	try
 		with timeout of 1800 seconds
-			do shell script "UI_MODE=applet RS3_SINGLE_APP=1 bash " & quoted form of coreScript & " --import " & quoted form of p & " 2>&1"
+			set out to do shell script "UI_MODE=applet RS3_SINGLE_APP=1 bash " & quoted form of coreScript & " --import " & quoted form of p & " 2>&1"
 		end timeout
-		return true
+		-- capture the staged destination from the engine's machine-readable
+		-- "IMPORT_DEST: <path>" line (see ui_import_dest in lib/ui.sh). Nothing else
+		-- in the output is a reliable path — do NOT parse the human STATUS lines.
+		set dest to ""
+		repeat with aLine in paragraphs of out
+			if aLine starts with "IMPORT_DEST: " then
+				set dest to (characters 14 thru -1 of aLine) as text
+			end if
+		end repeat
+		return {true, dest}
 	on error errMsg
 		display dialog "Couldn't import “" & p & "”:" & return & return & errMsg buttons {"OK"} default button 1 with title "Import problem" with icon stop
-		return false
+		return {false, ""}
 	end try
 end importOne
 

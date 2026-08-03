@@ -25,9 +25,15 @@ ever). Every launch after that just opens the app.
 <details>
 <summary><b>Bring your sessions and configs over from a PC</b></summary>
 
-**Easiest:** drag your old `AIM_SPORT` folder — or a `.zip` of it, or loose `.xrk` files —
-straight onto the RaceStudio 3 app. It merges everything in and **never overwrites** what you
-already have. Works from a USB stick, a backup, or a Parallels shared folder.
+**Easiest:** drag your old `AIM_SPORT` folder — or a `.zip` of it, or loose `.xrk`/`.drk` session
+files — straight onto the RaceStudio 3 app. It merges everything into your data folder and
+**never overwrites** what you already have. Works from a USB stick, a backup, or a Parallels
+shared folder.
+
+One caveat: RaceStudio 3 only *shows* sessions it has imported itself (its database is indexed at
+open, not rescanned). After dropping files, finish the job in RS3: **cogwheel → Import → Import
+Folder**, and pick the folder the Import app tells you the files went to. RS3 handles `.drk`
+fine — this is about getting RS3 to notice the files at all.
 
 **Have an AI assistant do it for you:** open [LLM-PROMPT.md](LLM-PROMPT.md), copy the whole
 thing, and paste it into Claude or ChatGPT on your Mac. It'll find your old data wherever it

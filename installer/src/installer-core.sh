@@ -492,34 +492,69 @@ do_import() {
   # The Import app is its own entry point and never runs the launcher's hygiene, so a prefix that
   # still has `z: -> /` would keep it until RS3 is next launched. Drop it here too (issue #32).
   [ -d "${PREFIX:-}" ] && { drop_host_root_drive "$PREFIX" || true; }
-  case "$p" in
-    *.zip|*.ZIP)
+  local plow; plow="$(printf '%s' "$p" | tr '[:upper:]' '[:lower:]')"   # bash 3.2-safe lowercase (${p,,} needs bash 4+)
+  case "$plow" in
+    *.zip)
       [ -f "$p" ] || die "Import: zip not found: $p"
       local tmp; tmp="$(mktemp -d "${TMPDIR:-/tmp}/rs3import.XXXXXX")"
       ui_say "Unzipping…"
       ditto -x -k "$p" "$tmp" 2>/dev/null || unzip -q "$p" -d "$tmp" 2>/dev/null || { rm -rf "$tmp"; die "Import: couldn't unzip $p"; }
       local u; u="$(find "$tmp" -type d -name user -path '*RaceStudio3*' 2>/dev/null | head -1)"
-      [ -n "$u" ] || u="$tmp"
-      import_merge "$u"; local rc=$?
-      rm -rf "$tmp"
-      [ "$rc" -eq 0 ] || die "Import failed."
+      if [ -n "$u" ]; then
+        import_merge "$u"; local rc=$?
+        rm -rf "$tmp"
+        [ "$rc" -eq 0 ] || die "Import failed."
+      elif _dir_has_session_file "$tmp"; then
+        # a zip of loose .xrk/.drk sessions (no RaceStudio3 user tree)
+        local dest="$DATA_DIR/data/dropped-$(date +%Y%m%d)"
+        mkdir -p "$dest"
+        local n=0 f
+        while IFS= read -r f; do
+          local rel="${f#"$tmp"/}"
+          mkdir -p "$dest/$(dirname "$rel")" || { rm -rf "$tmp"; die "Import: failed creating $(dirname "$rel")"; }
+          if [ ! -e "$dest/$rel" ]; then
+            ditto "$f" "$dest/$rel" || { rm -rf "$tmp"; die "Import: failed copying $rel"; }
+            n=$((n+1))
+          fi
+        done < <(find "$tmp" -type f \( -iname '*.xrk' -o -iname '*.drk' \))
+        rm -rf "$tmp"
+        if [ "$n" -eq 0 ]; then
+          ui_say "No new session files in zip — everything is already in the data folder."
+        else
+          ui_say "Imported $n session file(s) from zip (nothing overwritten)."
+          ui_import_dest "$dest"
+        fi
+      else
+        rm -rf "$tmp"
+        die "Import: zip has no RaceStudio3 user folder and no .xrk or .drk files."
+      fi
       ;;
-    *.xrk|*.XRK)
+    *.xrk|*.drk)
+      # A single session file (case-insensitive via $plow). The copy is checked: a failed copy is
+      # an error, not a silent "Imported" success. If the file is already staged, say so and do
+      # not claim a staged destination.
       [ -f "$p" ] || die "Import: file not found: $p"
       local dest="$DATA_DIR/data/dropped-$(date +%Y%m%d)"
       mkdir -p "$dest"
-      [ -e "$dest/$(basename "$p")" ] || ditto "$p" "$dest/$(basename "$p")"
-      ui_say "Imported session: $(basename "$p") -> $dest"
+      local target="$dest/$(basename "$p")"
+      if [ -e "$target" ]; then
+        ui_say "No new session staged — $(basename "$p") is already in the data folder."
+      elif ditto "$p" "$target"; then
+        ui_say "Imported session: $(basename "$p")"
+        ui_import_dest "$dest"
+      else
+        ui_error "Import: failed to copy $(basename "$p")"; return 1
+      fi
       ;;
     *)
       [ -d "$p" ] || die "Import: folder not found: $p"
-      # A RaceStudio3 user tree merges; otherwise a folder of loose .xrk sessions is imported.
+      # A RaceStudio3 user tree merges; otherwise a folder of loose .xrk/.drk sessions is imported.
       if [ -n "$(_find_user_tree "$p")" ]; then
         import_merge "$p"
-      elif _dir_has_xrk "$p"; then
-        import_xrk_dir "$p"
+      elif _dir_has_session_file "$p"; then
+        import_session_dir "$p"
       else
-        die "Import: '$p' has no RaceStudio3 user folder and no .xrk files."
+        die "Import: '$p' has no RaceStudio3 user folder and no .xrk or .drk files."
       fi
       ;;
   esac
