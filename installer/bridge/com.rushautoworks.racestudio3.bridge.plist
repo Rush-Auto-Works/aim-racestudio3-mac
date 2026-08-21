@@ -2,8 +2,9 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!-- aim-bridge root LaunchDaemon, registered via SMAppService from RaceStudio 3.app.
      Runs as root (exempt from the macOS Local Network gate) and relays loopback <-> the AiM dash.
-     BundleProgram is relative to the app bundle; the daemon hard-pins 10.0.0.1:2000/36002 when
-     running as root (it ignores the environment), so no arguments carry a destination. -->
+     BundleProgram is relative to the app bundle; when running as root, the daemon resolves the
+     dash IP from interface state among 10.0.0.1 / 11.0.0.1 / 12.0.0.1 and ignores the environment,
+     so no arguments carry a destination. -->
 <plist version="1.0">
 <dict>
     <key>Label</key>

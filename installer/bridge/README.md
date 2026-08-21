@@ -37,7 +37,8 @@ sourced from 36002 by a second host.
 In production the relay runs as **root** (an `SMAppService` daemon). Root code is exempt from
 the gate, so the relay reaches the dash with no prompt and no entitlement. The relay is
 **protocol-agnostic** — it forwards bytes, it does not parse STCP/STNC — and it is pinned to
-exactly two ports and one dash address, refusing everything else.
+exactly two ports and the three permitted dash gateway addresses (`10.0.0.1`, `11.0.0.1`, or
+`12.0.0.1`), refusing everything else.
 
 The pcap (`promiscuous-slurp/sam cap.pcapng`, real RS3↔MXS) shows RS3 **unicasts** to the
 dash's fixed gateway IP — no broadcast/multicast in the connect flow — so a plain unicast
@@ -73,9 +74,9 @@ no gate involved:
 
 ```bash
 SKIP_SIGN=1 bash installer/bridge/build-bridge.sh
-sudo installer/bridge/build/aim-bridge          # DASH_ADDR defaults to 10.0.0.1
+sudo installer/bridge/build/aim-bridge          # root resolves 10.0.0.1, 11.0.0.1, or 12.0.0.1 from network state
 # in another shell, drive the bridge like RS3 would (e.g. promiscuous-slurp aim-probe
-# pointed at 127.0.0.1 instead of 10.0.0.1) and confirm session list + download work.
+# pointed at 127.0.0.1 instead of the dash gateway) and confirm session list + download work.
 ```
 
 ## Roadmap
@@ -83,13 +84,14 @@ sudo installer/bridge/build/aim-bridge          # DASH_ADDR defaults to 10.0.0.1
 - **Phase 1 — DONE:** the relay + hermetic + realistic-keepalive tests.
 - **Phase 1.5 — DONE:** proved a Wine guest's loopback traffic escapes the gate (`falsify-loopback.sh`).
 - **Phase 2 — DONE:** two Wine source patches (`wine-patch/`, built in CI, swapped into the bundle):
-  `ws2_32` redirects discovery (`0.0.0.0:36002` + `10.0.0.0/24`) to loopback and rewrites the
-  relay's reply source back to the dash; `wlanapi` presents a synthetic connected interface so RS3
-  starts discovery at all. DYLD interpose (Rosetta blocks it) and a ws2_32 proxy DLL (Wine has no
+  `ws2_32` redirects discovery (`0.0.0.0:36002` + the `10.0.0.0/24`, `11.0.0.0/24`, and
+  `12.0.0.0/24` dash subnets) to loopback and rewrites the relay's reply source back to the
+  canonical `10.0.0.1` address RS3 sees; `wlanapi` presents a synthetic connected interface so
+  RS3 starts discovery at all. DYLD interpose (Rosetta blocks it) and a ws2_32 proxy DLL (Wine has no
   `AppInit_DLLs`) were both ruled out — see `test/interpose_rewrite.c`, `test/appinit_probe.c`.
 - **Phase 3 — DONE:** the relay ships as a root `SMAppService.daemon` (`aim-bridge-ctl` registers
-  it; one-time Login Items approval), hardened (root → no env, pinned dest, no `SO_REUSEADDR`),
-  with uninstall teardown.
+  it; one-time Login Items approval), hardened (root → no env, resolved dash destination limited to
+  10.0.0.1 / 11.0.0.1 / 12.0.0.1, no `SO_REUSEADDR`), with uninstall teardown.
 - **Phase 3.5 — DONE:** launcher health-check + Login Items guidance + SD/USB fallback.
 - **Phase 4 — DONE (verified on hardware 2026-06-11):** RaceStudio 3 connected to a real AiM **MXS**
   dash over WiFi on **macOS 26** under Wine — the device appeared in Connected Devices and RS3 opened
@@ -98,9 +100,10 @@ sudo installer/bridge/build/aim-bridge          # DASH_ADDR defaults to 10.0.0.1
 ## Security
 
 Root scope is limited to the relay, never all of Wine. Running as root, `aim-bridge` ignores the
-environment and hardcodes the permitted destination subnet (`10.0.0.0/28`) and ports
-(listen `36003/UDP` + `2000/TCP`, dash `36002/UDP` + `2000/TCP`), binds loopback-only, filters
-upstream replies to the pinned dash address, and drops `SO_REUSEADDR` (so a local process
+environment and permits only the three dash gateway addresses (`10.0.0.1`, `11.0.0.1`, and
+`12.0.0.1`), resolving the active one from interface state, plus the fixed ports (listen
+`36003/UDP` + `2000/TCP`, dash `36002/UDP` + `2000/TCP`). It binds loopback-only, filters
+upstream replies to the resolved dash address, and drops `SO_REUSEADDR` (so a local process
 can't pre-bind/steal the port). We chose loopback-bind + hardcoded-dest over peer validation
 (there's no XPC peer on a raw socket; the confused-deputy risk is low — a dash holds no secrets
 and grants no escalation to the Mac). Uninstall unregisters the daemon (user `aim-bridge-ctl

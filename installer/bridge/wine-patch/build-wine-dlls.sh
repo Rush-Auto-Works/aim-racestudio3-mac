@@ -3,9 +3,10 @@
 # The first two make RS3 reach an AiM dash over WiFi (the macOS 15+/26 Local Network gate; both
 # required); the third is an unrelated GDI+ crash-loop fix that rides the same pipeline:
 #
-#   ws2_32.dll  — redirects the dash subnet 10.0.0.0/24 AND the discovery target 0.0.0.0:36002
-#                 to 127.0.0.1 (port 36002->36003), and rewrites the relay's reply source back
-#                 to 10.0.0.1 so RS3 accepts it. (ws2_32-localnet.patch)
+#   ws2_32.dll  — redirects the dash subnets 10.0.0.0/24, 11.0.0.0/24, and 12.0.0.0/24 AND the
+#                 discovery target 0.0.0.0:36002 to 127.0.0.1 (port 36002->36003), and rewrites
+#                 the relay's reply source back to canonical 10.0.0.1 so RS3 accepts it.
+#                 (ws2_32-localnet.patch)
 #   wlanapi.dll — presents one synthetic, connected Wi-Fi interface so RS3 starts dash discovery
 #                 at all (Wine's wlanapi reports zero interfaces). (wlanapi-synth-iface.patch)
 #   gdiplus.dll — guards GDI+'s Bezier path flattener (flatten_bezier) against a degenerate

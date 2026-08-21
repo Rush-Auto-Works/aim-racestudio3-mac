@@ -25,7 +25,7 @@ others="$(grep -E '^\+\+\+ ' "$PATCH" | grep -v 'dlls/ws2_32/socket.c' || true)"
 
 echo "== the redirect helper + forward decl are added =="
 has 'static const struct sockaddr *aim_loopback_redirect(' "helper/decl signature"
-has 'int is_dash = (b[0] == 10 && b[1] == 0 && b[2] == 0);' "10.0.0.0/24 dash-subnet test"
+has 'int is_dash = (b[0] >= 10 && b[0] <= 12 && b[1] == 0 && b[2] == 0);' "10/11/12.0.0.0/24 dash-subnet test"
 has 'int is_disco0 = (in->sin_addr.s_addr == 0 && in->sin_port == htons( 36002 ));' "0.0.0.0:36002 discovery case"
 has 'if (tmp->sin_port == htons( 36002 )) tmp->sin_port = htons( 36003 );' "port 36002->36003 remap"
 has 'd[0] = 127; d[1] = 0; d[2] = 0; d[3] = 1;' "127.0.0.1 rewrite"

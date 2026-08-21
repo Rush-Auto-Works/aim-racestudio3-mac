@@ -58,6 +58,7 @@ the same `/` if you prefer drive letters.
 
 - **WiFi.** Join your device's WiFi network in macOS System Settings, then connect inside
   RaceStudio 3 just like on Windows.
+  The dash gateway may be **10.0.0.1, 11.0.0.1, or 12.0.0.1**; the bridge resolves the matching dash subnet from your Mac's network state.
   - **On macOS Sequoia (15) and Tahoe (26):** the first time you open RaceStudio 3, it explains
     that it needs a small background helper for Wi-Fi, then macOS shows **"'RaceStudio 3' can run
     in the background"** — click **Allow**. That one‑time step lets RaceStudio 3 reach your device

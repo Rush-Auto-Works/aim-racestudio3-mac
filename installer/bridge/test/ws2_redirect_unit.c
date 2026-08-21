@@ -5,7 +5,7 @@
  * test-ws2-redirect.sh asserts the patch still contains this exact logic, so this test and the
  * shipped code can't silently drift. Compiles natively (the types are standard BSD sockets).
  *
- * Exhaustively checks the 10.0.0.0/28 boundary and the guards (family, length, NULL).
+ * Covers all three 10/11/12.0.0.0/24 dash subnets and the guards (family, length, NULL).
  */
 #include <stdio.h>
 #include <string.h>
@@ -21,7 +21,7 @@ static const struct sockaddr *aim_loopback_redirect( const struct sockaddr *addr
     {
         const struct sockaddr_in *in = (const struct sockaddr_in *)addr;
         const unsigned char *b = (const unsigned char *)&in->sin_addr;
-        int is_dash = (b[0] == 10 && b[1] == 0 && b[2] == 0); /* 10.0.0.0/24 dash subnet */
+        int is_dash = (b[0] >= 10 && b[0] <= 12 && b[1] == 0 && b[2] == 0); /* 10/11/12.0.0.0/24 dash subnets */
         int is_disco0 = (in->sin_addr.s_addr == 0 && in->sin_port == htons( 36002 )); /* 0.0.0.0:36002 */
         if (is_dash || is_disco0)
         {
@@ -80,7 +80,7 @@ static void expect_passthrough(const char *ip) {
 
 int main(void) {
     printf("ws2_redirect_unit:\n");
-    /* in 10.0.0.0/28 -> rewritten */
+    /* Each AiM dash gateway subnet -> rewritten */
     expect_rewrite("10.0.0.0");
     expect_rewrite("10.0.0.1");    /* the real dash */
     expect_rewrite("10.0.0.2");    /* the host's DHCP addr */
@@ -88,9 +88,14 @@ int main(void) {
     expect_rewrite("10.0.0.16");   /* inside /24 (was outside the old /28) */
     expect_rewrite("10.0.0.254");
     expect_rewrite("10.0.0.255");  /* the subnet BROADCAST RS3 sends discovery to */
+    expect_rewrite("11.0.0.1");
+    expect_rewrite("11.0.0.255");
+    expect_rewrite("12.0.0.1");
+    expect_rewrite("12.0.0.255");
     /* port remap: discovery 36002 -> 36003; everything else preserved */
     expect_rewrite_port("10.0.0.255", 36002, 36003); /* broadcast discovery -> relay's 36003 */
     expect_rewrite_port("10.0.0.1", 36002, 36003);   /* aim-ka unicast -> relay's 36003 */
+    expect_rewrite_port("11.0.0.1", 36002, 36003);   /* discovery on the second dash subnet */
     expect_rewrite_port("10.0.0.1", 2000, 2000);     /* STCP data port untouched */
     expect_rewrite_port("10.0.0.1", 36003, 36003);   /* already-36003 not double-mapped */
     /* 0.0.0.0:36002 — RS3's actual discovery target under Wine — rewrites to 127.0.0.1:36003 */
@@ -98,10 +103,12 @@ int main(void) {
     /* 0.0.0.0 on any OTHER port is NOT touched (only the discovery port) */
     expect_passthrough_port("0.0.0.0", 2000);
     expect_passthrough_port("0.0.0.0", 80);
-    /* outside 10.0.0.0/24 -> passthrough */
+    /* addresses outside the three dash subnets -> passthrough */
+    expect_passthrough("13.0.0.1");
     expect_passthrough("10.0.1.1");
     expect_passthrough("10.1.0.1");
-    expect_passthrough("11.0.0.1");
+    expect_passthrough("11.1.0.1");  /* second octet must be zero */
+    expect_passthrough("12.0.1.1");  /* third octet must be zero */
     expect_passthrough("192.168.0.1");
     expect_passthrough("127.0.0.1");
     expect_passthrough("8.8.8.8");  /* public IP (license/update traffic) must NOT be touched */

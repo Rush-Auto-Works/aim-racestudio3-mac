@@ -17,7 +17,7 @@ if "$BUILD/ws2_redirect_unit"; then ok "all boundary/guard cases pass"; else bad
 
 echo "== drift guard: tested logic matches the shipped patch =="
 for line in \
-  'int is_dash = (b[0] == 10 && b[1] == 0 && b[2] == 0);' \
+  'int is_dash = (b[0] >= 10 && b[0] <= 12 && b[1] == 0 && b[2] == 0);' \
   'int is_disco0 = (in->sin_addr.s_addr == 0 && in->sin_port == htons( 36002 ));' \
   'd[0] = 127; d[1] = 0; d[2] = 0; d[3] = 1;' \
   'if (tmp->sin_port == htons( 36002 )) tmp->sin_port = htons( 36003 );' \

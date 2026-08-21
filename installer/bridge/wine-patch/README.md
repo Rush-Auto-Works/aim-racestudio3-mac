@@ -19,8 +19,9 @@ the prebuilt bundle.
 A helper, applied at the top of each address-taking entry point:
 
 ```c
-/* AiM WiFi loopback redirect: AP-mode dash is 10.0.0.0/28; the macOS Local Network gate
- * drops it for the Wine guest, so send it to 127.0.0.1 where the root aim-bridge relays.
+/* AiM WiFi loopback redirect: dash gateways are 10.0.0.1, 11.0.0.1, or 12.0.0.1
+ * (subnets 10.0.0.0/24, 11.0.0.0/24, and 12.0.0.0/24); the macOS Local Network gate
+ * drops them for the Wine guest, so send them to 127.0.0.1 where the root aim-bridge relays.
  * Dest port 36002 (aim-ka discovery) additionally remaps to 36003: RS3 itself binds
  * 0.0.0.0:36002 (it sends discovery FROM 36002), so the relay must listen on 36003 —
  * if it held 127.0.0.1:36002, RS3's bind fails WSAEADDRINUSE and discovery never starts
@@ -28,10 +29,10 @@ A helper, applied at the top of each address-taking entry point:
 static const struct sockaddr *aim_loopback_redirect(const struct sockaddr *addr, int len,
                                                     struct sockaddr_in *tmp)
 {
-    if (addr && len >= (int)sizeof(struct sockaddr_in) && addr->sa_family == AF_INET)
-    {
         const struct sockaddr_in *in = (const struct sockaddr_in *)addr;
-        if ((ntohl(in->sin_addr.s_addr) & 0xfffffff0) == 0x0a000000) /* 10.0.0.0/28 */
+        if ((ntohl(in->sin_addr.s_addr) & 0xffffff00) == 0x0a000000 ||
+            (ntohl(in->sin_addr.s_addr) & 0xffffff00) == 0x0b000000 ||
+            (ntohl(in->sin_addr.s_addr) & 0xffffff00) == 0x0c000000) /* 10/11/12.0.0/24 */
         {
             *tmp = *in;
             tmp->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
@@ -50,15 +51,16 @@ Call sites (each: `struct sockaddr_in _aim_tmp; addr = aim_loopback_redirect(add
 - `WSASendTo()`      (~L3269, the destination param)
 - `WSASendMsg()`     (~L1205, `msg->name`)
 
-Scope guard: only `10.0.0.0/24` and `0.0.0.0:36002` are rewritten, so RS3's other traffic
-(license/update to public IPs) is untouched.
+Scope guard: only the `10.0.0.0/24`, `11.0.0.0/24`, and `12.0.0.0/24` dash subnets plus
+`0.0.0.0:36002` are rewritten, so RS3's other traffic (license/update to public IPs) is untouched.
 
-## On-device reality (2026-06-11) — why the scope is 0.0.0.0:36002 and /24
+## On-device reality (2026-06-11) — why the scope is 0.0.0.0:36002 and the three /24 subnets
 
 Logging every send destination under Wine showed RS3 addresses aim-ka discovery to
 **`0.0.0.0:36002`** (its per-interface broadcast resolves to 0.0.0.0 under Wine), NOT
-`10.0.0.255` or the gateway. So the redirect covers both `0.0.0.0:36002` and the dash subnet
-`10.0.0.0/24` (the `.1` keepalive RS3 unicasts *after* discovery). The relay replies from
+the dash broadcast or gateway. So the redirect covers both `0.0.0.0:36002` and the three dash
+subnets (`10.0.0.0/24`, `11.0.0.0/24`, and `12.0.0.0/24`) for the `.1` keepalive RS3 unicasts
+after discovery. The relay replies from
 `127.0.0.1:36003`; RS3 ignores replies whose source isn't the dash, so the patch ALSO rewrites
 the inbound recv source (`127.0.0.1:36003` → `10.0.0.1:36002`) in `WS2_recv_base`. With these,
 RS3 connected to a real MXS dash and the device appeared. This `ws2_32` patch is necessary but
