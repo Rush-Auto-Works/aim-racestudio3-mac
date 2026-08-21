@@ -58,9 +58,9 @@
   *      connect   (ws2_32.4)
   */
 +/* AiM WiFi loopback redirect (macOS Local Network gate workaround).
-+ * The AP-mode AiM dash is on 10.0.0.0/24, which the macOS 15+/26 Local Network privacy gate
++ * The AP-mode AiM dash is on 10.0.0.0/24, 11.0.0.0/24, or 12.0.0.0/24, which the macOS 15+/26 Local Network privacy gate
 + * silently drops for the Wine guest. Redirect those sockets to 127.0.0.1, where the notarized
-+ * root aim-bridge daemon relays to the real dash. Only 10.0.0.0/24 is touched; all other
++ * root aim-bridge daemon relays to the real dash. Only the three dash subnets + 0.0.0.0:36002 are touched; all other
 + * traffic is unaffected. See aim-racestudio3-mac installer/bridge/.
 + * Port 36002 (aim-ka discovery) is remapped to 36003: RS3 itself binds 0.0.0.0:36002 for
 + * discovery, so the relay must not occupy that port on loopback — it listens on 36003. */
@@ -71,7 +71,7 @@
 +    {
 +        const struct sockaddr_in *in = (const struct sockaddr_in *)addr;
 +        const unsigned char *b = (const unsigned char *)&in->sin_addr;
-+        int is_dash = (b[0] == 10 && b[1] == 0 && b[2] == 0); /* 10.0.0.0/24 dash subnet */
++        int is_dash = (b[0] >= 10 && b[0] <= 12 && b[1] == 0 && b[2] == 0); /* 10/11/12.0.0.0/24 dash subnets */
 +        int is_disco0 = (in->sin_addr.s_addr == 0 && in->sin_port == htons( 36002 )); /* 0.0.0.0:36002 */
 +        if (is_dash || is_disco0)
 +        {

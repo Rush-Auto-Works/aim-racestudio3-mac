@@ -12,6 +12,12 @@ only this installer is versioned here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+- WiFi bridge now supports all three AiM dash gateway IPs (`10.0.0.1`, `11.0.0.1`, and
+  `12.0.0.1`). The relay resolves the dash IP from the Mac's network state, and the `ws2_32`
+  redirect covers all three dash subnets.
+
 ## [3.83.39-3] — 2026-08-03
 
 **Fixes the satellite track map showing blank (white) in RaceStudio 3.**

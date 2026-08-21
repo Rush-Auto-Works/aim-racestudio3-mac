@@ -45,7 +45,7 @@
 +} AIM_WLAN_CONNECTION_ATTRIBUTES;
 +
 +/* The dash's AP SSID. RS3 only needs to believe Wi-Fi is associated; the dash IP is derived
-+ * from the host route (10.0.0.1 on the dash AP), not from here. */
++ * from the Mac's interface state (10.0.0.1 / 11.0.0.1 / 12.0.0.1 on the dash AP), not from here. */
 +static const char AIM_SSID[] = "AiM-Dash";
 +
  static struct wine_wlan
