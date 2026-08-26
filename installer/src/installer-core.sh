@@ -7,7 +7,7 @@
 #   installer-core.sh --dry-run run  # validate logic; NO network, NO writes outside sandbox
 #   installer-core.sh --repair       # re-run from the first failed postcondition
 #   installer-core.sh --reinstall    # wipe engine+prefix (never Documents data w/o confirm)
-#   installer-core.sh --import <dir> # merge an external user/ folder into the data dir
+#   installer-core.sh --import <path># merge a user/ folder, session file(s) or a .zconf2 config
 #   installer-core.sh uninstall      # remove engine + launchers (data kept unless confirmed)
 #
 # Phases (the 8 progress steps): preflight acquire-installer download-wine make-prefix
@@ -545,6 +545,11 @@ do_import() {
       else
         ui_error "Import: failed to copy $(basename "$p")"; return 1
       fi
+      ;;
+    *.zconf2|*.zconfig)
+      # An AiM configuration export. This one really imports — RS3 lists the cfgs/ folders it
+      # finds on disk, so no follow-up Import inside RS3 is needed (see import_config_archive).
+      import_config_archive "$p" || die "Import failed."
       ;;
     *)
       [ -d "$p" ] || die "Import: folder not found: $p"

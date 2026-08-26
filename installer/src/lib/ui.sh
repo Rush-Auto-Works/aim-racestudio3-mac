@@ -37,6 +37,18 @@ ui_import_dest() {
   esac
 }
 
+# ui_import_config <name> : machine-readable "a configuration landed in the data folder", one
+# line per configuration. Same applet contract as IMPORT_DEST — the applet parses exactly
+# "IMPORT_CONFIG: <name>". A configuration needs no follow-up Import inside RS3 the way a session
+# does (RS3 lists the cfgs/ folders it finds on disk), only a restart, so the applet says a
+# different thing for it.
+ui_import_config() {
+  case "$UI_MODE" in
+    applet) printf 'IMPORT_CONFIG: %s\n' "$1" ;;
+    *)      ui_say "imported configuration $1" ;;
+  esac
+}
+
 ui_progress() {  # <step> <total> <description>
   case "$UI_MODE" in
     applet) printf 'PROGRESS: %s %s %s\n' "$1" "$2" "$3" ;;

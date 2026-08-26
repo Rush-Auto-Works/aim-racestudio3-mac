@@ -210,3 +210,121 @@ import_session_dir() {
 # import_xrk_dir <dir> : back-compat wrapper for import_session_dir (historical name; a folder of
 # loose .xrk sessions).
 import_xrk_dir() { import_session_dir "$@"; }
+
+# ---- configuration import (.zconf2 / .zconfig) ---------------------------------------------
+# A configuration export is a zip whose top level holds one or more `cfg_<timestamp>` folders (the
+# `.aimcfg` plus its `devices/` tree) and, optionally, a `to_copy_in_app_root_folder/user/…`
+# payload of shared resources — overlay icons, masks and the like.
+#
+# Unlike a session, a configuration really can be imported without RaceStudio 3's own Import step.
+# RS3's database (`database/data.xrd`) has no configurations table: it lists whatever
+# `cfgs/<cfg_*>` folders it finds on disk. So copying the folder in IS the import; the
+# configuration shows up the next time RS3 starts.
+
+# _find_config_dirs <dir> : print the configuration folders inside an unpacked archive, one per
+# line — a top-level folder holding at least one `.aimcfg`.
+_find_config_dirs() {
+  local d
+  for d in "$1"/*/; do
+    [ -d "$d" ] || continue
+    [ -n "$(find "$d" -maxdepth 1 -type f -iname '*.aimcfg' -print -quit 2>/dev/null)" ] || continue
+    printf '%s\n' "${d%/}"
+  done
+}
+
+# _cfg_label <cfg_dir> : the name RaceStudio 3 shows for a configuration — its `.aimcfg` filename
+# without the extension. The folder name is only a timestamp, so it is useless in a dialog.
+_cfg_label() {
+  local f
+  f="$(find "$1" -maxdepth 1 -type f -iname '*.aimcfg' -print -quit 2>/dev/null)"
+  if [ -z "$f" ]; then basename "$1"; return 0; fi
+  f="$(basename "$f")"
+  printf '%s' "${f%.*}"
+}
+
+# _cfg_already_imported <cfgs_dir> <base> <src_dir> : true when <src_dir> is identical to a
+# configuration already there — either under the archive's own name or one of its `_NN` siblings.
+# Dropping the same file twice should say so rather than stack another copy; RS3's own importer
+# never checks, which is how a data folder ends up with a dozen identical `cfg_…_NN` twins.
+_cfg_already_imported() {
+  local root="$1" base="$2" src="$3" d
+  for d in "$root/$base" "$root/$base"_[0-9][0-9]; do
+    [ -d "$d" ] || continue
+    diff -rq "$src" "$d" >/dev/null 2>&1 && return 0
+  done
+  return 1
+}
+
+# _cfg_free_name <cfgs_dir> <base> : echo a free folder name under <cfgs_dir>, using RaceStudio 3's
+# own collision convention (`<base>_01` … `<base>_99`). Echoes nothing and returns 1 if all are
+# taken — better a clear error than silently overwriting somebody's configuration.
+_cfg_free_name() {
+  local root="$1" base="$2" i=1 n
+  if [ ! -e "$root/$base" ]; then printf '%s' "$base"; return 0; fi
+  while [ "$i" -le 99 ]; do
+    n="$(printf '%s_%02d' "$base" "$i")"
+    [ -e "$root/$n" ] || { printf '%s' "$n"; return 0; }
+    i=$((i+1))
+  done
+  return 1
+}
+
+# import_config_archive <file> : import an AiM configuration export into DATA_DIR/cfgs/. Nothing is
+# overwritten — a name that is taken gets the `_NN` suffix, and the shared-resource payload is
+# merged copy-if-absent by the same engine as import_merge.
+import_config_archive() {
+  local zip="$1" tmp cfgs dirs d base name payload n=0 found=0
+  [ -f "$zip" ] || { ui_error "Import: file not found: $zip"; return 1; }
+  cfgs="$DATA_DIR/cfgs"
+  mkdir -p "$cfgs" || { ui_error "Import: couldn't create $cfgs"; return 1; }
+  tmp="$(mktemp -d "${TMPDIR:-/tmp}/rs3cfg.XXXXXX")" || { ui_error "Import: couldn't make a temp folder"; return 1; }
+
+  ui_say "Unpacking configuration…"
+  if ! ditto -x -k "$zip" "$tmp" 2>/dev/null && ! unzip -q "$zip" -d "$tmp" 2>/dev/null; then
+    rm -rf "$tmp"
+    ui_error "Import: '$(basename "$zip")' is not a readable AiM configuration export."
+    return 1
+  fi
+
+  dirs="$(_find_config_dirs "$tmp")"
+  if [ -z "$dirs" ]; then
+    rm -rf "$tmp"
+    ui_error "Import: '$(basename "$zip")' has no configuration in it (no .aimcfg found)."
+    return 1
+  fi
+
+  while IFS= read -r d; do
+    [ -n "$d" ] || continue
+    found=$((found+1))
+    base="$(basename "$d")"
+    if _cfg_already_imported "$cfgs" "$base" "$d"; then
+      ui_say "Already in RaceStudio 3: $(_cfg_label "$d")"
+      continue
+    fi
+    name="$(_cfg_free_name "$cfgs" "$base")" || {
+      rm -rf "$tmp"; ui_error "Import: $cfgs already holds 100 copies of $base"; return 1
+    }
+    ditto "$d" "$cfgs/$name" || {
+      rm -rf "$tmp"; ui_error "Import: failed copying configuration $base"; return 1
+    }
+    n=$((n+1))
+    ui_import_config "$(_cfg_label "$d")"
+  done <<EOF
+$dirs
+EOF
+
+  # Shared resources the configuration references (overlay icons and masks) live beside the cfg
+  # folders and belong at the root of the data folder. Copy-if-absent: a user's own file wins.
+  payload="$(find "$tmp" -mindepth 2 -maxdepth 2 -type d -name user -path '*to_copy_in_app_root*' -print -quit 2>/dev/null)"
+  if [ -n "$payload" ] && ! _merge_copy_if_absent "$payload" "$DATA_DIR"; then
+    rm -rf "$tmp"; ui_error "Import: failed copying the configuration's shared resources"; return 1
+  fi
+  rm -rf "$tmp"
+
+  if [ "$n" -eq 0 ]; then
+    ui_say "Nothing new — that configuration is already in RaceStudio 3."
+  else
+    ui_say "Imported $n configuration(s) of $found."
+  fi
+  return 0
+}

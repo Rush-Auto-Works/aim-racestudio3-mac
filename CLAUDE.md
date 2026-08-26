@@ -116,6 +116,15 @@ This file is constraints, conventions, and hard-won gotchas only.
   process can't inject the broadcast (only the mountmgr driver host can), and the only Wine lever
   (assign a fresh letter per card) is invasive + leaky. **Don't re-litigate.** Full detail: memory
   `smartycam-sd-import-works`.
+- **Configurations live on disk; sessions live in the database.** PR #47 established that RS3 only
+  shows telemetry it imported itself (parsed + registered in `database/data.xrd`), so a dropped
+  `.xrk`/`.drk` can only be staged and the user pointed at RS3's own Import. That does **not**
+  generalise: `data.xrd` has no configurations table, and RS3 lists whatever `cfgs/<cfg_*>` folders
+  it finds. So a `.zconf2` really can be imported by copying — `import_config_archive`
+  (`lib/data.sh`) unpacks it into `cfgs/` with RS3's own `_NN` collision suffix and merges the
+  archive's `to_copy_in_app_root_folder/user/` payload (overlay icons and masks) into the data
+  root. The configuration appears after RS3 restarts. RS3's own importer leaves the unpacked
+  `to_copy_in_app_root_NN` folders behind in `cfgs/`; ours doesn't.
 - **The prefix must NOT have a `z:` drive.** Wine's default `z: -> /` hands RS3 the whole Mac as a
   fixed disk, and RS3 recursively walks every fixed drive after a config clone/import with no depth
   cap. Any directory-symlink cycle out there traps it forever: the path grows past macOS `PATH_MAX`

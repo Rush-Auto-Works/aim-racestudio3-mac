@@ -187,4 +187,54 @@ RS3_APP_SUPPORT="$INSTALL_ROOT" RS3_DATA_DIR="$DATA_DIR" UI_MODE=dryrun \
   bash "$SRC_DIR/installer-core.sh" --import "$sf" >/dev/null 2>&1
 assert_file "$DATA_DIR/data/dropped-"*/session.drk "drk: single .drk file routed to dropped-<date>/"
 
+# ---- 10e. import_config_archive: a .zconf2 configuration export ------------------------------
+# The archive shape RaceStudio 3 exports: one cfg_<timestamp> folder holding the .aimcfg + its
+# devices/ tree, plus a to_copy_in_app_root_folder/user/ payload of shared resources.
+scenario import-zconf2
+mkdir -p "$DATA_DIR/cfgs"
+zsrc="$SANDBOX/import/zconf2/src"
+mkdir -p "$zsrc/cfg_20220318_162427/devices/MXS" "$zsrc/to_copy_in_app_root_folder/user/resources/overlay"
+printf 'CFG\n'     > "$zsrc/cfg_20220318_162427/rush sr mxs.aimcfg"
+printf 'log\n'     > "$zsrc/cfg_20220318_162427/rush sr mxs.aimcfg.dump.log"
+printf 'DEV\n'     > "$zsrc/cfg_20220318_162427/devices/MXS/dev.aimdev2"
+printf 'ICON\n'    > "$zsrc/to_copy_in_app_root_folder/user/resources/overlay/icon.png"
+zarc="$SANDBOX/import/zconf2/config.zconf2"
+(cd "$zsrc" && zip -q -r "$zarc" .)
+
+assert_eq "$(_cfg_label "$zsrc/cfg_20220318_162427")" "rush sr mxs" "zconf2: label is the .aimcfg name, not the .dump.log"
+import_config_archive "$zarc"
+assert_eq "$?" 0 "zconf2: import returns 0"
+assert_file   "$DATA_DIR/cfgs/cfg_20220318_162427/rush sr mxs.aimcfg"   "zconf2: config folder copied into cfgs/"
+assert_file   "$DATA_DIR/cfgs/cfg_20220318_162427/devices/MXS/dev.aimdev2" "zconf2: devices/ tree copied"
+assert_file   "$DATA_DIR/resources/overlay/icon.png"                     "zconf2: app-root payload merged into the data folder"
+assert_absent "$DATA_DIR/cfgs/to_copy_in_app_root_folder"                "zconf2: payload folder not left behind in cfgs/"
+
+# Re-dropping the same file is a no-op, not a second copy.
+import_config_archive "$zarc"
+assert_absent "$DATA_DIR/cfgs/cfg_20220318_162427_01" "zconf2: identical re-import does not stack a copy"
+
+# A DIFFERENT config that happens to carry the same timestamp folder gets RS3's _NN suffix, and
+# the config already there is untouched.
+printf 'OTHER\n' > "$zsrc/cfg_20220318_162427/rush sr mxs.aimcfg"
+zarc2="$SANDBOX/import/zconf2/other.zconf2"
+(cd "$zsrc" && zip -q -r "$zarc2" .)
+import_config_archive "$zarc2"
+assert_file "$DATA_DIR/cfgs/cfg_20220318_162427_01/rush sr mxs.aimcfg" "zconf2: name collision gets the _NN suffix"
+assert_eq "$(cat "$DATA_DIR/cfgs/cfg_20220318_162427/rush sr mxs.aimcfg")" "CFG" "zconf2: existing config not overwritten"
+
+# A zip with no .aimcfg in it is an error, not a silent success.
+nocfg="$SANDBOX/import/zconf2/nocfg.zconf2"
+mkdir -p "$SANDBOX/import/zconf2/empty/junk"
+printf 'x\n' > "$SANDBOX/import/zconf2/empty/junk/readme.txt"
+(cd "$SANDBOX/import/zconf2/empty" && zip -q -r "$nocfg" .)
+import_config_archive "$nocfg" >/dev/null 2>&1
+assert_eq "$?" 1 "zconf2: archive with no .aimcfg fails"
+
+# ---- 10f. single-file .zconf2 routing (do_import *.zconf2 branch) ----------------------------
+scenario import-zconf2-dispatch
+mkdir -p "$DATA_DIR"
+RS3_APP_SUPPORT="$INSTALL_ROOT" RS3_DATA_DIR="$DATA_DIR" UI_MODE=dryrun \
+  bash "$SRC_DIR/installer-core.sh" --import "$zarc" >/dev/null 2>&1
+assert_file "$DATA_DIR/cfgs/cfg_20220318_162427/rush sr mxs.aimcfg" "zconf2: engine routes a dropped .zconf2 to the config importer"
+
 finish
