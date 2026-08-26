@@ -227,6 +227,11 @@ _find_config_dirs() {
   local d
   for d in "$1"/*/; do
     [ -d "$d" ] || continue
+    # A .zconf2 is an untrusted zip and `ditto -x` recreates symlink entries verbatim, so a config
+    # folder that is really a link would be copied into the live cfgs/ still pointing outside the
+    # data tree. Only a real directory is a configuration. (ditto DOES flatten `../` traversal
+    # entries into the destination, verified 2026-08-26, so only links need rejecting here.)
+    [ ! -L "${d%/}" ] || continue
     [ -n "$(find "$d" -maxdepth 1 -type f -iname '*.aimcfg' -print -quit 2>/dev/null)" ] || continue
     printf '%s\n' "${d%/}"
   done
@@ -298,7 +303,7 @@ import_config_archive() {
     found=$((found+1))
     base="$(basename "$d")"
     if _cfg_already_imported "$cfgs" "$base" "$d"; then
-      ui_say "Already in RaceStudio 3: $(_cfg_label "$d")"
+      ui_import_config_dup "$(_cfg_label "$d")"
       continue
     fi
     name="$(_cfg_free_name "$cfgs" "$base")" || {
@@ -309,16 +314,19 @@ import_config_archive() {
     }
     n=$((n+1))
     ui_import_config "$(_cfg_label "$d")"
-  done <<EOF
-$dirs
-EOF
+  done < <(printf '%s\n' "$dirs")
 
   # Shared resources the configuration references (overlay icons and masks) live beside the cfg
-  # folders and belong at the root of the data folder. Copy-if-absent: a user's own file wins.
-  payload="$(find "$tmp" -mindepth 2 -maxdepth 2 -type d -name user -path '*to_copy_in_app_root*' -print -quit 2>/dev/null)"
-  if [ -n "$payload" ] && ! _merge_copy_if_absent "$payload" "$DATA_DIR"; then
-    rm -rf "$tmp"; ui_error "Import: failed copying the configuration's shared resources"; return 1
-  fi
+  # folders and belong at the root of the data folder. Merge EVERY such payload — an archive can
+  # carry more than one, and stopping at the first drops icons the config points at. Copy-if-absent
+  # throughout: a user's own file wins, and _merge_copy_if_absent skips symlink entries because it
+  # only walks `-type f` and `-type d`.
+  while IFS= read -r payload; do
+    [ -n "$payload" ] || continue
+    _merge_copy_if_absent "$payload" "$DATA_DIR" || {
+      rm -rf "$tmp"; ui_error "Import: failed copying the configuration's shared resources"; return 1
+    }
+  done < <(find "$tmp" -mindepth 2 -maxdepth 2 -type d -name user -path '*to_copy_in_app_root*' 2>/dev/null)
   rm -rf "$tmp"
 
   if [ "$n" -eq 0 ]; then

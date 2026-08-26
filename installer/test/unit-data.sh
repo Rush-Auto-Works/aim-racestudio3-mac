@@ -210,8 +210,10 @@ assert_file   "$DATA_DIR/resources/overlay/icon.png"                     "zconf2
 assert_absent "$DATA_DIR/cfgs/to_copy_in_app_root_folder"                "zconf2: payload folder not left behind in cfgs/"
 
 # Re-dropping the same file is a no-op, not a second copy.
-import_config_archive "$zarc"
+dupout="$(UI_MODE=applet import_config_archive "$zarc")"
 assert_absent "$DATA_DIR/cfgs/cfg_20220318_162427_01" "zconf2: identical re-import does not stack a copy"
+assert_true  "printf '%s' \"$dupout\" | grep -q '^IMPORT_CONFIG_DUP: rush sr mxs$'" "zconf2: re-import reports IMPORT_CONFIG_DUP to the applet"
+assert_false "printf '%s' \"$dupout\" | grep -q '^IMPORT_CONFIG: '"                 "zconf2: re-import emits no IMPORT_CONFIG"
 
 # A DIFFERENT config that happens to carry the same timestamp folder gets RS3's _NN suffix, and
 # the config already there is untouched.
@@ -221,6 +223,33 @@ zarc2="$SANDBOX/import/zconf2/other.zconf2"
 import_config_archive "$zarc2"
 assert_file "$DATA_DIR/cfgs/cfg_20220318_162427_01/rush sr mxs.aimcfg" "zconf2: name collision gets the _NN suffix"
 assert_eq "$(cat "$DATA_DIR/cfgs/cfg_20220318_162427/rush sr mxs.aimcfg")" "CFG" "zconf2: existing config not overwritten"
+
+# Every to_copy_in_app_root* payload is merged, not just the first one found.
+scenario import-zconf2-payloads
+mkdir -p "$DATA_DIR/cfgs"
+psrc="$SANDBOX/import/payloads/src"
+mkdir -p "$psrc/cfg_1" "$psrc/to_copy_in_app_root_folder/user/resources/overlay" "$psrc/to_copy_in_app_root_1/user/resources/masks"
+printf 'CFG\n'  > "$psrc/cfg_1/one.aimcfg"
+printf 'A\n'    > "$psrc/to_copy_in_app_root_folder/user/resources/overlay/a.png"
+printf 'B\n'    > "$psrc/to_copy_in_app_root_1/user/resources/masks/b.png"
+parc="$SANDBOX/import/payloads/two.zconf2"
+(cd "$psrc" && zip -q -r "$parc" .)
+import_config_archive "$parc"
+assert_file "$DATA_DIR/resources/overlay/a.png" "zconf2: first payload merged"
+assert_file "$DATA_DIR/resources/masks/b.png"   "zconf2: SECOND payload merged too"
+
+# A config folder that is really a symlink is not a configuration. ditto -x recreates symlink
+# entries verbatim, so accepting one would plant a link pointing outside the data tree into cfgs/.
+scenario import-zconf2-symlink
+mkdir -p "$DATA_DIR/cfgs"
+lsrc="$SANDBOX/import/symlink/src"
+outside="$SANDBOX/import/symlink/outside"
+mkdir -p "$lsrc/cfg_ok" "$outside"
+printf 'OK\n'     > "$lsrc/cfg_ok/ok.aimcfg"
+printf 'SECRET\n' > "$outside/evil.aimcfg"        # a real config tree the link points at
+ln -s "$outside" "$lsrc/cfg_link"
+assert_eq "$(_find_config_dirs "$lsrc" | wc -l | tr -d ' ')" "1" "zconf2: symlinked config folder rejected"
+assert_eq "$(basename "$(_find_config_dirs "$lsrc")")" "cfg_ok" "zconf2: the real config folder is still found"
 
 # A zip with no .aimcfg in it is an error, not a silent success.
 nocfg="$SANDBOX/import/zconf2/nocfg.zconf2"

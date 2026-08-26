@@ -49,6 +49,17 @@ ui_import_config() {
   esac
 }
 
+# ui_import_config_dup <name> : the counterpart to ui_import_config — the archive held a
+# configuration byte-identical to one already in the data folder, so nothing was copied. The applet
+# needs its own line for this, otherwise a re-drop renders as "Imported 1 item(s)" with an empty
+# list of configurations.
+ui_import_config_dup() {
+  case "$UI_MODE" in
+    applet) printf 'IMPORT_CONFIG_DUP: %s\n' "$1" ;;
+    *)      ui_say "already in RaceStudio 3: $1" ;;
+  esac
+}
+
 ui_progress() {  # <step> <total> <description>
   case "$UI_MODE" in
     applet) printf 'PROGRESS: %s %s %s\n' "$1" "$2" "$3" ;;

@@ -44,6 +44,7 @@ on open theItems
 	set okCount to 0
 	set dests to {}
 	set cfgs to {}
+	set dupCfgs to {}
 	repeat with anItem in theItems
 		set importResult to importOne(coreScript, POSIX path of anItem)
 		if item 1 of importResult is true then
@@ -54,10 +55,18 @@ on open theItems
 			repeat with c in item 3 of importResult
 				if cfgs does not contain (c as text) then set end of cfgs to (c as text)
 			end repeat
+			repeat with c in item 4 of importResult
+				if dupCfgs does not contain (c as text) then set end of dupCfgs to (c as text)
+			end repeat
 		end if
 	end repeat
 	if okCount > 0 then
-		set msg to "Imported " & okCount & " item(s) into your RaceStudio 3 data folder. Nothing existing was overwritten."
+		-- Everything the drop produced was already there, so do not open with "Imported N item(s)".
+		if (count of cfgs) = 0 and (count of dests) = 0 and (count of dupCfgs) > 0 then
+			set msg to "Nothing new to import."
+		else
+			set msg to "Imported " & okCount & " item(s) into your RaceStudio 3 data folder. Nothing existing was overwritten."
+		end if
 		-- A configuration is done: RS3 lists the cfgs/ folders it finds on disk, so it only has to
 		-- be restarted. Sessions are the opposite — RS3 never scans the data folder, and they
 		-- appear only once imported through its own UI. Say whichever applies, or both.
@@ -67,6 +76,13 @@ on open theItems
 				set cfgText to cfgText & return & "• " & c
 			end repeat
 			set msg to msg & return & return & "Configurations added:" & cfgText & return & return & "Quit and reopen RaceStudio 3 to see them under Configurations."
+		end if
+		if (count of dupCfgs) > 0 then
+			set dupText to ""
+			repeat with c in dupCfgs
+				set dupText to dupText & return & "• " & c
+			end repeat
+			set msg to msg & return & return & "Already in RaceStudio 3, not copied again:" & dupText
 		end if
 		if (count of dests) > 0 then
 			set destText to ""
@@ -272,17 +288,20 @@ on importOne(coreScript, p)
 		-- in the output is a reliable path — do NOT parse the human STATUS lines.
 		set dest to ""
 		set cfgNames to {}
+		set dupNames to {}
 		repeat with aLine in paragraphs of out
 			if aLine starts with "IMPORT_DEST: " then
 				set dest to (characters 14 thru -1 of aLine) as text
 			else if aLine starts with "IMPORT_CONFIG: " then
 				set end of cfgNames to ((characters 16 thru -1 of aLine) as text)
+			else if aLine starts with "IMPORT_CONFIG_DUP: " then
+				set end of dupNames to ((characters 20 thru -1 of aLine) as text)
 			end if
 		end repeat
-		return {true, dest, cfgNames}
+		return {true, dest, cfgNames, dupNames}
 	on error errMsg
 		display dialog "Couldn't import “" & p & "”:" & return & return & errMsg buttons {"OK"} default button 1 with title "Import problem" with icon stop
-		return {false, "", {}}
+		return {false, "", {}, {}}
 	end try
 end importOne
 
