@@ -54,12 +54,23 @@ _merge_copy_if_absent() {
       # land on a name that already exists.
       tmp="$(mktemp "$dst/$rel.tmp.XXXXXX")" || return 1
       ditto "$src/$rel" "$tmp" || { rm -f "$tmp"; return 1; }
-      # `mv -n`, not `mv -f`: the absent-check above and this rename are not atomic, and anything
-      # that appeared in between (a second import, RS3 itself) is the user's file and wins. mv -n
-      # leaves it alone and exits 0, so drop our temp either way.
-      mv -n "$tmp" "$dst/$rel"
-      rm -f "$tmp"
-      _MERGED_COPIED+=("$rel")
+      # Committing the copy is two guards, because neither alone is enough. The re-test catches a
+      # destination that appeared while ditto ran — including a DIRECTORY, which both `ln` and `mv`
+      # would descend into, dropping the temp inside and reporting success. `ln` then does the
+      # commit, failing with EEXIST rather than clobbering if a plain file beat us to it. That
+      # leaves a two-syscall window in which a directory could still appear; it is not airtight,
+      # and it is as close as portable shell gets without a rename-if-absent syscall.
+      if [ -e "$dst/$rel" ] || [ -L "$dst/$rel" ]; then
+        rm -f "$tmp"                       # lost the race; whatever is there is the user's and wins
+      elif ln "$tmp" "$dst/$rel" 2>/dev/null; then
+        _MERGED_COPIED+=("$rel")
+        rm -f "$tmp"
+      else
+        rm -f "$tmp"
+        # Something occupying the destination is the expected loss of that race. Anything else
+        # means the copy really failed and the caller must hear about it.
+        [ -e "$dst/$rel" ] || [ -L "$dst/$rel" ] || return 1
+      fi
     fi
   done < <(cd "$src" && find . -type f)
 }
@@ -277,10 +288,12 @@ _cfg_already_imported() {
 # taken — better a clear error than silently overwriting somebody's configuration.
 _cfg_free_name() {
   local root="$1" base="$2" i=1 n
-  if [ ! -e "$root/$base" ]; then printf '%s' "$base"; return 0; fi
+  # `-e` alone would call a DANGLING symlink free, and the caller's failure branch would then
+  # rm -rf the user's link on its way out. A name is taken if anything is there at all.
+  if [ ! -e "$root/$base" ] && [ ! -L "$root/$base" ]; then printf '%s' "$base"; return 0; fi
   while [ "$i" -le 99 ]; do
     n="$(printf '%s_%02d' "$base" "$i")"
-    [ -e "$root/$n" ] || { printf '%s' "$n"; return 0; }
+    if [ ! -e "$root/$n" ] && [ ! -L "$root/$n" ]; then printf '%s' "$n"; return 0; fi
     i=$((i+1))
   done
   return 1

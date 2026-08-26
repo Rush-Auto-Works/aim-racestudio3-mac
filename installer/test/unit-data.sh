@@ -318,6 +318,59 @@ chmod 755 "$DATA_DIR/cfgs"
 assert_eq "$_rc" 1 "failcopy: a config that could not be copied fails the import"
 assert_absent "$DATA_DIR/cfgs/cfg_1" "failcopy: nothing left in cfgs/ after the failure"
 
+# The commit is `ln`, not `mv -n`, because the absence check and the commit are not atomic. If the
+# destination turns into a directory in between, `mv -n` moves the temp INSIDE it, exits 0, leaks
+# it there, and the helper records a copy that never happened. `ln` fails with EEXIST instead.
+# Shadowing ditto is what makes the race deterministic: it creates the directory as a side effect
+# of writing the temp file, i.e. exactly between the check and the commit.
+scenario merge-dest-became-a-dir
+mkdir -p "$DATA_DIR/resources/overlay"
+rsrc="$SANDBOX/race/src/resources/overlay"
+mkdir -p "$rsrc"
+printf 'NEW\n' > "$rsrc/icon.png"
+ditto() {
+  /usr/bin/ditto "$@"
+  local rc=$?
+  mkdir -p "$DATA_DIR/resources/overlay/icon.png"   # the racing writer
+  return $rc
+}
+_merge_copy_if_absent "$SANDBOX/race/src" "$DATA_DIR"
+_rrc=$?
+unset -f ditto
+assert_eq "$_rrc" 0 "race: losing the race is not an error"
+assert_eq "$(find "$DATA_DIR/resources/overlay" -name '*.tmp.*' | wc -l | tr -d ' ')" "0" "race: no temp file leaked into the directory that appeared"
+assert_eq "${#_MERGED_COPIED[@]}" "0" "race: a copy that did not happen is not recorded"
+
+# A dangling symlink already sitting at a config name must not be treated as a free slot: the
+# failure branch would then rm -rf the user's link on its way out.
+scenario cfg-free-name-dangling
+mkdir -p "$DATA_DIR/cfgs"
+ln -s "$SANDBOX/gone" "$DATA_DIR/cfgs/cfg_1"
+assert_eq "$(_cfg_free_name "$DATA_DIR/cfgs" cfg_1)" "cfg_1_01" "free-name: a dangling symlink counts as taken"
+ln -s "$SANDBOX/gone" "$DATA_DIR/cfgs/cfg_1_01"
+assert_eq "$(_cfg_free_name "$DATA_DIR/cfgs" cfg_1)" "cfg_1_02" "free-name: a dangling _NN symlink counts as taken too"
+
+# The half-written-configuration cleanup, pinned by shadowing ditto so the config copy fails AFTER
+# creating its destination. The real binary still does the extraction; only the second call fails.
+scenario import-zconf2-partial-cleanup
+mkdir -p "$DATA_DIR/cfgs"
+psrc2="$SANDBOX/import/partial/src"
+mkdir -p "$psrc2/cfg_1"
+printf 'CFG\n' > "$psrc2/cfg_1/one.aimcfg"
+parc2="$SANDBOX/import/partial/p.zconf2"
+(cd "$psrc2" && zip -q -r "$parc2" .)
+ditto() {   # shadows /usr/bin/ditto for this scenario only
+  case "$*" in
+    *"$DATA_DIR/cfgs/"*) mkdir -p "${!#}"; printf 'HALF\n' > "${!#}/one.aimcfg"; return 1 ;;
+    *) /usr/bin/ditto "$@" ;;
+  esac
+}
+import_config_archive "$parc2" >/dev/null 2>&1
+_prc=$?
+unset -f ditto
+assert_eq "$_prc" 1 "partial: an import whose only config failed returns 1"
+assert_absent "$DATA_DIR/cfgs/cfg_1" "partial: the half-written configuration was removed"
+
 # A symlink ANYWHERE inside the config folder is refused. ditto preserves inner links too, so
 # `cfg_x/devices -> /` would plant a link to the whole Mac under cfgs/ and hang RS3 (issue #32).
 scenario import-zconf2-inner-symlink
