@@ -309,7 +309,7 @@ _cfg_free_name() {
 # overwritten — a name that is taken gets the `_NN` suffix, and the shared-resource payload is
 # merged copy-if-absent by the same engine as import_merge.
 import_config_archive() {
-  local zip="$1" tmp cfgs dirs d base name payload n=0 found=0 failed=0 res=0
+  local zip="$1" tmp cfgs dirs d base name payload n=0 found=0 failed=0 resfail=0 res=0
   [ -f "$zip" ] || { ui_error "Import: file not found: $zip"; return 1; }
   cfgs="$DATA_DIR/cfgs"
   mkdir -p "$cfgs" || { ui_error "Import: couldn't create $cfgs"; return 1; }
@@ -383,9 +383,15 @@ import_config_archive() {
   # only walks `-type f` and `-type d`.
   while IFS= read -r payload; do
     [ -n "$payload" ] || continue
-    _merge_copy_if_absent "$payload" "$DATA_DIR" || {
-      rm -rf "$tmp"; ui_error "Import: failed copying the configuration's shared resources"; return 1
-    }
+    # Failing hard here would repeat, one loop later, the exact bug the pre-scan above exists to
+    # avoid: configurations are already in cfgs/ by now, and the applet discards stdout on a
+    # non-zero exit, so the user would be told the import failed while a configuration had landed.
+    # Warn instead and let the applet render it. _merge_copy_if_absent stops at its first failure,
+    # so count whatever it managed before that.
+    if ! _merge_copy_if_absent "$payload" "$DATA_DIR"; then
+      resfail=$((resfail+1))
+      ui_warn "couldn't copy some of the configuration's shared resources (icons, masks)"
+    fi
     # Count what actually landed. A configuration can be a duplicate while its icons and masks are
     # new, and saying "nothing new" then would be untrue.
     res=$((res + ${#_MERGED_COPIED[@]}))
@@ -401,6 +407,12 @@ import_config_archive() {
   if [ "$failed" -gt 0 ]; then
     ui_error "Import: none of the $found configuration(s) in '$(basename "$zip")' could be copied"
     return 1
+  fi
+  # Nothing failed on the configurations themselves, so this is the duplicate case. A resource
+  # failure alone is a warning, not an error — the configuration IS in RaceStudio 3.
+  if [ "$resfail" -gt 0 ] && [ "$res" -eq 0 ]; then
+    ui_say "That configuration was already in RaceStudio 3."
+    return 0
   fi
   if [ "$res" -gt 0 ]; then
     ui_say "That configuration was already in RaceStudio 3; added $res new shared resource file(s)."

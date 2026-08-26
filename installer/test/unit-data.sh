@@ -385,6 +385,26 @@ import_config_archive "$iarc" >/dev/null 2>&1
 assert_eq "$?" 1 "zconf2: config folder containing a symlink is refused"
 assert_absent "$DATA_DIR/cfgs/cfg_evil" "zconf2: nothing from the symlinked archive reached cfgs/"
 
+# A shared-resource failure must not sink a configuration that already landed. The applet throws
+# away stdout on a non-zero exit, so returning 1 here would report "couldn't import" while the
+# configuration sat in cfgs/ — the same desync the pre-scan above exists to prevent.
+scenario import-zconf2-payload-fails
+mkdir -p "$DATA_DIR/cfgs" "$DATA_DIR/resources"
+ysrc="$SANDBOX/import/payfail/src"
+mkdir -p "$ysrc/cfg_1" "$ysrc/to_copy_in_app_root_folder/user/resources/overlay"
+printf 'CFG\n'  > "$ysrc/cfg_1/one.aimcfg"
+printf 'ICON\n' > "$ysrc/to_copy_in_app_root_folder/user/resources/overlay/i.png"
+yarc="$SANDBOX/import/payfail/y.zconf2"
+(cd "$ysrc" && zip -q -r "$yarc" .)
+chmod 555 "$DATA_DIR/resources"      # the payload merge cannot write; the config copy still can
+yout="$(UI_MODE=applet import_config_archive "$yarc" 2>/dev/null)"
+_yrc=$?
+chmod 755 "$DATA_DIR/resources"
+assert_eq "$_yrc" 0 "payfail: a resource failure does not fail the whole import"
+assert_file "$DATA_DIR/cfgs/cfg_1/one.aimcfg" "payfail: the configuration still landed"
+assert_true "printf '%s' \"$yout\" | grep -q '^IMPORT_CONFIG: one$'" "payfail: the applet is still told the config landed"
+assert_true "printf '%s' \"$yout\" | grep -q '^WARN: '"              "payfail: the applet is told something went wrong"
+
 # The symlink scan runs over the WHOLE archive before anything is copied. Refusing mid-loop would
 # leave earlier configurations in cfgs/ with their shared resources never merged, while the applet
 # told the user the import failed.
