@@ -41,7 +41,9 @@ assert_dir()    { if [ -d "$1" ]; then _ok "dir $1"; else _fail "dir missing $1"
 assert_symlink_to() { # <link> <target>
   if [ -L "$1" ] && [ "$(readlink "$1")" = "$2" ]; then _ok "symlink $1 -> $2";
   else _fail "symlink $1 -> $2 (got '$(readlink "$1" 2>/dev/null)')"; fi; }
-assert_absent() { if [ ! -e "$1" ]; then _ok "absent $1"; else _fail "should be absent $1"; fi; }
+# `-e` is false for a DANGLING symlink, so `! -e` alone would call a link that is still sitting
+# there "absent" and let a data-safety assertion pass over a real leftover. `-L` closes that.
+assert_absent() { if [ ! -e "$1" ] && [ ! -L "$1" ]; then _ok "absent $1"; else _fail "should be absent $1"; fi; }
 
 # end-of-file summary; sets exit code
 finish() {

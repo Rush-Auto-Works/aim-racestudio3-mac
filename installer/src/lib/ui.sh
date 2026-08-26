@@ -37,6 +37,39 @@ ui_import_dest() {
   esac
 }
 
+# ui_import_config <name> : machine-readable "a configuration landed in the data folder", one
+# line per configuration. Same applet contract as IMPORT_DEST — the applet parses exactly
+# "IMPORT_CONFIG: <name>". A configuration needs no follow-up Import inside RS3 the way a session
+# does (RS3 lists the cfgs/ folders it finds on disk), only a restart, so the applet says a
+# different thing for it.
+ui_import_config() {
+  case "$UI_MODE" in
+    applet) printf 'IMPORT_CONFIG: %s\n' "$1" ;;
+    *)      ui_say "imported configuration $1" ;;
+  esac
+}
+
+# ui_import_config_dup <name> : the counterpart to ui_import_config — the archive held a
+# configuration byte-identical to one already in the data folder, so nothing was copied. The applet
+# needs its own line for this, otherwise a re-drop renders as "Imported 1 item(s)" with an empty
+# list of configurations.
+ui_import_config_dup() {
+  case "$UI_MODE" in
+    applet) printf 'IMPORT_CONFIG_DUP: %s\n' "$1" ;;
+    *)      ui_say "already in RaceStudio 3: $1" ;;
+  esac
+}
+
+# ui_import_extras <count> : shared resource files (overlay icons, masks) that landed alongside a
+# configuration. Emitted whether or not the configuration itself was new — a duplicate config can
+# still bring new icons, and the applet must not then claim nothing was imported.
+ui_import_extras() {
+  case "$UI_MODE" in
+    applet) printf 'IMPORT_EXTRAS: %s\n' "$1" ;;
+    *)      ui_say "added $1 shared resource file(s)" ;;
+  esac
+}
+
 ui_progress() {  # <step> <total> <description>
   case "$UI_MODE" in
     applet) printf 'PROGRESS: %s %s %s\n' "$1" "$2" "$3" ;;

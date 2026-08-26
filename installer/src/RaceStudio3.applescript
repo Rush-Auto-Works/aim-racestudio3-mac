@@ -2,7 +2,8 @@
 --   • First launch: sets up a pinned modern Wine + RaceStudio 3 (the 8-phase flow with a live
 --     progress bar), then opens RS3. No Terminal, no Parallels, no CrossOver.
 --   • Later launches: just opens RaceStudio 3.
---   • Drop an AIM_SPORT folder / .zip / .xrk / .drk onto the app to import data (never overwrites).
+--   • Drop an AIM_SPORT folder / .zip / .xrk / .drk / .zconf2 onto the app to import data
+--     (never overwrites). A configuration lands ready to use; sessions still need RS3's own Import.
 -- The Wine engine + Windows prefix live in ~/Library/Application Support/RaceStudio3 (outside the
 -- signed app, as required), your data in ~/Documents/AIM_SPORT. Import / Uninstall are standalone
 -- apps that ship beside this one in /Applications/AiM (the DMG drops the whole AiM folder in).
@@ -43,6 +44,10 @@ on open theItems
 	end if
 	set okCount to 0
 	set dests to {}
+	set cfgs to {}
+	set dupCfgs to {}
+	set extraCount to 0
+	set warnings to {}
 	repeat with anItem in theItems
 		set importResult to importOne(coreScript, POSIX path of anItem)
 		if item 1 of importResult is true then
@@ -50,22 +55,67 @@ on open theItems
 			if item 2 of importResult is not "" and dests does not contain item 2 of importResult then
 				set end of dests to item 2 of importResult
 			end if
+			repeat with c in item 3 of importResult
+				if cfgs does not contain (c as text) then set end of cfgs to (c as text)
+			end repeat
+			repeat with c in item 4 of importResult
+				if dupCfgs does not contain (c as text) then set end of dupCfgs to (c as text)
+			end repeat
+			set extraCount to extraCount + (item 5 of importResult)
+			repeat with w in item 6 of importResult
+				if warnings does not contain (w as text) then set end of warnings to (w as text)
+			end repeat
 		end if
 	end repeat
 	if okCount > 0 then
-		-- RS3 does not scan the data folder on its own: sessions only appear once imported
-		-- through RS3's own UI (cogwheel → Import → Import Folder/File(s)). Point the user at
-		-- where the files were staged so they can do that final step.
+		-- Everything the drop produced was already there, so do not open with "Imported N item(s)".
+		-- Only for a SINGLE dropped item: a folder merge emits neither IMPORT_DEST nor
+		-- IMPORT_CONFIG, so on a mixed drop an empty dests list does not mean nothing landed.
+		if (count of theItems) = 1 and (count of cfgs) = 0 and (count of dests) = 0 and extraCount = 0 and (count of dupCfgs) > 0 then
+			set msg to "Nothing new to import."
+		else
+			set msg to "Imported " & okCount & " item(s) into your RaceStudio 3 data folder. Nothing existing was overwritten."
+		end if
+		-- A configuration is done: RS3 lists the cfgs/ folders it finds on disk, so it only has to
+		-- be restarted. Sessions are the opposite — RS3 never scans the data folder, and they
+		-- appear only once imported through its own UI. Say whichever applies, or both.
+		if (count of cfgs) > 0 then
+			set cfgText to ""
+			repeat with c in cfgs
+				set cfgText to cfgText & return & "• " & c
+			end repeat
+			set msg to msg & return & return & "Configurations added:" & cfgText & return & return & "Quit and reopen RaceStudio 3 to see them under Configurations."
+		end if
+		if (count of dupCfgs) > 0 then
+			set dupText to ""
+			repeat with c in dupCfgs
+				set dupText to dupText & return & "• " & c
+			end repeat
+			set msg to msg & return & return & "Already in RaceStudio 3, not copied again:" & dupText
+		end if
+		if extraCount > 0 then
+			set msg to msg & return & return & "Added " & extraCount & " shared resource file(s) the configuration needs (icons, masks)."
+		end if
 		if (count of dests) > 0 then
 			set destText to ""
 			repeat with d in dests
 				set destText to destText & return & d
 			end repeat
-			set msg to "Imported " & okCount & " item(s) into your RaceStudio 3 data folder. Nothing existing was overwritten." & return & return & "RaceStudio 3 won't show these until you import them:" & return & "Open RaceStudio 3 → cogwheel (bottom-left) → Import → Import Folder, then pick:" & destText & return & return & "(Or Import File(s) for individual sessions.)"
-		else
-			set msg to "Imported " & okCount & " item(s) into your RaceStudio 3 data folder. Nothing existing was overwritten."
+			set msg to msg & return & return & "RaceStudio 3 won't show your sessions until you import them:" & return & "Open RaceStudio 3 → cogwheel (bottom-left) → Import → Import Folder, then pick:" & destText & return & return & "(Or Import File(s) for individual sessions.)"
 		end if
-		display dialog msg buttons {"OK"} default button 1 with title "Import complete" with icon note
+		-- The engine reports a recoverable problem (a configuration it could not copy, say) as a
+		-- WARN: line and still exits 0. Showing only the successes would make a partial import look
+		-- like a clean one.
+		if (count of warnings) > 0 then
+			set warnText to ""
+			repeat with w in warnings
+				set warnText to warnText & return & "• " & w
+			end repeat
+			set msg to msg & return & return & "Some things didn't work:" & warnText
+			display dialog msg buttons {"OK"} default button 1 with title "Import finished with problems" with icon caution
+		else
+			display dialog msg buttons {"OK"} default button 1 with title "Import complete" with icon note
+		end if
 	end if
 end open
 
@@ -261,15 +311,27 @@ on importOne(coreScript, p)
 		-- "IMPORT_DEST: <path>" line (see ui_import_dest in lib/ui.sh). Nothing else
 		-- in the output is a reliable path — do NOT parse the human STATUS lines.
 		set dest to ""
+		set cfgNames to {}
+		set dupNames to {}
+		set extras to 0
+		set warns to {}
 		repeat with aLine in paragraphs of out
-			if aLine starts with "IMPORT_DEST: " then
+			if aLine starts with "WARN: " then
+				set end of warns to ((characters 7 thru -1 of aLine) as text)
+			else if aLine starts with "IMPORT_DEST: " then
 				set dest to (characters 14 thru -1 of aLine) as text
+			else if aLine starts with "IMPORT_CONFIG: " then
+				set end of cfgNames to ((characters 16 thru -1 of aLine) as text)
+			else if aLine starts with "IMPORT_CONFIG_DUP: " then
+				set end of dupNames to ((characters 20 thru -1 of aLine) as text)
+			else if aLine starts with "IMPORT_EXTRAS: " then
+				set extras to extras + (((characters 16 thru -1 of aLine) as text) as integer)
 			end if
 		end repeat
-		return {true, dest}
+		return {true, dest, cfgNames, dupNames, extras, warns}
 	on error errMsg
 		display dialog "Couldn't import “" & p & "”:" & return & return & errMsg buttons {"OK"} default button 1 with title "Import problem" with icon stop
-		return {false, ""}
+		return {false, "", {}, {}, 0, {}}
 	end try
 end importOne
 

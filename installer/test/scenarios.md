@@ -95,6 +95,12 @@ mostly the GUI and the live-hardware paths.
 ## Manual — import flows
 - Drag an `AIM_SPORT` folder (or a `.zip`, or loose `.xrk`/`.drk`) onto `Import RaceStudio 3 Data.app` →
   merges, never overwrites, shows a summary count.
+- Drag a `.zconf2` configuration export onto either app → dialog lists the configuration under
+  "Configurations added" and says to restart RS3. Restart it: the configuration is in Configurations.
+- Drop the same `.zconf2` again → "Nothing new to import." and the name under "Already in
+  RaceStudio 3, not copied again". Nothing new appears in `cfgs/`.
+- Drop a `.zconf2` that is the same configuration but carries a new overlay icon → reports the
+  resource count, and the icon is in `~/AIM_SPORT/resources/overlay/`.
 - Installer's optional "I have a folder" picker → same merge.
 - Auto-from-Parallels (`scripts/port-data-from-parallels.sh`) with a running VM.
 

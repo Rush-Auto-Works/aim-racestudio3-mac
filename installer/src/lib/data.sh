@@ -44,10 +44,37 @@ _merge_copy_if_absent() {
   # Copy files that are absent in dst.
   while IFS= read -r rel; do
     rel="${rel#./}"
-    if [ ! -e "$dst/$rel" ]; then
-      tmp="$dst/$rel.tmp.$$"
-      ditto "$src/$rel" "$tmp" && mv -f "$tmp" "$dst/$rel" || { rm -f "$tmp"; return 1; }
-      _MERGED_COPIED+=("$rel")
+    # `-e` alone is not "absent": it is false for a DANGLING symlink, so a user's link whose target
+    # is offline (an unmounted volume, a moved folder) read as missing and `mv -f` replaced it with
+    # a regular file. `-L` closes that hole.
+    if [ ! -e "$dst/$rel" ] && [ ! -L "$dst/$rel" ]; then
+      # mktemp, not "$rel.tmp.$$": the PID name is predictable, so a leftover from a crashed
+      # import (or a user file that simply happens to be called that) would be clobbered by the
+      # ditto and then deleted by the mv. mktemp creates its file exclusively, so it can never
+      # land on a name that already exists.
+      tmp="$(mktemp "$dst/$rel.tmp.XXXXXX")" || return 1
+      ditto "$src/$rel" "$tmp" || { rm -f "$tmp"; return 1; }
+      # Committing the copy is two guards, because neither alone is enough. The re-test catches a
+      # destination that appeared while ditto ran — including a DIRECTORY, which both `ln` and `mv`
+      # would descend into, dropping the temp inside and reporting success. `ln` then does the
+      # commit, failing with EEXIST rather than clobbering if a plain file beat us to it. That
+      # leaves a two-syscall window in which a directory could still appear; it is not airtight,
+      # and it is as close as portable shell gets without a rename-if-absent syscall.
+      if [ -e "$dst/$rel" ] || [ -L "$dst/$rel" ]; then
+        rm -f "$tmp"                       # lost the race; whatever is there is the user's and wins
+      elif ln "$tmp" "$dst/$rel" 2>/dev/null; then
+        _MERGED_COPIED+=("$rel")
+        rm -f "$tmp"
+      elif [ -e "$dst/$rel" ] || [ -L "$dst/$rel" ]; then
+        rm -f "$tmp"                       # lost the race in the window above; the user's file wins
+      elif mv "$tmp" "$dst/$rel"; then
+        # ln also fails on a volume with no hard links — exFAT or SMB, which DATA_DIR can be
+        # pointed at with `set-config`. The destination is still absent here, so a plain rename is
+        # both correct and what this did before.
+        _MERGED_COPIED+=("$rel")
+      else
+        rm -f "$tmp"; return 1
+      fi
     fi
   done < <(cd "$src" && find . -type f)
 }
@@ -193,7 +220,9 @@ import_session_dir() {
   while IFS= read -r f; do
     rel="${f#"$in"/}"
     mkdir -p "$dest/$(dirname "$rel")" || { ui_error "import failed creating $(dirname "$rel")"; rc=1; break; }
-    if [ ! -e "$dest/$rel" ]; then
+    # `-e` is false for a dangling symlink, so it alone would call a user's link "absent" and let
+    # ditto replace it. Same invariant as _merge_copy_if_absent.
+    if [ ! -e "$dest/$rel" ] && [ ! -L "$dest/$rel" ]; then
       ditto "$f" "$dest/$rel" || { ui_error "import failed copying $rel"; rc=1; break; }
       n=$((n+1))
     fi
@@ -210,3 +239,185 @@ import_session_dir() {
 # import_xrk_dir <dir> : back-compat wrapper for import_session_dir (historical name; a folder of
 # loose .xrk sessions).
 import_xrk_dir() { import_session_dir "$@"; }
+
+# ---- configuration import (.zconf2 / .zconfig) ---------------------------------------------
+# A configuration export is a zip whose top level holds one or more `cfg_<timestamp>` folders (the
+# `.aimcfg` plus its `devices/` tree) and, optionally, a `to_copy_in_app_root_folder/user/…`
+# payload of shared resources — overlay icons, masks and the like.
+#
+# Unlike a session, a configuration really can be imported without RaceStudio 3's own Import step.
+# RS3's database (`database/data.xrd`) has no configurations table: it lists whatever
+# `cfgs/<cfg_*>` folders it finds on disk. So copying the folder in IS the import; the
+# configuration shows up the next time RS3 starts.
+
+# _find_config_dirs <dir> : print the configuration folders inside an unpacked archive, one per
+# line — a top-level folder holding at least one `.aimcfg`.
+_find_config_dirs() {
+  local d
+  for d in "$1"/*/; do
+    [ -d "$d" ] || continue
+    # A .zconf2 is an untrusted zip and `ditto -x` recreates symlink entries verbatim, so a config
+    # folder that is really a link would be copied into the live cfgs/ still pointing outside the
+    # data tree. Only a real directory is a configuration. (ditto DOES flatten `../` traversal
+    # entries into the destination, verified 2026-08-26, so only links need rejecting here.)
+    [ ! -L "${d%/}" ] || continue
+    [ -n "$(find "$d" -maxdepth 1 -type f -iname '*.aimcfg' -print -quit 2>/dev/null)" ] || continue
+    printf '%s\n' "${d%/}"
+  done
+}
+
+# _cfg_label <cfg_dir> : the name RaceStudio 3 shows for a configuration — its `.aimcfg` filename
+# without the extension. The folder name is only a timestamp, so it is useless in a dialog.
+_cfg_label() {
+  local f
+  f="$(find "$1" -maxdepth 1 -type f -iname '*.aimcfg' -print -quit 2>/dev/null)"
+  if [ -z "$f" ]; then basename "$1"; return 0; fi
+  f="$(basename "$f")"
+  printf '%s' "${f%.*}"
+}
+
+# _cfg_already_imported <cfgs_dir> <base> <src_dir> : true when <src_dir> is identical to a
+# configuration already there — either under the archive's own name or one of its `_NN` siblings.
+# Dropping the same file twice should say so rather than stack another copy; RS3's own importer
+# never checks, which is how a data folder ends up with a dozen identical `cfg_…_NN` twins.
+_cfg_already_imported() {
+  local root="$1" base="$2" src="$3" d
+  for d in "$root/$base" "$root/$base"_[0-9][0-9]; do
+    [ -d "$d" ] || continue
+    diff -rq "$src" "$d" >/dev/null 2>&1 && return 0
+  done
+  return 1
+}
+
+# _cfg_free_name <cfgs_dir> <base> : echo a free folder name under <cfgs_dir>, using RaceStudio 3's
+# own collision convention (`<base>_01` … `<base>_99`). Echoes nothing and returns 1 if all are
+# taken — better a clear error than silently overwriting somebody's configuration.
+_cfg_free_name() {
+  local root="$1" base="$2" i=1 n
+  # `-e` alone would call a DANGLING symlink free, and the caller's failure branch would then
+  # rm -rf the user's link on its way out. A name is taken if anything is there at all.
+  if [ ! -e "$root/$base" ] && [ ! -L "$root/$base" ]; then printf '%s' "$base"; return 0; fi
+  while [ "$i" -le 99 ]; do
+    n="$(printf '%s_%02d' "$base" "$i")"
+    if [ ! -e "$root/$n" ] && [ ! -L "$root/$n" ]; then printf '%s' "$n"; return 0; fi
+    i=$((i+1))
+  done
+  return 1
+}
+
+# import_config_archive <file> : import an AiM configuration export into DATA_DIR/cfgs/. Nothing is
+# overwritten — a name that is taken gets the `_NN` suffix, and the shared-resource payload is
+# merged copy-if-absent by the same engine as import_merge.
+import_config_archive() {
+  local zip="$1" tmp cfgs dirs d base name payload n=0 found=0 failed=0 resfail=0 res=0
+  [ -f "$zip" ] || { ui_error "Import: file not found: $zip"; return 1; }
+  cfgs="$DATA_DIR/cfgs"
+  mkdir -p "$cfgs" || { ui_error "Import: couldn't create $cfgs"; return 1; }
+  tmp="$(mktemp -d "${TMPDIR:-/tmp}/rs3cfg.XXXXXX")" || { ui_error "Import: couldn't make a temp folder"; return 1; }
+
+  ui_say "Unpacking configuration…"
+  if ! ditto -x -k "$zip" "$tmp" 2>/dev/null && ! unzip -q "$zip" -d "$tmp" 2>/dev/null; then
+    rm -rf "$tmp"
+    ui_error "Import: '$(basename "$zip")' is not a readable AiM configuration export."
+    return 1
+  fi
+
+  dirs="$(_find_config_dirs "$tmp")"
+  if [ -z "$dirs" ]; then
+    rm -rf "$tmp"
+    ui_error "Import: '$(basename "$zip")' has no configuration in it (no .aimcfg found)."
+    return 1
+  fi
+
+  # Validate every configuration BEFORE copying any of them. Refusing mid-loop would abort with
+  # earlier configurations already sitting in cfgs/ and their shared resources never merged, and
+  # the applet discards stdout on a non-zero exit, so the user would be told "couldn't import"
+  # while a half-supported configuration had in fact appeared.
+  while IFS= read -r d; do
+    [ -n "$d" ] || continue
+    # The top-level `-L` check in _find_config_dirs is not enough: ditto preserves symlinks INSIDE
+    # the folder too, so `cfg_x/devices -> /` would plant a link to the whole Mac under cfgs/.
+    # RS3 walks that tree with no depth cap and hangs on the resulting cycle — the same failure as
+    # issue #32's `z:` drive. A configuration RS3 exported never contains one.
+    if [ -n "$(find "$d" -type l -print -quit 2>/dev/null)" ]; then
+      rm -rf "$tmp"
+      ui_error "Import: '$(basename "$d")' contains symbolic links, which a RaceStudio 3 configuration never does. Refusing to copy it into your data folder."
+      return 1
+    fi
+  done < <(printf '%s\n' "$dirs")
+
+  while IFS= read -r d; do
+    [ -n "$d" ] || continue
+    found=$((found+1))
+    base="$(basename "$d")"
+    if _cfg_already_imported "$cfgs" "$base" "$d"; then
+      ui_import_config_dup "$(_cfg_label "$d")"
+      continue
+    fi
+    # A full cfgs/ is not a reason to abandon the configurations that already landed, and the
+    # payload merge below still has to run for them.
+    if ! name="$(_cfg_free_name "$cfgs" "$base")"; then
+      failed=$((failed+1))
+      ui_warn "$cfgs already holds 100 copies of $base"
+      continue
+    fi
+    # One bad copy in a multi-configuration archive must not report the whole import as failed —
+    # the ones already in cfgs/ are really there, and the applet discards stdout on a non-zero exit.
+    if ditto "$d" "$cfgs/$name"; then
+      n=$((n+1))
+      ui_import_config "$(_cfg_label "$d")"
+    else
+      # A half-written config directory in cfgs/ is worse than none: RS3 lists it and the next
+      # attempt sees the name as taken. _cfg_free_name guaranteed this path did not exist before
+      # the copy, so removing it can only take back what this run just made.
+      rm -rf "$cfgs/$name"
+      failed=$((failed+1))
+      ui_warn "couldn't copy configuration $base"
+    fi
+  done < <(printf '%s\n' "$dirs")
+
+  # Shared resources the configuration references (overlay icons and masks) live beside the cfg
+  # folders and belong at the root of the data folder. Merge EVERY such payload — an archive can
+  # carry more than one, and stopping at the first drops icons the config points at. Copy-if-absent
+  # throughout: a user's own file wins, and _merge_copy_if_absent skips symlink entries because it
+  # only walks `-type f` and `-type d`.
+  while IFS= read -r payload; do
+    [ -n "$payload" ] || continue
+    # Failing hard here would repeat, one loop later, the exact bug the pre-scan above exists to
+    # avoid: configurations are already in cfgs/ by now, and the applet discards stdout on a
+    # non-zero exit, so the user would be told the import failed while a configuration had landed.
+    # Warn instead and let the applet render it. _merge_copy_if_absent stops at its first failure,
+    # so count whatever it managed before that.
+    if ! _merge_copy_if_absent "$payload" "$DATA_DIR"; then
+      resfail=$((resfail+1))
+      ui_warn "couldn't copy some of the configuration's shared resources (icons, masks)"
+    fi
+    # Count what actually landed. A configuration can be a duplicate while its icons and masks are
+    # new, and saying "nothing new" then would be untrue.
+    res=$((res + ${#_MERGED_COPIED[@]}))
+  done < <(find "$tmp" -mindepth 2 -maxdepth 2 -type d -name user -path '*to_copy_in_app_root*' 2>/dev/null)
+  [ "$res" -eq 0 ] || ui_import_extras "$res"
+  rm -rf "$tmp"
+
+  if [ "$n" -gt 0 ]; then
+    ui_say "Imported $n configuration(s) of $found."
+    [ "$failed" -eq 0 ] || ui_warn "$failed configuration(s) in the archive could not be copied"
+    return 0
+  fi
+  if [ "$failed" -gt 0 ]; then
+    ui_error "Import: none of the $found configuration(s) in '$(basename "$zip")' could be copied"
+    return 1
+  fi
+  # Nothing failed on the configurations themselves, so this is the duplicate case. A resource
+  # failure alone is a warning, not an error — the configuration IS in RaceStudio 3.
+  if [ "$resfail" -gt 0 ] && [ "$res" -eq 0 ]; then
+    ui_say "That configuration was already in RaceStudio 3."
+    return 0
+  fi
+  if [ "$res" -gt 0 ]; then
+    ui_say "That configuration was already in RaceStudio 3; added $res new shared resource file(s)."
+  else
+    ui_say "Nothing new — that configuration is already in RaceStudio 3."
+  fi
+  return 0
+}

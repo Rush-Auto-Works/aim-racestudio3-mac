@@ -187,4 +187,265 @@ RS3_APP_SUPPORT="$INSTALL_ROOT" RS3_DATA_DIR="$DATA_DIR" UI_MODE=dryrun \
   bash "$SRC_DIR/installer-core.sh" --import "$sf" >/dev/null 2>&1
 assert_file "$DATA_DIR/data/dropped-"*/session.drk "drk: single .drk file routed to dropped-<date>/"
 
+# ---- 10e. import_config_archive: a .zconf2 configuration export ------------------------------
+# The archive shape RaceStudio 3 exports: one cfg_<timestamp> folder holding the .aimcfg + its
+# devices/ tree, plus a to_copy_in_app_root_folder/user/ payload of shared resources.
+scenario import-zconf2
+mkdir -p "$DATA_DIR/cfgs"
+zsrc="$SANDBOX/import/zconf2/src"
+mkdir -p "$zsrc/cfg_20220318_162427/devices/MXS" "$zsrc/to_copy_in_app_root_folder/user/resources/overlay"
+printf 'CFG\n'     > "$zsrc/cfg_20220318_162427/rush sr mxs.aimcfg"
+printf 'log\n'     > "$zsrc/cfg_20220318_162427/rush sr mxs.aimcfg.dump.log"
+printf 'DEV\n'     > "$zsrc/cfg_20220318_162427/devices/MXS/dev.aimdev2"
+printf 'ICON\n'    > "$zsrc/to_copy_in_app_root_folder/user/resources/overlay/icon.png"
+zarc="$SANDBOX/import/zconf2/config.zconf2"
+(cd "$zsrc" && zip -q -r "$zarc" .)
+
+assert_eq "$(_cfg_label "$zsrc/cfg_20220318_162427")" "rush sr mxs" "zconf2: label is the .aimcfg name, not the .dump.log"
+import_config_archive "$zarc"
+assert_eq "$?" 0 "zconf2: import returns 0"
+assert_file   "$DATA_DIR/cfgs/cfg_20220318_162427/rush sr mxs.aimcfg"   "zconf2: config folder copied into cfgs/"
+assert_file   "$DATA_DIR/cfgs/cfg_20220318_162427/devices/MXS/dev.aimdev2" "zconf2: devices/ tree copied"
+assert_file   "$DATA_DIR/resources/overlay/icon.png"                     "zconf2: app-root payload merged into the data folder"
+assert_absent "$DATA_DIR/cfgs/to_copy_in_app_root_folder"                "zconf2: payload folder not left behind in cfgs/"
+
+# Re-dropping the same file is a no-op, not a second copy.
+dupout="$(UI_MODE=applet import_config_archive "$zarc")"
+assert_absent "$DATA_DIR/cfgs/cfg_20220318_162427_01" "zconf2: identical re-import does not stack a copy"
+assert_true  "printf '%s' \"$dupout\" | grep -q '^IMPORT_CONFIG_DUP: rush sr mxs$'" "zconf2: re-import reports IMPORT_CONFIG_DUP to the applet"
+assert_false "printf '%s' \"$dupout\" | grep -q '^IMPORT_CONFIG: '"                 "zconf2: re-import emits no IMPORT_CONFIG"
+
+# A DIFFERENT config that happens to carry the same timestamp folder gets RS3's _NN suffix, and
+# the config already there is untouched.
+printf 'OTHER\n' > "$zsrc/cfg_20220318_162427/rush sr mxs.aimcfg"
+zarc2="$SANDBOX/import/zconf2/other.zconf2"
+(cd "$zsrc" && zip -q -r "$zarc2" .)
+import_config_archive "$zarc2"
+assert_file "$DATA_DIR/cfgs/cfg_20220318_162427_01/rush sr mxs.aimcfg" "zconf2: name collision gets the _NN suffix"
+assert_eq "$(cat "$DATA_DIR/cfgs/cfg_20220318_162427/rush sr mxs.aimcfg")" "CFG" "zconf2: existing config not overwritten"
+
+# Every to_copy_in_app_root* payload is merged, not just the first one found.
+scenario import-zconf2-payloads
+mkdir -p "$DATA_DIR/cfgs"
+psrc="$SANDBOX/import/payloads/src"
+mkdir -p "$psrc/cfg_1" "$psrc/to_copy_in_app_root_folder/user/resources/overlay" "$psrc/to_copy_in_app_root_1/user/resources/masks"
+printf 'CFG\n'  > "$psrc/cfg_1/one.aimcfg"
+printf 'A\n'    > "$psrc/to_copy_in_app_root_folder/user/resources/overlay/a.png"
+printf 'B\n'    > "$psrc/to_copy_in_app_root_1/user/resources/masks/b.png"
+parc="$SANDBOX/import/payloads/two.zconf2"
+(cd "$psrc" && zip -q -r "$parc" .)
+import_config_archive "$parc"
+assert_eq "$?" 0 "zconf2: multi-payload import returns 0"
+assert_file "$DATA_DIR/resources/overlay/a.png" "zconf2: first payload merged"
+assert_file "$DATA_DIR/resources/masks/b.png"   "zconf2: SECOND payload merged too"
+
+# A config folder that is really a symlink is not a configuration. ditto -x recreates symlink
+# entries verbatim, so accepting one would plant a link pointing outside the data tree into cfgs/.
+scenario import-zconf2-symlink
+mkdir -p "$DATA_DIR/cfgs"
+lsrc="$SANDBOX/import/symlink/src"
+outside="$SANDBOX/import/symlink/outside"
+mkdir -p "$lsrc/cfg_ok" "$outside"
+printf 'OK\n'     > "$lsrc/cfg_ok/ok.aimcfg"
+printf 'SECRET\n' > "$outside/evil.aimcfg"        # a real config tree the link points at
+ln -s "$outside" "$lsrc/cfg_link"
+assert_eq "$(_find_config_dirs "$lsrc" | wc -l | tr -d ' ')" "1" "zconf2: symlinked config folder rejected"
+assert_eq "$(basename "$(_find_config_dirs "$lsrc")")" "cfg_ok" "zconf2: the real config folder is still found"
+
+# A user file that happens to sit at the merge helper's temp path must survive. The old name was
+# "<file>.tmp.$$", which a leftover from a crashed import (or plain PID reuse) could collide with —
+# ditto would clobber it and the mv would delete it.
+scenario merge-temp-collision
+mkdir -p "$DATA_DIR/resources/overlay"
+msrc="$SANDBOX/merge/src/resources/overlay"
+mkdir -p "$msrc"
+printf 'NEW\n' > "$msrc/icon.png"
+printf 'PRECIOUS\n' > "$DATA_DIR/resources/overlay/icon.png.tmp.$$"
+_merge_copy_if_absent "$SANDBOX/merge/src" "$DATA_DIR"
+assert_eq "$?" 0 "merge: copy succeeds despite a file at the old temp path"
+assert_eq "$(cat "$DATA_DIR/resources/overlay/icon.png.tmp.$$")" "PRECIOUS" "merge: file at the predictable temp path is NOT destroyed"
+assert_eq "$(cat "$DATA_DIR/resources/overlay/icon.png")" "NEW" "merge: the new file still landed"
+
+# A duplicate configuration whose payload carries NEW icons must not report "nothing new".
+scenario import-zconf2-dup-new-resources
+mkdir -p "$DATA_DIR/cfgs"
+dsrc="$SANDBOX/import/dupres/src"
+mkdir -p "$dsrc/cfg_1" "$dsrc/to_copy_in_app_root_folder/user/resources/overlay"
+printf 'CFG\n' > "$dsrc/cfg_1/one.aimcfg"
+printf 'A\n'   > "$dsrc/to_copy_in_app_root_folder/user/resources/overlay/a.png"
+darc1="$SANDBOX/import/dupres/first.zconf2"
+(cd "$dsrc" && zip -q -r "$darc1" .)
+import_config_archive "$darc1" >/dev/null 2>&1
+# Same config, one extra icon.
+printf 'B\n' > "$dsrc/to_copy_in_app_root_folder/user/resources/overlay/b.png"
+darc2="$SANDBOX/import/dupres/second.zconf2"
+(cd "$dsrc" && zip -q -r "$darc2" .)
+dupres="$(UI_MODE=applet import_config_archive "$darc2")"
+assert_eq "$?" 0 "dup-res: duplicate-with-new-resources returns 0"
+assert_file "$DATA_DIR/resources/overlay/b.png" "dup-res: the new icon was merged"
+assert_true "printf '%s' \"$dupres\" | grep -q '^IMPORT_EXTRAS: 1$'" "dup-res: applet is told 1 resource file landed"
+assert_true "printf '%s' \"$dupres\" | grep -q '^IMPORT_CONFIG_DUP: one$'" "dup-res: the config itself is still reported as a duplicate"
+
+# A DANGLING symlink in the data folder is still the user's file. `-e` is false for one, so the
+# merge used to treat it as absent and `mv -f` replaced it with a regular file — silent data loss
+# for anyone whose link points at an unmounted volume.
+scenario merge-dangling-symlink
+mkdir -p "$DATA_DIR/resources/overlay"
+gsrc="$SANDBOX/dangle/src/resources/overlay"
+mkdir -p "$gsrc"
+printf 'NEW\n' > "$gsrc/icon.png"
+ln -s "$SANDBOX/dangle/no-such-target" "$DATA_DIR/resources/overlay/icon.png"
+_merge_copy_if_absent "$SANDBOX/dangle/src" "$DATA_DIR"
+assert_eq "$?" 0 "dangle: merge still returns 0"
+assert_symlink_to "$DATA_DIR/resources/overlay/icon.png" "$SANDBOX/dangle/no-such-target" "dangle: the user's dangling symlink survives"
+
+# A copy that fails must report failure rather than a silent success. An unwritable cfgs/ is the
+# only deterministic way to fail the copy from a test: `ditto -x` normalizes extracted modes to
+# 644, so an archive cannot carry a file that makes the second ditto die partway. That means this
+# pins the failure REPORTING, not the `rm -rf "$cfgs/$name"` cleanup beside it — the cleanup is
+# defensive and unreachable from here.
+scenario import-zconf2-copy-fails
+mkdir -p "$DATA_DIR/cfgs"
+fsrc="$SANDBOX/import/failcopy/src"
+mkdir -p "$fsrc/cfg_1"
+printf 'CFG\n' > "$fsrc/cfg_1/one.aimcfg"
+farc="$SANDBOX/import/failcopy/f.zconf2"
+(cd "$fsrc" && zip -q -r "$farc" .)
+chmod 555 "$DATA_DIR/cfgs"
+import_config_archive "$farc" >/dev/null 2>&1
+_rc=$?
+chmod 755 "$DATA_DIR/cfgs"
+assert_eq "$_rc" 1 "failcopy: a config that could not be copied fails the import"
+assert_absent "$DATA_DIR/cfgs/cfg_1" "failcopy: nothing left in cfgs/ after the failure"
+
+# The commit is `ln`, not `mv -n`, because the absence check and the commit are not atomic. If the
+# destination turns into a directory in between, `mv -n` moves the temp INSIDE it, exits 0, leaks
+# it there, and the helper records a copy that never happened. `ln` fails with EEXIST instead.
+# Shadowing ditto is what makes the race deterministic: it creates the directory as a side effect
+# of writing the temp file, i.e. exactly between the check and the commit.
+scenario merge-dest-became-a-dir
+mkdir -p "$DATA_DIR/resources/overlay"
+rsrc="$SANDBOX/race/src/resources/overlay"
+mkdir -p "$rsrc"
+printf 'NEW\n' > "$rsrc/icon.png"
+ditto() {
+  /usr/bin/ditto "$@"
+  local rc=$?
+  mkdir -p "$DATA_DIR/resources/overlay/icon.png"   # the racing writer
+  return $rc
+}
+_merge_copy_if_absent "$SANDBOX/race/src" "$DATA_DIR"
+_rrc=$?
+unset -f ditto
+assert_eq "$_rrc" 0 "race: losing the race is not an error"
+assert_eq "$(find "$DATA_DIR/resources/overlay" -name '*.tmp.*' | wc -l | tr -d ' ')" "0" "race: no temp file leaked into the directory that appeared"
+assert_eq "${#_MERGED_COPIED[@]}" "0" "race: a copy that did not happen is not recorded"
+
+# A dangling symlink already sitting at a config name must not be treated as a free slot: the
+# failure branch would then rm -rf the user's link on its way out.
+scenario cfg-free-name-dangling
+mkdir -p "$DATA_DIR/cfgs"
+ln -s "$SANDBOX/gone" "$DATA_DIR/cfgs/cfg_1"
+assert_eq "$(_cfg_free_name "$DATA_DIR/cfgs" cfg_1)" "cfg_1_01" "free-name: a dangling symlink counts as taken"
+ln -s "$SANDBOX/gone" "$DATA_DIR/cfgs/cfg_1_01"
+assert_eq "$(_cfg_free_name "$DATA_DIR/cfgs" cfg_1)" "cfg_1_02" "free-name: a dangling _NN symlink counts as taken too"
+
+# The half-written-configuration cleanup, pinned by shadowing ditto so the config copy fails AFTER
+# creating its destination. The real binary still does the extraction; only the second call fails.
+scenario import-zconf2-partial-cleanup
+mkdir -p "$DATA_DIR/cfgs"
+psrc2="$SANDBOX/import/partial/src"
+mkdir -p "$psrc2/cfg_1"
+printf 'CFG\n' > "$psrc2/cfg_1/one.aimcfg"
+parc2="$SANDBOX/import/partial/p.zconf2"
+(cd "$psrc2" && zip -q -r "$parc2" .)
+ditto() {   # shadows /usr/bin/ditto for this scenario only
+  case "$*" in
+    *"$DATA_DIR/cfgs/"*) mkdir -p "${!#}"; printf 'HALF\n' > "${!#}/one.aimcfg"; return 1 ;;
+    *) /usr/bin/ditto "$@" ;;
+  esac
+}
+import_config_archive "$parc2" >/dev/null 2>&1
+_prc=$?
+unset -f ditto
+assert_eq "$_prc" 1 "partial: an import whose only config failed returns 1"
+assert_absent "$DATA_DIR/cfgs/cfg_1" "partial: the half-written configuration was removed"
+
+# A symlink ANYWHERE inside the config folder is refused. ditto preserves inner links too, so
+# `cfg_x/devices -> /` would plant a link to the whole Mac under cfgs/ and hang RS3 (issue #32).
+scenario import-zconf2-inner-symlink
+mkdir -p "$DATA_DIR/cfgs"
+isrc="$SANDBOX/import/innerlink/src"
+mkdir -p "$isrc/cfg_evil"
+printf 'CFG\n' > "$isrc/cfg_evil/e.aimcfg"
+ln -s "/" "$isrc/cfg_evil/devices"
+iarc="$SANDBOX/import/innerlink/evil.zconf2"
+(cd "$isrc" && zip -q -r -y "$iarc" .)
+import_config_archive "$iarc" >/dev/null 2>&1
+assert_eq "$?" 1 "zconf2: config folder containing a symlink is refused"
+assert_absent "$DATA_DIR/cfgs/cfg_evil" "zconf2: nothing from the symlinked archive reached cfgs/"
+
+# A shared-resource failure must not sink a configuration that already landed. The applet throws
+# away stdout on a non-zero exit, so returning 1 here would report "couldn't import" while the
+# configuration sat in cfgs/ — the same desync the pre-scan above exists to prevent.
+scenario import-zconf2-payload-fails
+mkdir -p "$DATA_DIR/cfgs" "$DATA_DIR/resources"
+ysrc="$SANDBOX/import/payfail/src"
+mkdir -p "$ysrc/cfg_1" "$ysrc/to_copy_in_app_root_folder/user/resources/overlay"
+printf 'CFG\n'  > "$ysrc/cfg_1/one.aimcfg"
+printf 'ICON\n' > "$ysrc/to_copy_in_app_root_folder/user/resources/overlay/i.png"
+yarc="$SANDBOX/import/payfail/y.zconf2"
+(cd "$ysrc" && zip -q -r "$yarc" .)
+chmod 555 "$DATA_DIR/resources"      # the payload merge cannot write; the config copy still can
+yout="$(UI_MODE=applet import_config_archive "$yarc" 2>/dev/null)"
+_yrc=$?
+chmod 755 "$DATA_DIR/resources"
+assert_eq "$_yrc" 0 "payfail: a resource failure does not fail the whole import"
+assert_file "$DATA_DIR/cfgs/cfg_1/one.aimcfg" "payfail: the configuration still landed"
+assert_true "printf '%s' \"$yout\" | grep -q '^IMPORT_CONFIG: one$'" "payfail: the applet is still told the config landed"
+assert_true "printf '%s' \"$yout\" | grep -q '^WARN: '"              "payfail: the applet is told something went wrong"
+
+# The symlink scan runs over the WHOLE archive before anything is copied. Refusing mid-loop would
+# leave earlier configurations in cfgs/ with their shared resources never merged, while the applet
+# told the user the import failed.
+scenario import-zconf2-symlink-second-config
+mkdir -p "$DATA_DIR/cfgs"
+tsrc="$SANDBOX/import/twocfg/src"
+mkdir -p "$tsrc/cfg_aaa" "$tsrc/cfg_zzz" "$tsrc/to_copy_in_app_root_folder/user/resources/overlay"
+printf 'GOOD\n' > "$tsrc/cfg_aaa/good.aimcfg"
+printf 'BAD\n'  > "$tsrc/cfg_zzz/bad.aimcfg"
+printf 'ICON\n' > "$tsrc/to_copy_in_app_root_folder/user/resources/overlay/i.png"
+ln -s "/" "$tsrc/cfg_zzz/devices"
+tarc="$SANDBOX/import/twocfg/two.zconf2"
+(cd "$tsrc" && zip -q -r -y "$tarc" .)
+import_config_archive "$tarc" >/dev/null 2>&1
+assert_eq "$?" 1 "twocfg: an archive with one bad config is refused"
+assert_absent "$DATA_DIR/cfgs/cfg_aaa" "twocfg: the CLEAN config did not land either"
+assert_absent "$DATA_DIR/resources/overlay/i.png" "twocfg: the shared payload did not land either"
+
+# import_session_dir holds the same -e/-L invariant as the merge helper.
+scenario session-dir-dangling-symlink
+sdir="$SANDBOX/import/sessdangle/RUN"
+mkdir -p "$sdir" "$DATA_DIR/data/RUN"
+printf 'LAP\n' > "$sdir/a.xrk"
+ln -s "$SANDBOX/import/sessdangle/gone" "$DATA_DIR/data/RUN/a.xrk"
+import_session_dir "$sdir" >/dev/null 2>&1
+assert_symlink_to "$DATA_DIR/data/RUN/a.xrk" "$SANDBOX/import/sessdangle/gone" "session-dir: a dangling symlink is not replaced"
+
+# A zip with no .aimcfg in it is an error, not a silent success.
+nocfg="$SANDBOX/import/zconf2/nocfg.zconf2"
+mkdir -p "$SANDBOX/import/zconf2/empty/junk"
+printf 'x\n' > "$SANDBOX/import/zconf2/empty/junk/readme.txt"
+(cd "$SANDBOX/import/zconf2/empty" && zip -q -r "$nocfg" .)
+import_config_archive "$nocfg" >/dev/null 2>&1
+assert_eq "$?" 1 "zconf2: archive with no .aimcfg fails"
+
+# ---- 10f. single-file .zconf2 routing (do_import *.zconf2 branch) ----------------------------
+scenario import-zconf2-dispatch
+mkdir -p "$DATA_DIR"
+RS3_APP_SUPPORT="$INSTALL_ROOT" RS3_DATA_DIR="$DATA_DIR" UI_MODE=dryrun \
+  bash "$SRC_DIR/installer-core.sh" --import "$zarc" >/dev/null 2>&1
+assert_eq "$?" 0 "zconf2: engine exits 0 on a dropped .zconf2"
+assert_file "$DATA_DIR/cfgs/cfg_20220318_162427/rush sr mxs.aimcfg" "zconf2: engine routes a dropped .zconf2 to the config importer"
+
 finish

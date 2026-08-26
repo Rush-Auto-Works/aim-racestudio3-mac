@@ -14,6 +14,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- **Double-clicking a `.zconf2` configuration export now imports it.** It used to fail with
+  "Import: folder not found" — the importer only knew about session files and folders. A
+  configuration is copied into your `cfgs/` folder (and the icons and masks it references into
+  the data folder) without overwriting anything you already have; drop the same file twice and
+  it says so instead of stacking a duplicate. Quit and reopen RaceStudio 3 to see it under
+  Configurations. Unlike a session, a configuration needs no second Import inside RaceStudio 3.
 - WiFi bridge now supports all three AiM dash gateway IPs (`10.0.0.1`, `11.0.0.1`, and
   `12.0.0.1`). The relay resolves the dash IP from the Mac's network state, and the `ws2_32`
   redirect covers all three dash subnets.

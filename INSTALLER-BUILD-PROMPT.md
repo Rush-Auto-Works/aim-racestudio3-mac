@@ -88,8 +88,8 @@ BUILD ORDER (prove the engine before the GUI):
    Rosetta-cancel.
 4. Build the AppleScript applets (Install/Uninstall .app) + the launcher .app + an
    **Import RaceStudio 3 Data.app droplet** (`on open` accepts a dragged AIM_SPORT/user folder,
-   a .zip, or loose .xrk; merges via the SAME copy-if-absent engine as data_relocate_safe — never
-   overwrite). Also wire the installer's optional import step (auto-from-Parallels via
+   a .zip, loose .xrk/.drk, or a .zconf2 configuration export; merges via the SAME copy-if-absent
+   engine as data_relocate_safe — never overwrite). Also wire the installer's optional import step (auto-from-Parallels via
    scripts/port-data-from-parallels.sh + a "choose folder" picker). Codesign + notarize + staple
    every .app. Native dialogs + staged progress; the heavy logic stays in the tested core script.
 5. Update README with a "Free, no-CrossOver install" section: download -> right-click->Open
