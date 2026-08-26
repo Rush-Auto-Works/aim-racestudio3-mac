@@ -251,6 +251,20 @@ ln -s "$outside" "$lsrc/cfg_link"
 assert_eq "$(_find_config_dirs "$lsrc" | wc -l | tr -d ' ')" "1" "zconf2: symlinked config folder rejected"
 assert_eq "$(basename "$(_find_config_dirs "$lsrc")")" "cfg_ok" "zconf2: the real config folder is still found"
 
+# A symlink ANYWHERE inside the config folder is refused. ditto preserves inner links too, so
+# `cfg_x/devices -> /` would plant a link to the whole Mac under cfgs/ and hang RS3 (issue #32).
+scenario import-zconf2-inner-symlink
+mkdir -p "$DATA_DIR/cfgs"
+isrc="$SANDBOX/import/innerlink/src"
+mkdir -p "$isrc/cfg_evil"
+printf 'CFG\n' > "$isrc/cfg_evil/e.aimcfg"
+ln -s "/" "$isrc/cfg_evil/devices"
+iarc="$SANDBOX/import/innerlink/evil.zconf2"
+(cd "$isrc" && zip -q -r -y "$iarc" .)
+import_config_archive "$iarc" >/dev/null 2>&1
+assert_eq "$?" 1 "zconf2: config folder containing a symlink is refused"
+assert_absent "$DATA_DIR/cfgs/cfg_evil" "zconf2: nothing from the symlinked archive reached cfgs/"
+
 # A zip with no .aimcfg in it is an error, not a silent success.
 nocfg="$SANDBOX/import/zconf2/nocfg.zconf2"
 mkdir -p "$SANDBOX/import/zconf2/empty/junk"

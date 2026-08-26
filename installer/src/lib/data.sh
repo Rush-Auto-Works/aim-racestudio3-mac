@@ -278,7 +278,7 @@ _cfg_free_name() {
 # overwritten — a name that is taken gets the `_NN` suffix, and the shared-resource payload is
 # merged copy-if-absent by the same engine as import_merge.
 import_config_archive() {
-  local zip="$1" tmp cfgs dirs d base name payload n=0 found=0
+  local zip="$1" tmp cfgs dirs d base name payload n=0 found=0 failed=0
   [ -f "$zip" ] || { ui_error "Import: file not found: $zip"; return 1; }
   cfgs="$DATA_DIR/cfgs"
   mkdir -p "$cfgs" || { ui_error "Import: couldn't create $cfgs"; return 1; }
@@ -306,14 +306,27 @@ import_config_archive() {
       ui_import_config_dup "$(_cfg_label "$d")"
       continue
     fi
+    # The top-level `-L` check in _find_config_dirs is not enough: ditto preserves symlinks INSIDE
+    # the folder too, so `cfg_x/devices -> /` would plant a link to the whole Mac under cfgs/.
+    # RS3 walks that tree with no depth cap and hangs on the resulting cycle — the same failure as
+    # issue #32's `z:` drive. A configuration RS3 exported never contains one.
+    if [ -n "$(find "$d" -type l -print -quit 2>/dev/null)" ]; then
+      rm -rf "$tmp"
+      ui_error "Import: '$base' contains symbolic links, which a RaceStudio 3 configuration never does. Refusing to copy it into your data folder."
+      return 1
+    fi
     name="$(_cfg_free_name "$cfgs" "$base")" || {
       rm -rf "$tmp"; ui_error "Import: $cfgs already holds 100 copies of $base"; return 1
     }
-    ditto "$d" "$cfgs/$name" || {
-      rm -rf "$tmp"; ui_error "Import: failed copying configuration $base"; return 1
-    }
-    n=$((n+1))
-    ui_import_config "$(_cfg_label "$d")"
+    # One bad copy in a multi-configuration archive must not report the whole import as failed —
+    # the ones already in cfgs/ are really there, and the applet discards stdout on a non-zero exit.
+    if ditto "$d" "$cfgs/$name"; then
+      n=$((n+1))
+      ui_import_config "$(_cfg_label "$d")"
+    else
+      failed=$((failed+1))
+      ui_warn "couldn't copy configuration $base"
+    fi
   done < <(printf '%s\n' "$dirs")
 
   # Shared resources the configuration references (overlay icons and masks) live beside the cfg
@@ -329,10 +342,15 @@ import_config_archive() {
   done < <(find "$tmp" -mindepth 2 -maxdepth 2 -type d -name user -path '*to_copy_in_app_root*' 2>/dev/null)
   rm -rf "$tmp"
 
-  if [ "$n" -eq 0 ]; then
-    ui_say "Nothing new — that configuration is already in RaceStudio 3."
-  else
+  if [ "$n" -gt 0 ]; then
     ui_say "Imported $n configuration(s) of $found."
+    [ "$failed" -eq 0 ] || ui_warn "$failed configuration(s) in the archive could not be copied"
+    return 0
   fi
+  if [ "$failed" -gt 0 ]; then
+    ui_error "Import: none of the $found configuration(s) in '$(basename "$zip")' could be copied"
+    return 1
+  fi
+  ui_say "Nothing new — that configuration is already in RaceStudio 3."
   return 0
 }

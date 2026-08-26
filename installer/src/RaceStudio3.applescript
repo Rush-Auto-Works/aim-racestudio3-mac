@@ -62,7 +62,9 @@ on open theItems
 	end repeat
 	if okCount > 0 then
 		-- Everything the drop produced was already there, so do not open with "Imported N item(s)".
-		if (count of cfgs) = 0 and (count of dests) = 0 and (count of dupCfgs) > 0 then
+		-- Only for a SINGLE dropped item: a folder merge emits neither IMPORT_DEST nor
+		-- IMPORT_CONFIG, so on a mixed drop an empty dests list does not mean nothing landed.
+		if (count of theItems) = 1 and (count of cfgs) = 0 and (count of dests) = 0 and (count of dupCfgs) > 0 then
 			set msg to "Nothing new to import."
 		else
 			set msg to "Imported " & okCount & " item(s) into your RaceStudio 3 data folder. Nothing existing was overwritten."
