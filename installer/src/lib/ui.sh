@@ -60,6 +60,16 @@ ui_import_config_dup() {
   esac
 }
 
+# ui_import_extras <count> : shared resource files (overlay icons, masks) that landed alongside a
+# configuration. Emitted whether or not the configuration itself was new — a duplicate config can
+# still bring new icons, and the applet must not then claim nothing was imported.
+ui_import_extras() {
+  case "$UI_MODE" in
+    applet) printf 'IMPORT_EXTRAS: %s\n' "$1" ;;
+    *)      ui_say "added $1 shared resource file(s)" ;;
+  esac
+}
+
 ui_progress() {  # <step> <total> <description>
   case "$UI_MODE" in
     applet) printf 'PROGRESS: %s %s %s\n' "$1" "$2" "$3" ;;

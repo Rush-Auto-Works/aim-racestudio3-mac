@@ -251,6 +251,39 @@ ln -s "$outside" "$lsrc/cfg_link"
 assert_eq "$(_find_config_dirs "$lsrc" | wc -l | tr -d ' ')" "1" "zconf2: symlinked config folder rejected"
 assert_eq "$(basename "$(_find_config_dirs "$lsrc")")" "cfg_ok" "zconf2: the real config folder is still found"
 
+# A user file that happens to sit at the merge helper's temp path must survive. The old name was
+# "<file>.tmp.$$", which a leftover from a crashed import (or plain PID reuse) could collide with —
+# ditto would clobber it and the mv would delete it.
+scenario merge-temp-collision
+mkdir -p "$DATA_DIR/resources/overlay"
+msrc="$SANDBOX/merge/src/resources/overlay"
+mkdir -p "$msrc"
+printf 'NEW\n' > "$msrc/icon.png"
+printf 'PRECIOUS\n' > "$DATA_DIR/resources/overlay/icon.png.tmp.$$"
+_merge_copy_if_absent "$SANDBOX/merge/src" "$DATA_DIR"
+assert_eq "$?" 0 "merge: copy succeeds despite a file at the old temp path"
+assert_eq "$(cat "$DATA_DIR/resources/overlay/icon.png.tmp.$$")" "PRECIOUS" "merge: file at the predictable temp path is NOT destroyed"
+assert_eq "$(cat "$DATA_DIR/resources/overlay/icon.png")" "NEW" "merge: the new file still landed"
+
+# A duplicate configuration whose payload carries NEW icons must not report "nothing new".
+scenario import-zconf2-dup-new-resources
+mkdir -p "$DATA_DIR/cfgs"
+dsrc="$SANDBOX/import/dupres/src"
+mkdir -p "$dsrc/cfg_1" "$dsrc/to_copy_in_app_root_folder/user/resources/overlay"
+printf 'CFG\n' > "$dsrc/cfg_1/one.aimcfg"
+printf 'A\n'   > "$dsrc/to_copy_in_app_root_folder/user/resources/overlay/a.png"
+darc1="$SANDBOX/import/dupres/first.zconf2"
+(cd "$dsrc" && zip -q -r "$darc1" .)
+import_config_archive "$darc1" >/dev/null 2>&1
+# Same config, one extra icon.
+printf 'B\n' > "$dsrc/to_copy_in_app_root_folder/user/resources/overlay/b.png"
+darc2="$SANDBOX/import/dupres/second.zconf2"
+(cd "$dsrc" && zip -q -r "$darc2" .)
+dupres="$(UI_MODE=applet import_config_archive "$darc2")"
+assert_file "$DATA_DIR/resources/overlay/b.png" "dup-res: the new icon was merged"
+assert_true "printf '%s' \"$dupres\" | grep -q '^IMPORT_EXTRAS: 1$'" "dup-res: applet is told 1 resource file landed"
+assert_true "printf '%s' \"$dupres\" | grep -q '^IMPORT_CONFIG_DUP: one$'" "dup-res: the config itself is still reported as a duplicate"
+
 # A symlink ANYWHERE inside the config folder is refused. ditto preserves inner links too, so
 # `cfg_x/devices -> /` would plant a link to the whole Mac under cfgs/ and hang RS3 (issue #32).
 scenario import-zconf2-inner-symlink

@@ -45,7 +45,11 @@ _merge_copy_if_absent() {
   while IFS= read -r rel; do
     rel="${rel#./}"
     if [ ! -e "$dst/$rel" ]; then
-      tmp="$dst/$rel.tmp.$$"
+      # mktemp, not "$rel.tmp.$$": the PID name is predictable, so a leftover from a crashed
+      # import (or a user file that simply happens to be called that) would be clobbered by the
+      # ditto and then deleted by the mv. mktemp creates its file exclusively, so it can never
+      # land on a name that already exists.
+      tmp="$(mktemp "$dst/$rel.tmp.XXXXXX")" || return 1
       ditto "$src/$rel" "$tmp" && mv -f "$tmp" "$dst/$rel" || { rm -f "$tmp"; return 1; }
       _MERGED_COPIED+=("$rel")
     fi
@@ -278,7 +282,7 @@ _cfg_free_name() {
 # overwritten — a name that is taken gets the `_NN` suffix, and the shared-resource payload is
 # merged copy-if-absent by the same engine as import_merge.
 import_config_archive() {
-  local zip="$1" tmp cfgs dirs d base name payload n=0 found=0 failed=0
+  local zip="$1" tmp cfgs dirs d base name payload n=0 found=0 failed=0 res=0
   [ -f "$zip" ] || { ui_error "Import: file not found: $zip"; return 1; }
   cfgs="$DATA_DIR/cfgs"
   mkdir -p "$cfgs" || { ui_error "Import: couldn't create $cfgs"; return 1; }
@@ -339,7 +343,11 @@ import_config_archive() {
     _merge_copy_if_absent "$payload" "$DATA_DIR" || {
       rm -rf "$tmp"; ui_error "Import: failed copying the configuration's shared resources"; return 1
     }
+    # Count what actually landed. A configuration can be a duplicate while its icons and masks are
+    # new, and saying "nothing new" then would be untrue.
+    res=$((res + ${#_MERGED_COPIED[@]}))
   done < <(find "$tmp" -mindepth 2 -maxdepth 2 -type d -name user -path '*to_copy_in_app_root*' 2>/dev/null)
+  [ "$res" -eq 0 ] || ui_import_extras "$res"
   rm -rf "$tmp"
 
   if [ "$n" -gt 0 ]; then
@@ -351,6 +359,10 @@ import_config_archive() {
     ui_error "Import: none of the $found configuration(s) in '$(basename "$zip")' could be copied"
     return 1
   fi
-  ui_say "Nothing new — that configuration is already in RaceStudio 3."
+  if [ "$res" -gt 0 ]; then
+    ui_say "That configuration was already in RaceStudio 3; added $res new shared resource file(s)."
+  else
+    ui_say "Nothing new — that configuration is already in RaceStudio 3."
+  fi
   return 0
 }

@@ -45,6 +45,7 @@ on open theItems
 	set dests to {}
 	set cfgs to {}
 	set dupCfgs to {}
+	set extraCount to 0
 	repeat with anItem in theItems
 		set importResult to importOne(coreScript, POSIX path of anItem)
 		if item 1 of importResult is true then
@@ -58,13 +59,14 @@ on open theItems
 			repeat with c in item 4 of importResult
 				if dupCfgs does not contain (c as text) then set end of dupCfgs to (c as text)
 			end repeat
+			set extraCount to extraCount + (item 5 of importResult)
 		end if
 	end repeat
 	if okCount > 0 then
 		-- Everything the drop produced was already there, so do not open with "Imported N item(s)".
 		-- Only for a SINGLE dropped item: a folder merge emits neither IMPORT_DEST nor
 		-- IMPORT_CONFIG, so on a mixed drop an empty dests list does not mean nothing landed.
-		if (count of theItems) = 1 and (count of cfgs) = 0 and (count of dests) = 0 and (count of dupCfgs) > 0 then
+		if (count of theItems) = 1 and (count of cfgs) = 0 and (count of dests) = 0 and extraCount = 0 and (count of dupCfgs) > 0 then
 			set msg to "Nothing new to import."
 		else
 			set msg to "Imported " & okCount & " item(s) into your RaceStudio 3 data folder. Nothing existing was overwritten."
@@ -85,6 +87,9 @@ on open theItems
 				set dupText to dupText & return & "• " & c
 			end repeat
 			set msg to msg & return & return & "Already in RaceStudio 3, not copied again:" & dupText
+		end if
+		if extraCount > 0 then
+			set msg to msg & return & return & "Added " & extraCount & " shared resource file(s) the configuration needs (icons, masks)."
 		end if
 		if (count of dests) > 0 then
 			set destText to ""
@@ -291,6 +296,7 @@ on importOne(coreScript, p)
 		set dest to ""
 		set cfgNames to {}
 		set dupNames to {}
+		set extras to 0
 		repeat with aLine in paragraphs of out
 			if aLine starts with "IMPORT_DEST: " then
 				set dest to (characters 14 thru -1 of aLine) as text
@@ -298,12 +304,14 @@ on importOne(coreScript, p)
 				set end of cfgNames to ((characters 16 thru -1 of aLine) as text)
 			else if aLine starts with "IMPORT_CONFIG_DUP: " then
 				set end of dupNames to ((characters 20 thru -1 of aLine) as text)
+			else if aLine starts with "IMPORT_EXTRAS: " then
+				set extras to extras + (((characters 16 thru -1 of aLine) as text) as integer)
 			end if
 		end repeat
-		return {true, dest, cfgNames, dupNames}
+		return {true, dest, cfgNames, dupNames, extras}
 	on error errMsg
 		display dialog "Couldn't import “" & p & "”:" & return & return & errMsg buttons {"OK"} default button 1 with title "Import problem" with icon stop
-		return {false, "", {}, {}}
+		return {false, "", {}, {}, 0}
 	end try
 end importOne
 
