@@ -235,6 +235,7 @@ printf 'B\n'    > "$psrc/to_copy_in_app_root_1/user/resources/masks/b.png"
 parc="$SANDBOX/import/payloads/two.zconf2"
 (cd "$psrc" && zip -q -r "$parc" .)
 import_config_archive "$parc"
+assert_eq "$?" 0 "zconf2: multi-payload import returns 0"
 assert_file "$DATA_DIR/resources/overlay/a.png" "zconf2: first payload merged"
 assert_file "$DATA_DIR/resources/masks/b.png"   "zconf2: SECOND payload merged too"
 
@@ -280,9 +281,42 @@ printf 'B\n' > "$dsrc/to_copy_in_app_root_folder/user/resources/overlay/b.png"
 darc2="$SANDBOX/import/dupres/second.zconf2"
 (cd "$dsrc" && zip -q -r "$darc2" .)
 dupres="$(UI_MODE=applet import_config_archive "$darc2")"
+assert_eq "$?" 0 "dup-res: duplicate-with-new-resources returns 0"
 assert_file "$DATA_DIR/resources/overlay/b.png" "dup-res: the new icon was merged"
 assert_true "printf '%s' \"$dupres\" | grep -q '^IMPORT_EXTRAS: 1$'" "dup-res: applet is told 1 resource file landed"
 assert_true "printf '%s' \"$dupres\" | grep -q '^IMPORT_CONFIG_DUP: one$'" "dup-res: the config itself is still reported as a duplicate"
+
+# A DANGLING symlink in the data folder is still the user's file. `-e` is false for one, so the
+# merge used to treat it as absent and `mv -f` replaced it with a regular file — silent data loss
+# for anyone whose link points at an unmounted volume.
+scenario merge-dangling-symlink
+mkdir -p "$DATA_DIR/resources/overlay"
+gsrc="$SANDBOX/dangle/src/resources/overlay"
+mkdir -p "$gsrc"
+printf 'NEW\n' > "$gsrc/icon.png"
+ln -s "$SANDBOX/dangle/no-such-target" "$DATA_DIR/resources/overlay/icon.png"
+_merge_copy_if_absent "$SANDBOX/dangle/src" "$DATA_DIR"
+assert_eq "$?" 0 "dangle: merge still returns 0"
+assert_symlink_to "$DATA_DIR/resources/overlay/icon.png" "$SANDBOX/dangle/no-such-target" "dangle: the user's dangling symlink survives"
+
+# A copy that fails must report failure rather than a silent success. An unwritable cfgs/ is the
+# only deterministic way to fail the copy from a test: `ditto -x` normalizes extracted modes to
+# 644, so an archive cannot carry a file that makes the second ditto die partway. That means this
+# pins the failure REPORTING, not the `rm -rf "$cfgs/$name"` cleanup beside it — the cleanup is
+# defensive and unreachable from here.
+scenario import-zconf2-copy-fails
+mkdir -p "$DATA_DIR/cfgs"
+fsrc="$SANDBOX/import/failcopy/src"
+mkdir -p "$fsrc/cfg_1"
+printf 'CFG\n' > "$fsrc/cfg_1/one.aimcfg"
+farc="$SANDBOX/import/failcopy/f.zconf2"
+(cd "$fsrc" && zip -q -r "$farc" .)
+chmod 555 "$DATA_DIR/cfgs"
+import_config_archive "$farc" >/dev/null 2>&1
+_rc=$?
+chmod 755 "$DATA_DIR/cfgs"
+assert_eq "$_rc" 1 "failcopy: a config that could not be copied fails the import"
+assert_absent "$DATA_DIR/cfgs/cfg_1" "failcopy: nothing left in cfgs/ after the failure"
 
 # A symlink ANYWHERE inside the config folder is refused. ditto preserves inner links too, so
 # `cfg_x/devices -> /` would plant a link to the whole Mac under cfgs/ and hang RS3 (issue #32).
@@ -311,6 +345,7 @@ scenario import-zconf2-dispatch
 mkdir -p "$DATA_DIR"
 RS3_APP_SUPPORT="$INSTALL_ROOT" RS3_DATA_DIR="$DATA_DIR" UI_MODE=dryrun \
   bash "$SRC_DIR/installer-core.sh" --import "$zarc" >/dev/null 2>&1
+assert_eq "$?" 0 "zconf2: engine exits 0 on a dropped .zconf2"
 assert_file "$DATA_DIR/cfgs/cfg_20220318_162427/rush sr mxs.aimcfg" "zconf2: engine routes a dropped .zconf2 to the config importer"
 
 finish

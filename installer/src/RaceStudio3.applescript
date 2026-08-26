@@ -46,6 +46,7 @@ on open theItems
 	set cfgs to {}
 	set dupCfgs to {}
 	set extraCount to 0
+	set warnings to {}
 	repeat with anItem in theItems
 		set importResult to importOne(coreScript, POSIX path of anItem)
 		if item 1 of importResult is true then
@@ -60,6 +61,9 @@ on open theItems
 				if dupCfgs does not contain (c as text) then set end of dupCfgs to (c as text)
 			end repeat
 			set extraCount to extraCount + (item 5 of importResult)
+			repeat with w in item 6 of importResult
+				if warnings does not contain (w as text) then set end of warnings to (w as text)
+			end repeat
 		end if
 	end repeat
 	if okCount > 0 then
@@ -98,7 +102,19 @@ on open theItems
 			end repeat
 			set msg to msg & return & return & "RaceStudio 3 won't show your sessions until you import them:" & return & "Open RaceStudio 3 → cogwheel (bottom-left) → Import → Import Folder, then pick:" & destText & return & return & "(Or Import File(s) for individual sessions.)"
 		end if
-		display dialog msg buttons {"OK"} default button 1 with title "Import complete" with icon note
+		-- The engine reports a recoverable problem (a configuration it could not copy, say) as a
+		-- WARN: line and still exits 0. Showing only the successes would make a partial import look
+		-- like a clean one.
+		if (count of warnings) > 0 then
+			set warnText to ""
+			repeat with w in warnings
+				set warnText to warnText & return & "• " & w
+			end repeat
+			set msg to msg & return & return & "Some things didn't work:" & warnText
+			display dialog msg buttons {"OK"} default button 1 with title "Import finished with problems" with icon caution
+		else
+			display dialog msg buttons {"OK"} default button 1 with title "Import complete" with icon note
+		end if
 	end if
 end open
 
@@ -297,8 +313,11 @@ on importOne(coreScript, p)
 		set cfgNames to {}
 		set dupNames to {}
 		set extras to 0
+		set warns to {}
 		repeat with aLine in paragraphs of out
-			if aLine starts with "IMPORT_DEST: " then
+			if aLine starts with "WARN: " then
+				set end of warns to ((characters 7 thru -1 of aLine) as text)
+			else if aLine starts with "IMPORT_DEST: " then
 				set dest to (characters 14 thru -1 of aLine) as text
 			else if aLine starts with "IMPORT_CONFIG: " then
 				set end of cfgNames to ((characters 16 thru -1 of aLine) as text)
@@ -308,10 +327,10 @@ on importOne(coreScript, p)
 				set extras to extras + (((characters 16 thru -1 of aLine) as text) as integer)
 			end if
 		end repeat
-		return {true, dest, cfgNames, dupNames, extras}
+		return {true, dest, cfgNames, dupNames, extras, warns}
 	on error errMsg
 		display dialog "Couldn't import “" & p & "”:" & return & return & errMsg buttons {"OK"} default button 1 with title "Import problem" with icon stop
-		return {false, "", {}, {}, 0}
+		return {false, "", {}, {}, 0, {}}
 	end try
 end importOne
 

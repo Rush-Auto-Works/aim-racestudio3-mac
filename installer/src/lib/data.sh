@@ -44,13 +44,21 @@ _merge_copy_if_absent() {
   # Copy files that are absent in dst.
   while IFS= read -r rel; do
     rel="${rel#./}"
-    if [ ! -e "$dst/$rel" ]; then
+    # `-e` alone is not "absent": it is false for a DANGLING symlink, so a user's link whose target
+    # is offline (an unmounted volume, a moved folder) read as missing and `mv -f` replaced it with
+    # a regular file. `-L` closes that hole.
+    if [ ! -e "$dst/$rel" ] && [ ! -L "$dst/$rel" ]; then
       # mktemp, not "$rel.tmp.$$": the PID name is predictable, so a leftover from a crashed
       # import (or a user file that simply happens to be called that) would be clobbered by the
       # ditto and then deleted by the mv. mktemp creates its file exclusively, so it can never
       # land on a name that already exists.
       tmp="$(mktemp "$dst/$rel.tmp.XXXXXX")" || return 1
-      ditto "$src/$rel" "$tmp" && mv -f "$tmp" "$dst/$rel" || { rm -f "$tmp"; return 1; }
+      ditto "$src/$rel" "$tmp" || { rm -f "$tmp"; return 1; }
+      # `mv -n`, not `mv -f`: the absent-check above and this rename are not atomic, and anything
+      # that appeared in between (a second import, RS3 itself) is the user's file and wins. mv -n
+      # leaves it alone and exits 0, so drop our temp either way.
+      mv -n "$tmp" "$dst/$rel"
+      rm -f "$tmp"
       _MERGED_COPIED+=("$rel")
     fi
   done < <(cd "$src" && find . -type f)
@@ -328,6 +336,10 @@ import_config_archive() {
       n=$((n+1))
       ui_import_config "$(_cfg_label "$d")"
     else
+      # A half-written config directory in cfgs/ is worse than none: RS3 lists it and the next
+      # attempt sees the name as taken. _cfg_free_name guaranteed this path did not exist before
+      # the copy, so removing it can only take back what this run just made.
+      rm -rf "$cfgs/$name"
       failed=$((failed+1))
       ui_warn "couldn't copy configuration $base"
     fi
