@@ -15,7 +15,7 @@ on run
 	importItems(core, {f})
 end run
 
--- drag-and-drop: accept dropped folders / .zip / .xrk / .drk
+-- drag-and-drop: accept dropped folders / .zip / .xrk / .drk / .zconf2
 on open theItems
 	set core to corePath()
 	if not isInstalled(core) then

@@ -10,7 +10,7 @@ Wine (benign nonzero exits). Success is judged by **postconditions (ledger)**, n
 ## installer-core.sh (475 lines) — dispatch
 
 Actions: `run` (all 8 phases) · `<phase>` (one phase, applet calls these) · `repair` · `reinstall`
-· `import <dir|zip|xrk>` · `uninstall` · `set-config` · `is-installed` · `help`.
+· `import <dir|zip|xrk|drk|zconf2>` · `uninstall` · `set-config` · `is-installed` · `help`.
 Flags: `--dry-run` (no net/writes outside sandbox) · `--latest` · `--smoke-test` · `--repair` · `--reinstall` · `--import`.
 
 Phases: `phase_preflight acquire_installer download_wine make_prefix silent_install relocate_data make_launcher done`.
@@ -26,11 +26,11 @@ RS3_SINGLE_APP UI_MODE LAUNCHER_APP_SRC IMPORT_APP_SRC UNINSTALL_APP_SRC`.
 
 | Module | Key functions | Purpose |
 |--------|---------------|---------|
-| `data.sh` | `data_relocate_safe` `_merge_copy_if_absent` `_verify_merge` `_find_user_tree` `_dir_has_xrk` `import_merge` `import_xrk_dir` | The #1 data-loss surface. Relocate prefix `user/` → DATA_DIR; merge imports. |
+| `data.sh` | `data_relocate_safe` `_merge_copy_if_absent` `_verify_merge` `_find_user_tree` `_dir_has_session_file` `import_merge` `import_session_dir` `import_config_archive` `_find_config_dirs` `_cfg_label` `_cfg_already_imported` `_cfg_free_name` | The #1 data-loss surface. Relocate prefix `user/` → DATA_DIR; merge imports; unpack `.zconf2` configs into `cfgs/`. |
 | `ledger.sh` | `ledger_mark/clear/has/verify/done/skip_if_done` | Phase completion markers (`$STATE_DIR/*.ok`) + structural postconditions. |
 | `net.sh` | `https_guard` `validate_version` `validate_wine_asset` `file_size` `download_verified` | HTTPS-only downloads with size+sha256 verification. |
 | `preflight.sh` | `macos_ok` `is_apple_silicon` `rosetta_present` `rosetta_install_cli` `enough_disk` `icloud_documents_synced` | Environment checks. |
-| `ui.sh` | `ui_say/progress/warn/error/persist/recall/choice/confirm` | Dual CLI/applet UX; applet path emits `NEEDS_*` sentinels + rc. |
+| `ui.sh` | `ui_say/progress/warn/error/persist/recall/choice/confirm` `ui_import_dest` `ui_import_config` `ui_import_config_dup` `ui_import_extras` | Dual CLI/applet UX; applet path emits `NEEDS_*` sentinels + rc. |
 | `wine.sh` | `watchdog` `find_wine_binary` `wineserver_path/kill/wait` `run_wine` `wine_env_export` `write_macdrv_reg`/`apply_macdrv_keys` | Wine invocation wrappers (timeouts, prefix env) + native keyboard-feel Mac Driver reg keys. |
 
 ## data_relocate_safe state machine (crash-safe, re-entrant)
@@ -45,10 +45,25 @@ Invariants: DST made complete+verified BEFORE SRC touched · MERGE = copy-if-abs
 
 Import routing (`do_import`): RS3 user-tree → `import_merge`; folder of loose `.xrk`/`.drk` →
 `import_session_dir` (copies into `$DATA_DIR/data/<folder>/`, never overwriting); `.zip` → user-tree
-merge OR loose-session copy; single `.xrk`/`.drk` → `$DATA_DIR/data/dropped-<date>/`. NOTE: RS3 does
-not scan the data folder — staged sessions only appear after the user runs RS3's own Import
-(cogwheel → Import → Import Folder); the engine emits `IMPORT_DEST: <path>` for the applet to guide
-them. `.drk` is the legacy RS2-era format; RS3's importer reads it natively.
+merge OR loose-session copy; single `.xrk`/`.drk` → `$DATA_DIR/data/dropped-<date>/`;
+`.zconf2`/`.zconfig` → `import_config_archive`. `.drk` is the legacy RS2-era format; RS3's importer
+reads it natively.
+
+Sessions and configurations end differently, and the difference is the whole point of the routing.
+RS3 does not scan the data folder, so a staged SESSION appears only after the user runs RS3's own
+Import (cogwheel → Import → Import Folder) — it needs a row in `database/data.xrd`. A CONFIGURATION
+needs no database row: RS3 lists whatever `cfgs/<cfg_*>` folders it finds on disk, so
+`import_config_archive` unpacking the archive there IS the import, and RS3 only has to restart.
+
+Applet contract — five machine-readable lines, all parsed by both `.applescript` files:
+
+| Line | Emitted by | Applet does |
+|------|-----------|-------------|
+| `IMPORT_DEST: <path>` | staged sessions | points the user at RS3's own Import |
+| `IMPORT_CONFIG: <name>` | a configuration that landed | lists it, says to restart RS3 |
+| `IMPORT_CONFIG_DUP: <name>` | a configuration already present | lists it as not copied again |
+| `IMPORT_EXTRAS: <count>` | shared resources merged | reports the count, suppresses "nothing new" |
+| `WARN: <text>` | any recoverable failure | switches the dialog to "finished with problems" |
 
 ## launch.sh (generated)
 

@@ -7,7 +7,7 @@
 #   installer-core.sh --dry-run run  # validate logic; NO network, NO writes outside sandbox
 #   installer-core.sh --repair       # re-run from the first failed postcondition
 #   installer-core.sh --reinstall    # wipe engine+prefix (never Documents data w/o confirm)
-#   installer-core.sh --import <path># merge a user/ folder, session file(s) or a .zconf2 config
+#   installer-core.sh --import <path> # merge a user/ folder, session file(s), or a .zconf2 config
 #   installer-core.sh uninstall      # remove engine + launchers (data kept unless confirmed)
 #
 # Phases (the 8 progress steps): preflight acquire-installer download-wine make-prefix
@@ -512,7 +512,9 @@ do_import() {
         while IFS= read -r f; do
           local rel="${f#"$tmp"/}"
           mkdir -p "$dest/$(dirname "$rel")" || { rm -rf "$tmp"; die "Import: failed creating $(dirname "$rel")"; }
-          if [ ! -e "$dest/$rel" ]; then
+          # `-e` alone is false for a dangling symlink; `-L` keeps a user's link from being
+          # replaced (same invariant as _merge_copy_if_absent).
+          if [ ! -e "$dest/$rel" ] && [ ! -L "$dest/$rel" ]; then
             ditto "$f" "$dest/$rel" || { rm -rf "$tmp"; die "Import: failed copying $rel"; }
             n=$((n+1))
           fi
@@ -537,7 +539,8 @@ do_import() {
       local dest="$DATA_DIR/data/dropped-$(date +%Y%m%d)"
       mkdir -p "$dest"
       local target="$dest/$(basename "$p")"
-      if [ -e "$target" ]; then
+      # `-e` alone is false for a dangling symlink; `-L` keeps a user's link from being replaced.
+      if [ -e "$target" ] || [ -L "$target" ]; then
         ui_say "No new session staged — $(basename "$p") is already in the data folder."
       elif ditto "$p" "$target"; then
         ui_say "Imported session: $(basename "$p")"

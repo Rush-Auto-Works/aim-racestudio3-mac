@@ -131,7 +131,10 @@ through the same copy-if-absent MERGE** (never overwrite, never clobber; see Dat
    `on open`): drag the **`AIM_SPORT`** folder (or its `RaceStudio3\user` subfolder) — from
    another PC, a USB stick, a backup, or a Parallels shared folder — onto it and it merges
    configs/profiles/database/sessions into the data dir. Also accepts a **`.zip`** (unzips to a
-   temp dir first) and loose **`.xrk`** files (→ `data/<date>/`).
+   temp dir first), loose **`.xrk`**/**`.drk`** files (→ `data/<date>/`), and a **`.zconf2`**
+   configuration export (unpacked into `cfgs/`). A dropped session still needs RS3's own Import to
+   become visible, because it needs a database row; a configuration does not, because RS3 lists the
+   `cfgs/` folders it finds on disk — it only has to restart.
 3. **"I have a folder" picker** — same import via a `choose folder` dialog inside the installer's
    optional import step, for users who prefer clicking to dragging.
 4. **Manual** — README documents the exact Mac path of the data dir so users can drop files in

@@ -65,11 +65,15 @@ _merge_copy_if_absent() {
       elif ln "$tmp" "$dst/$rel" 2>/dev/null; then
         _MERGED_COPIED+=("$rel")
         rm -f "$tmp"
+      elif [ -e "$dst/$rel" ] || [ -L "$dst/$rel" ]; then
+        rm -f "$tmp"                       # lost the race in the window above; the user's file wins
+      elif mv "$tmp" "$dst/$rel"; then
+        # ln also fails on a volume with no hard links — exFAT or SMB, which DATA_DIR can be
+        # pointed at with `set-config`. The destination is still absent here, so a plain rename is
+        # both correct and what this did before.
+        _MERGED_COPIED+=("$rel")
       else
-        rm -f "$tmp"
-        # Something occupying the destination is the expected loss of that race. Anything else
-        # means the copy really failed and the caller must hear about it.
-        [ -e "$dst/$rel" ] || [ -L "$dst/$rel" ] || return 1
+        rm -f "$tmp"; return 1
       fi
     fi
   done < <(cd "$src" && find . -type f)
@@ -216,7 +220,9 @@ import_session_dir() {
   while IFS= read -r f; do
     rel="${f#"$in"/}"
     mkdir -p "$dest/$(dirname "$rel")" || { ui_error "import failed creating $(dirname "$rel")"; rc=1; break; }
-    if [ ! -e "$dest/$rel" ]; then
+    # `-e` is false for a dangling symlink, so it alone would call a user's link "absent" and let
+    # ditto replace it. Same invariant as _merge_copy_if_absent.
+    if [ ! -e "$dest/$rel" ] && [ ! -L "$dest/$rel" ]; then
       ditto "$f" "$dest/$rel" || { ui_error "import failed copying $rel"; rc=1; break; }
       n=$((n+1))
     fi
@@ -323,6 +329,23 @@ import_config_archive() {
     return 1
   fi
 
+  # Validate every configuration BEFORE copying any of them. Refusing mid-loop would abort with
+  # earlier configurations already sitting in cfgs/ and their shared resources never merged, and
+  # the applet discards stdout on a non-zero exit, so the user would be told "couldn't import"
+  # while a half-supported configuration had in fact appeared.
+  while IFS= read -r d; do
+    [ -n "$d" ] || continue
+    # The top-level `-L` check in _find_config_dirs is not enough: ditto preserves symlinks INSIDE
+    # the folder too, so `cfg_x/devices -> /` would plant a link to the whole Mac under cfgs/.
+    # RS3 walks that tree with no depth cap and hangs on the resulting cycle — the same failure as
+    # issue #32's `z:` drive. A configuration RS3 exported never contains one.
+    if [ -n "$(find "$d" -type l -print -quit 2>/dev/null)" ]; then
+      rm -rf "$tmp"
+      ui_error "Import: '$(basename "$d")' contains symbolic links, which a RaceStudio 3 configuration never does. Refusing to copy it into your data folder."
+      return 1
+    fi
+  done < <(printf '%s\n' "$dirs")
+
   while IFS= read -r d; do
     [ -n "$d" ] || continue
     found=$((found+1))
@@ -331,18 +354,13 @@ import_config_archive() {
       ui_import_config_dup "$(_cfg_label "$d")"
       continue
     fi
-    # The top-level `-L` check in _find_config_dirs is not enough: ditto preserves symlinks INSIDE
-    # the folder too, so `cfg_x/devices -> /` would plant a link to the whole Mac under cfgs/.
-    # RS3 walks that tree with no depth cap and hangs on the resulting cycle — the same failure as
-    # issue #32's `z:` drive. A configuration RS3 exported never contains one.
-    if [ -n "$(find "$d" -type l -print -quit 2>/dev/null)" ]; then
-      rm -rf "$tmp"
-      ui_error "Import: '$base' contains symbolic links, which a RaceStudio 3 configuration never does. Refusing to copy it into your data folder."
-      return 1
+    # A full cfgs/ is not a reason to abandon the configurations that already landed, and the
+    # payload merge below still has to run for them.
+    if ! name="$(_cfg_free_name "$cfgs" "$base")"; then
+      failed=$((failed+1))
+      ui_warn "$cfgs already holds 100 copies of $base"
+      continue
     fi
-    name="$(_cfg_free_name "$cfgs" "$base")" || {
-      rm -rf "$tmp"; ui_error "Import: $cfgs already holds 100 copies of $base"; return 1
-    }
     # One bad copy in a multi-configuration archive must not report the whole import as failed —
     # the ones already in cfgs/ are really there, and the applet discards stdout on a non-zero exit.
     if ditto "$d" "$cfgs/$name"; then

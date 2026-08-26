@@ -385,6 +385,33 @@ import_config_archive "$iarc" >/dev/null 2>&1
 assert_eq "$?" 1 "zconf2: config folder containing a symlink is refused"
 assert_absent "$DATA_DIR/cfgs/cfg_evil" "zconf2: nothing from the symlinked archive reached cfgs/"
 
+# The symlink scan runs over the WHOLE archive before anything is copied. Refusing mid-loop would
+# leave earlier configurations in cfgs/ with their shared resources never merged, while the applet
+# told the user the import failed.
+scenario import-zconf2-symlink-second-config
+mkdir -p "$DATA_DIR/cfgs"
+tsrc="$SANDBOX/import/twocfg/src"
+mkdir -p "$tsrc/cfg_aaa" "$tsrc/cfg_zzz" "$tsrc/to_copy_in_app_root_folder/user/resources/overlay"
+printf 'GOOD\n' > "$tsrc/cfg_aaa/good.aimcfg"
+printf 'BAD\n'  > "$tsrc/cfg_zzz/bad.aimcfg"
+printf 'ICON\n' > "$tsrc/to_copy_in_app_root_folder/user/resources/overlay/i.png"
+ln -s "/" "$tsrc/cfg_zzz/devices"
+tarc="$SANDBOX/import/twocfg/two.zconf2"
+(cd "$tsrc" && zip -q -r -y "$tarc" .)
+import_config_archive "$tarc" >/dev/null 2>&1
+assert_eq "$?" 1 "twocfg: an archive with one bad config is refused"
+assert_absent "$DATA_DIR/cfgs/cfg_aaa" "twocfg: the CLEAN config did not land either"
+assert_absent "$DATA_DIR/resources/overlay/i.png" "twocfg: the shared payload did not land either"
+
+# import_session_dir holds the same -e/-L invariant as the merge helper.
+scenario session-dir-dangling-symlink
+sdir="$SANDBOX/import/sessdangle/RUN"
+mkdir -p "$sdir" "$DATA_DIR/data/RUN"
+printf 'LAP\n' > "$sdir/a.xrk"
+ln -s "$SANDBOX/import/sessdangle/gone" "$DATA_DIR/data/RUN/a.xrk"
+import_session_dir "$sdir" >/dev/null 2>&1
+assert_symlink_to "$DATA_DIR/data/RUN/a.xrk" "$SANDBOX/import/sessdangle/gone" "session-dir: a dangling symlink is not replaced"
+
 # A zip with no .aimcfg in it is an error, not a silent success.
 nocfg="$SANDBOX/import/zconf2/nocfg.zconf2"
 mkdir -p "$SANDBOX/import/zconf2/empty/junk"
