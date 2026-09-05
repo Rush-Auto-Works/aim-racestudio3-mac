@@ -30,7 +30,17 @@
 //   DASH_ADDR (10.0.0.1) · BRIDGE_LISTEN_ADDR (127.0.0.1)
 //   TCP_LISTEN_PORT (2000)  TCP_DASH_PORT (2000)
 //   UDP_LISTEN_PORT (36003) UDP_DASH_PORT (36002)
-// Overridable only so the hermetic test can point at a fake dash on loopback.
+// Overridable only so the hermetic test can point at a fake dash on loopback. An EMPTY
+// DASH_ADDR (non-root only) simulates "no interface on any dash subnet" for the gate test.
+//
+// The relay only ever forwards when the Mac has an interface ON a dash /24 (10/11/12.0.0.x).
+// Otherwise there is no dash to reach, and dialing 10.0.0.1 over the default route talks to
+// whatever a home router, hotspot or carrier puts there. RS3 then "finds" a phantom device,
+// opens control channels to it and stalls on replies that never come (seen 2026-09-05: a
+// non-dash 10.0.0.1 answered discovery + accepted TCP 2000 while RS3 froze every few minutes).
+// Off the dash Wi-Fi, datagrams are dropped and TCP connects are closed at once. A home LAN
+// that itself uses 10.0.0.0/24 is indistinguishable from the dash AP by address alone (known
+// limit; the dash's discovery reply is what RS3 checks next).
 
 import Darwin
 import Foundation
@@ -102,15 +112,19 @@ func serveTCP() {
         logmsg("TCP bind \(LISTEN_ADDR):\(TCP_LISTEN) failed: \(String(cString: strerror(errno)))"); exit(1)
     }
     listen(ls, 8)
-    logmsg("TCP \(LISTEN_ADDR):\(TCP_LISTEN) -> \(resolveDashIP()):\(TCP_DASH)")
+    logmsg("TCP \(LISTEN_ADDR):\(TCP_LISTEN) -> \(dashLabel(resolveDashIP())):\(TCP_DASH)")
     while true {
         let cs = accept(ls, nil, nil)
         if cs < 0 { continue }
         let an = counts.bump("tcp-accept")
         if milestone(an) { logmsg("tcp: RS3 opened the control channel (#\(an)) — it found a device, dialing dash") }
         DispatchQueue.global().async {
+            guard let dashIP = resolveDashIP() else {
+                let xn = counts.bump("tcp-nodash")
+                if milestone(xn) { logmsg("tcp: RS3 opened the control channel (#\(xn)) but \(NO_DASH_HINT); closing it") }
+                close(cs); return
+            }
             let ds = socket(AF_INET, SOCK_STREAM, 0)
-            let dashIP = resolveDashIP()
             var da = makeAddr(dashIP, TCP_DASH)
             guard withSockaddr(&da, { connect(ds, $0, $1) }) == 0 else {
                 logmsg("tcp: dial \(dashIP):\(TCP_DASH) FAILED: \(String(cString: strerror(errno))) — dash unreachable (wrong Wi-Fi / dash off?)")
@@ -131,6 +145,8 @@ func serveTCP() {
 // n==1 is the all-important FIRST occurrence. The events we track:
 //   c2d        a datagram arrived FROM RS3 (loopback) headed to the dash   (ws2_32/wlanapi OK)
 //   c2d-fail   sendto() to the dash failed locally — no route              (Mac not on dash Wi-Fi)
+//   c2d-nodash a datagram from RS3 was DROPPED: no interface on a dash /24  (off the dash Wi-Fi)
+//   tcp-nodash RS3's TCP connect was CLOSED: no interface on a dash /24      (off the dash Wi-Fi)
 //   d2c        a reply arrived FROM the resolved dash                     (full UDP path OK)
 //   d2c-drop   a reply arrived from some OTHER address (dropped)           (dash at a different IP)
 //   tcp-accept RS3 opened the TCP control/data channel                    (it found a device)
@@ -160,10 +176,12 @@ func dashTarget(for a: in_addr) -> (subnet: String, ip: String)? {
     }
 }
 
-func resolveDashIP() -> String {
-    guard IS_ROOT else { return DASH_ADDR }
+// nil = the Mac has NO interface on a dash subnet right now -> nothing is relayed (see header).
+// Re-evaluated per datagram / per TCP accept, so joining or leaving the dash Wi-Fi needs no restart.
+func resolveDashIP() -> String? {
+    guard IS_ROOT else { return DASH_ADDR.isEmpty ? nil : DASH_ADDR }
     var ifap: UnsafeMutablePointer<ifaddrs>?
-    guard getifaddrs(&ifap) == 0 else { return "10.0.0.1" }
+    guard getifaddrs(&ifap) == 0 else { return nil }
     defer { freeifaddrs(ifap) }
     var p = ifap
     while let cur = p {
@@ -175,8 +193,10 @@ func resolveDashIP() -> String {
         memcpy(&a, sa, Int(MemoryLayout<sockaddr_in>.size))
         if let target = dashTarget(for: a.sin_addr) { return target.ip }
     }
-    return "10.0.0.1"
+    return nil
 }
+func dashLabel(_ ip: String?) -> String { ip ?? "(none: no interface on a dash subnet)" }
+let NO_DASH_HINT = "NO interface on a dash subnet (10/11/12.0.0.x) — not relaying to 10.0.0.1 over the default route (a home router or hotspot is not a dash)"
 
 // Dump the Mac's IPv4 interfaces and whether any sits on one of the three dash /24s. This is the
 // single most useful line for the "no devices" report: it says whether the Mac is even joined to
@@ -239,7 +259,7 @@ func serveUDP() {
     // Replies are filtered to the currently resolved dash address (the unconnected socket accepts
     // any sender; we do the check connect() would have done).
     let us = socket(AF_INET, SOCK_DGRAM, 0)
-    logmsg("UDP \(LISTEN_ADDR):\(UDP_LISTEN) -> \(resolveDashIP()):\(UDP_DASH)")
+    logmsg("UDP \(LISTEN_ADDR):\(UDP_LISTEN) -> \(dashLabel(resolveDashIP())):\(UDP_DASH)")
 
     let client = ClientBox()
 
@@ -261,7 +281,11 @@ func serveUDP() {
             // from an EPHEMERAL port (e.g. 49861), not 36002 — pinning the port silently dropped
             // every reply and RS3 saw no device. The IP pin still drops a stray foreign sender; the
             // ws2_32 inbound rewrite makes RS3 accept the loopback-delivered reply as 10.0.0.1:36002.
-            let dashIP = resolveDashIP()
+            guard let dashIP = resolveDashIP() else {
+                let fn = counts.bump("d2c-nodash")
+                if milestone(fn) { logmsg("udp: ignored reply from \(ipv4(sa.sin_addr)):\(port16(sa.sin_port)) (#\(fn)) — \(NO_DASH_HINT)") }
+                continue
+            }
             let dashCurrent = makeAddr(dashIP, UDP_DASH)
             guard sa.sin_addr.s_addr == dashCurrent.sin_addr.s_addr else {
                 let fn = counts.bump("d2c-drop")
@@ -297,7 +321,11 @@ func serveUDP() {
         if n < 0 { if errno == EINTR { continue }; continue }
         client.set(ca)
         let cn = counts.bump("c2d")
-        let dashIP = resolveDashIP()
+        guard let dashIP = resolveDashIP() else {
+            let fn = counts.bump("c2d-nodash")
+            if milestone(fn) { logmsg("udp: datagram from RS3 \(ipv4(ca.sin_addr)):\(port16(ca.sin_port)) DROPPED (#\(fn), \(n)B) — \(NO_DASH_HINT)") }
+            continue
+        }
         if milestone(cn) { logmsg("udp: datagram from RS3 \(ipv4(ca.sin_addr)):\(port16(ca.sin_port)) -> dash \(dashIP):\(UDP_DASH) (#\(cn), \(n)B)") }
         var da = makeAddr(dashIP, UDP_DASH)
         let w = withSockaddr(&da) { sap, slen in

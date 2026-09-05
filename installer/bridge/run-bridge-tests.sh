@@ -13,6 +13,7 @@ TESTS=(
   test-bridge-keepalive.sh    # realistic keepalive-gated transfer + ~1s TCP close
   test-bridge-concurrent.sh   # many simultaneous connections (RS3 uses 2)
   test-bridge-dash-absent.sh  # graceful degradation + relay resilience when dash absent
+  test-bridge-no-dash-subnet.sh # off the dash Wi-Fi: drop UDP, close TCP, never dial 10.0.0.1
   test-bridge-ctl.sh          # SMAppService control tool contract
 )
 

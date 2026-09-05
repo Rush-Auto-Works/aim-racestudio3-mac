@@ -67,6 +67,20 @@ RS3 connected to a real MXS dash and the device appeared. This `ws2_32` patch is
 not sufficient on its own — RS3 won't start discovery until `wlanapi` reports a Wi-Fi interface
 (see `wlanapi-synth-iface.patch`).
 
+## `wlanapi` — the synthetic interface must never raise into RS3 (2026-09-05)
+
+RS3 3.83.39 rewrote its Wi-Fi manager (issue #40). Right after `WlanQueryInterface` reports our
+synthetic interface "connected", the new code calls **`WlanSetInterface`** — a Wine `@ stub`, so
+Wine raised `EXCEPTION_WINE_STUB` into RS3's Wi-Fi thread on every launch (`run.log`: `wine: Call
+from … to unimplemented function wlanapi.dll.WlanSetInterface, aborting`). RS3 swallowed it, but a
+thread unwinding mid-operation is the classic way to leave a lock held and freeze the UI minutes
+later — which is what a 3.83.50 user saw (grey window every ~10 min). The patch now implements
+`WlanSetInterface` (accepted, `ERROR_SUCCESS`; there is nothing to set on a fake association) and
+converts every other stubbed export to a real entry returning `ERROR_NOT_SUPPORTED` — no more
+stub exceptions from `wlanapi`, whatever the Wi-Fi dialog asks next. The two EAP profile setters
+stay stubs (by-value `EAP_METHOD_TYPE`, inexpressible in the `.spec`; RS3 does no EAP). Each
+first call is logged once as `AiM/wlanapi: <export> -> …` so `run.log` shows what RS3 reached.
+
 ## Build (both DLLs)
 
 ```bash

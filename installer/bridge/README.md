@@ -101,7 +101,11 @@ sudo installer/bridge/build/aim-bridge          # root resolves 10.0.0.1, 11.0.0
 
 Root scope is limited to the relay, never all of Wine. Running as root, `aim-bridge` ignores the
 environment and permits only the three dash gateway addresses (`10.0.0.1`, `11.0.0.1`, and
-`12.0.0.1`), resolving the active one from interface state, plus the fixed ports (listen
+`12.0.0.1`), resolving the active one from interface state — and relaying **nothing** when no
+interface is on a dash `/24` (UDP dropped, TCP closed at once; re-checked per packet, so joining
+the dash Wi-Fi needs no restart). Off the dash Wi-Fi, `10.0.0.1` is a home router / hotspot /
+carrier box, and dialing it let RS3 "find" a phantom dash and freeze on it (2026-09-05;
+`test-bridge-no-dash-subnet.sh`). Plus the fixed ports (listen
 `36003/UDP` + `2000/TCP`, dash `36002/UDP` + `2000/TCP`). It binds loopback-only, filters
 upstream replies to the resolved dash address, and drops `SO_REUSEADDR` (so a local process
 can't pre-bind/steal the port). We chose loopback-bind + hardcoded-dest over peer validation
