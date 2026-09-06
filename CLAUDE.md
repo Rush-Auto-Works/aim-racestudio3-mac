@@ -84,8 +84,10 @@ This file is constraints, conventions, and hard-won gotchas only.
      zero Wi-Fi interfaces, so RS3 never starts discovery. Present ONE synthetic *connected*
      interface (`WlanEnumInterfaces` + `WlanQueryInterface(current_connection)`). **And never let
      `wlanapi` raise into RS3**: 3.83.39+ calls `WlanSetInterface` (accepted) and may reach other
-     exports — all former `@ stub`s now return `ERROR_NOT_SUPPORTED` instead of Wine's stub
-     exception, which unwound RS3's Wi-Fi thread on every launch and matched a grey-freeze-every-
+     exports — every former `@ stub` now returns `ERROR_NOT_SUPPORTED` instead of Wine's stub
+     exception, EXCEPT `WlanSetProfileEapUserData`/`WlanSetProfileEapXmlUserData` (by-value
+     `EAP_METHOD_TYPE`, inexpressible in the `.spec`; RS3 does no EAP), which still raise. The
+     stub exception unwound RS3's Wi-Fi thread on every launch and matched a grey-freeze-every-
      10-minutes report on 3.83.50 (2026-09-05, issue #40).
   2. **`ws2_32.dll` outbound redirect** (`wine-patch/ws2_32-localnet.patch`) — RS3 addresses
      aim-ka discovery to **`0.0.0.0:36002`** under Wine (NOT `10.0.0.255`/gateway). Redirect both
