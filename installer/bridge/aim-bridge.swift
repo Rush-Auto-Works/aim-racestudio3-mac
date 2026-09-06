@@ -185,8 +185,9 @@ func resolveDashIP() -> String? {
     guard getifaddrs(&ifap) == 0 else {
         // Fail safe (relay nothing), but count it SEPARATELY from "off the dash subnet" so a
         // transient interface-enumeration failure is not misread as the Mac having left the AP.
+        let err = errno   // capture first: the counter's lock/unlock below may clobber errno
         let en = counts.bump("ifaddrs-fail")
-        if milestone(en) { logmsg("net: getifaddrs failed (#\(en)): \(String(cString: strerror(errno))) — treating as no dash subnet until it recovers") }
+        if milestone(en) { logmsg("net: getifaddrs failed (#\(en)): \(String(cString: strerror(err))) — treating as no dash subnet until it recovers") }
         return nil
     }
     defer { freeifaddrs(ifap) }
