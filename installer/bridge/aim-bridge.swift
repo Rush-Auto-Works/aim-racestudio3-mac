@@ -147,6 +147,7 @@ func serveTCP() {
 //   c2d-fail   sendto() to the dash failed locally — no route              (Mac not on dash Wi-Fi)
 //   c2d-nodash a datagram from RS3 was DROPPED: no interface on a dash /24  (off the dash Wi-Fi)
 //   tcp-nodash RS3's TCP connect was CLOSED: no interface on a dash /24      (off the dash Wi-Fi)
+//   ifaddrs-fail getifaddrs() itself failed — relayed nothing, but NOT "off the AP" (transient)
 //   d2c        a reply arrived FROM the resolved dash                     (full UDP path OK)
 //   d2c-drop   a reply arrived from some OTHER address (dropped)           (dash at a different IP)
 //   tcp-accept RS3 opened the TCP control/data channel                    (it found a device)
@@ -181,7 +182,13 @@ func dashTarget(for a: in_addr) -> (subnet: String, ip: String)? {
 func resolveDashIP() -> String? {
     guard IS_ROOT else { return DASH_ADDR.isEmpty ? nil : DASH_ADDR }
     var ifap: UnsafeMutablePointer<ifaddrs>?
-    guard getifaddrs(&ifap) == 0 else { return nil }
+    guard getifaddrs(&ifap) == 0 else {
+        // Fail safe (relay nothing), but count it SEPARATELY from "off the dash subnet" so a
+        // transient interface-enumeration failure is not misread as the Mac having left the AP.
+        let en = counts.bump("ifaddrs-fail")
+        if milestone(en) { logmsg("net: getifaddrs failed (#\(en)): \(String(cString: strerror(errno))) — treating as no dash subnet until it recovers") }
+        return nil
+    }
     defer { freeifaddrs(ifap) }
     var p = ifap
     while let cur = p {
