@@ -119,7 +119,9 @@ func serveTCP() {
         let an = counts.bump("tcp-accept")
         if milestone(an) { logmsg("tcp: RS3 opened the control channel (#\(an)) — it found a device, dialing dash") }
         DispatchQueue.global().async {
-            guard let dashIP = resolveDashIP() else {
+            let dash = DashResolve.resolve()
+            guard let dashIP = dash.ip else {
+                if dash.enumFail { close(cs); return }   // transient enumeration failure: already counted under ifaddrs-fail
                 let xn = counts.bump("tcp-nodash")
                 if milestone(xn) { logmsg("tcp: RS3 opened the control channel (#\(xn)) but \(NO_DASH_HINT); closing it") }
                 close(cs); return
@@ -177,20 +179,28 @@ func dashTarget(for a: in_addr) -> (subnet: String, ip: String)? {
     }
 }
 
-// nil = the Mac has NO interface on a dash subnet right now -> nothing is relayed (see header).
-// Re-evaluated per datagram / per TCP accept, so joining or leaving the dash Wi-Fi needs no restart.
-func resolveDashIP() -> String? {
-    guard IS_ROOT else { return DASH_ADDR.isEmpty ? nil : DASH_ADDR }
-    var ifap: UnsafeMutablePointer<ifaddrs>?
-    guard getifaddrs(&ifap) == 0 else {
-        // Fail safe (relay nothing), but count it SEPARATELY from "off the dash subnet" so a
-        // transient interface-enumeration failure is not misread as the Mac having left the AP.
-        let err = errno   // capture first: the counter's lock/unlock below may clobber errno
-        let en = counts.bump("ifaddrs-fail")
-        if milestone(en) { logmsg("net: getifaddrs failed (#\(en)): \(String(cString: strerror(err))) — treating as no dash subnet until it recovers") }
-        return nil
+enum DashResolve {
+    // nil ip with enumFail=false: NO interface on a dash subnet right now (see header).
+    // nil ip with enumFail=true: getifaddrs() itself failed — relay nothing, but the callers
+    //   must NOT count or log this as a no-dash event (it is a transient enumeration failure,
+    //   counted separately below). Re-evaluated per datagram / per TCP accept, so joining or
+    //   leaving the dash Wi-Fi needs no restart.
+    static func resolve() -> (ip: String?, enumFail: Bool) {
+        if !IS_ROOT { return DASH_ADDR.isEmpty ? (nil, false) : (DASH_ADDR, false) }
+        var ifap: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&ifap) == 0 else {
+            // Capture errno FIRST: the counter's lock/unlock below may clobber it.
+            let err = errno
+            let en = counts.bump("ifaddrs-fail")
+            if milestone(en) { logmsg("net: getifaddrs failed (#\(en)): \(String(cString: strerror(err))) — treated as a transient failure, relay paused until it recovers") }
+            return (nil, true)
+        }
+        defer { freeifaddrs(ifap) }
+        return (ipFromIfaddrs(ifap), false)
     }
-    defer { freeifaddrs(ifap) }
+}
+
+func ipFromIfaddrs(_ ifap: UnsafeMutablePointer<ifaddrs>?) -> String? {
     var p = ifap
     while let cur = p {
         let next = cur.pointee.ifa_next
@@ -203,6 +213,9 @@ func resolveDashIP() -> String? {
     }
     return nil
 }
+
+// Shim so existing call sites that only want an IP (banners, logNetContext) keep working.
+func resolveDashIP() -> String? { DashResolve.resolve().ip }
 func dashLabel(_ ip: String?) -> String { ip ?? "(none: no interface on a dash subnet)" }
 let NO_DASH_HINT = "NO interface on a dash subnet (10/11/12.0.0.x) — not relaying to 10.0.0.1 over the default route (a home router or hotspot is not a dash)"
 
@@ -289,7 +302,9 @@ func serveUDP() {
             // from an EPHEMERAL port (e.g. 49861), not 36002 — pinning the port silently dropped
             // every reply and RS3 saw no device. The IP pin still drops a stray foreign sender; the
             // ws2_32 inbound rewrite makes RS3 accept the loopback-delivered reply as 10.0.0.1:36002.
-            guard let dashIP = resolveDashIP() else {
+            let dash = DashResolve.resolve()
+            guard let dashIP = dash.ip else {
+                if dash.enumFail { continue }   // transient enumeration failure: already counted under ifaddrs-fail
                 let fn = counts.bump("d2c-nodash")
                 if milestone(fn) { logmsg("udp: ignored reply from \(ipv4(sa.sin_addr)):\(port16(sa.sin_port)) (#\(fn)) — \(NO_DASH_HINT)") }
                 continue
@@ -329,7 +344,9 @@ func serveUDP() {
         if n < 0 { if errno == EINTR { continue }; continue }
         client.set(ca)
         let cn = counts.bump("c2d")
-        guard let dashIP = resolveDashIP() else {
+        let dash = DashResolve.resolve()
+        guard let dashIP = dash.ip else {
+            if dash.enumFail { continue }   // transient enumeration failure: already counted under ifaddrs-fail
             let fn = counts.bump("c2d-nodash")
             if milestone(fn) { logmsg("udp: datagram from RS3 \(ipv4(ca.sin_addr)):\(port16(ca.sin_port)) DROPPED (#\(fn), \(n)B) — \(NO_DASH_HINT)") }
             continue
