@@ -12,7 +12,7 @@ only this installer is versioned here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [3.83.50-4] — 2026-09-24
 
 - **Addresses RaceStudio 3 freezing (grey, unresponsive window) every few minutes while analysing
   sessions** — two likely causes identified on a 3.83.50 install, both in the WiFi path (issue #40):
@@ -29,6 +29,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **The RaceStudio 3 log no longer grows forever.** Every launch appended to `run.log`, and one
   debugging session had pushed it to 234 MB. Past 10 MB it now moves to `run.log.1` at launch,
   so the previous session's log is still there after a crash. Show Logs collects both.
+- **Menu bar and ⌘Q work again for launches through the app icon.** The macOS-27 helper-app
+  launch (new in 3.83.50-3) registered the nested helper as the frontmost app; because it execs
+  Wine immediately and draws nothing of its own, macOS showed its empty application menu (bold
+  "RaceStudio 3" title, nothing in the dropdown) and ⌘Q did nothing. The helper is now a
+  background app (`LSUIElement`), so Wine owns the menu bar and ⌘Q as before.
 
 ## [3.83.50-3] — 2026-09-24
 
