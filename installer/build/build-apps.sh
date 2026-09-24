@@ -309,6 +309,11 @@ cat > "$HELPER/Contents/Info.plist" <<PLIST || { echo "helper Info.plist write f
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>$VERSION.$PKG_REV</string>
   <key>LSMinimumSystemVersion</key><string>$MIN_OS</string>
+  <!-- A/B on a disposable prefix (2026-09-24): helper-via-`open` showed a bold-but-empty app
+       menu and dead ⌘Q; adding LSUIElement to THIS helper restored a populated menu + working
+       ⌘Q. The helper execs Wine immediately and never draws UI of its own, so keep it out of
+       the foreground-app slot; Wine's winemac transformProcessToForeground takes the menu bar. -->
+  <key>LSUIElement</key><true/>
 </dict></plist>
 PLIST
 plutil -lint -s "$HELPER/Contents/Info.plist" || { echo "helper Info.plist invalid"; exit 1; }

@@ -43,6 +43,12 @@ grep -qF '/usr/bin/open ' "$AS" && grep -qF 'Contents/Helpers/RaceStudio 3.app' 
 ! grep -qE 'nohup .*wine|nohup arch' "$AS" \
   && ok "applet never runs wine as its own child" || bad "applet still nohups wine"
 
+# The helper ships LSUIElement: it execs Wine immediately and has no UI of its own. Without it
+# the helper owns LaunchServices' foreground slot on launch and macOS shows its EMPTY app menu
+# (bold "RaceStudio 3" title, nothing in the dropdown) and ⌘Q is dead — live A/B 2026-09-24.
+grep -q 'LSUIElement' "$SRC_DIR/../build/build-apps.sh" \
+  && ok "helper Info.plist sets LSUIElement" || bad "helper Info.plist missing LSUIElement"
+
 # The helper's executable must compile with the CI toolchain (macos-14 runs this suite). Only the
 # tagged release build compiled it before, so a Swift error surfaced at release time, not on the PR.
 if command -v swiftc >/dev/null 2>&1; then
