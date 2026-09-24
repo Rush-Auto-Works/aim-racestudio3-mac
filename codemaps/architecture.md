@@ -13,6 +13,7 @@ Languages: **Bash** (engine), **AppleScript** (the apps), **Python** (build-time
 RaceStudio 3.app (AppleScript applet, RaceStudio3.applescript)
   ├─ Contents/Resources/installer-core.sh + lib/ + pins.env   (the bash ENGINE, embedded)
   ├─ Contents/Resources/wine/                                  (bundled, patched, signed Wine)
+  ├─ Contents/Helpers/RaceStudio 3.app   (engine helper: `open`ed by launchRS3, execs Wine + RS3)
   └─ first launch → runs 8 phases → installs engine to ~/Library/Application Support/RaceStudio3
 Import RaceStudio 3 Data.app   (applet; embeds engine; calls `installer-core.sh --import`)
 Uninstall RaceStudio 3.app     (applet; runs the generated ~/…/RaceStudio3/bin/uninstall.sh)

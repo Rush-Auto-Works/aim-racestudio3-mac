@@ -15,6 +15,7 @@ Cannot run on Linux/Ubicloud.
 | 1c | **rebrand Wine app-menu** | `patch-wine-appname.py` rewrites `CFBundleName` in every `*-unix/wine` loader; fails if zero patched |
 | 1d | **native app-menu** | swap the from-source `winemac.so` (Import/Uninstall/Show Logs items + ⌘Q Quit) into `*x86_64-unix/winemac.so`; built by `installer/wine-patch/build-winemac-so.sh` from `winemac-native-menu.patch` (x86_64/Rosetta). Fail-loud under `HARDENED_RUNTIME=1`; dev build ships stock menu if absent. (replaced the `patch-wine-cmdq.py` binary edit) |
 | 2 | icons | `build_icns` runs `compose-icon.py` 3× → `rs3.icns` (plain), `rs3-import.icns` (badge), `rs3-uninstall.icns` (badge) |
+| 2b | **engine helper app** | `Contents/Helpers/RaceStudio 3.app` (id `…racestudio3.engine`): `rs3-engine.swift` → exec `rs3-engine.sh` → exec Wine+RS3. The applet `open`s it so Wine is its own LaunchServices app (macOS 27 BTM kills an app's hidden subordinates when it quits). Signed inside-out before the app bundle |
 | 3 | Info.plist | `CFBundleName`/version (= `RS3_PINNED_VER`); delete `CFBundleIconName` droplet quirk |
 | 3b | Import/Uninstall applets | osacompile siblings in `$DIST`; embed engine into Import; `brand_applet` applies the badged icns + id/version, deletes `CFBundleIconName` |
 | 4 | codesign | non-hardened `--deep` (local) OR `HARDENED_RUNTIME=1` per-file + entitlements (notarizable); signs all 3 apps |

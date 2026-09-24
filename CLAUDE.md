@@ -125,6 +125,20 @@ This file is constraints, conventions, and hard-won gotchas only.
   archive's `to_copy_in_app_root_folder/user/` payload (overlay icons and masks) into the data
   root. The configuration appears after RS3 restarts. RS3's own importer leaves the unpacked
   `to_copy_in_app_root_NN` folders behind in `cfgs/`; ours doesn't.
+- **RS3 must never run as a child of the launcher applet (macOS 27).** An app's child GUI processes
+  are its LaunchServices "subordinates". When the applet quits, loginwindow asks Background Task
+  Management, gets "not allowed to run in background", and force-quits the hidden subordinates
+  (`applicationDeath: ... is not allowed by BTM so terminating its subordinates`). explorer.exe is
+  one of them. Its death takes wineserver down, and RS3's window stays up frozen with no server
+  (every Wine fd `->(none)`, orphaned `winedevice.exe` that `wineserver -k` can't reach). Started
+  with macOS 27.0; diagnosed 2026-09-23. The fix: `launchRS3` runs the hygiene, then `open`s the
+  nested helper `Contents/Helpers/RaceStudio 3.app`, which execs `rs3-engine.sh` → Wine. Launched
+  that way, Wine is its own app in its own coalition. **Ruled out, don't retry:**
+  `responsibility_spawnattrs_setdisclaim` (the kill keys on the coalition, not responsibility);
+  a stay-open applet that hides its Dock tile (BTM kills a non-foreground, never-visible app and its
+  subordinates about 30 s later, even with Automatic Termination disabled);
+  `NSSupportsAutomaticTermination=false` (unrelated to this kill). Read the verdicts with
+  `log show --predicate 'process=="loginwindow" AND eventMessage CONTAINS "BTM"' --info`.
 - **The prefix must NOT have a `z:` drive.** Wine's default `z: -> /` hands RS3 the whole Mac as a
   fixed disk, and RS3 recursively walks every fixed drive after a config clone/import with no depth
   cap. Any directory-symlink cycle out there traps it forever: the path grows past macOS `PATH_MAX`

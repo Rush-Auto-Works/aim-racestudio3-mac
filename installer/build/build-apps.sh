@@ -284,6 +284,35 @@ cp "$DIST/rs3.icns" "$RES/applet.icns"
 [ -f "$RES/droplet.icns" ] && cp "$DIST/rs3.icns" "$RES/droplet.icns"
 # keep $DIST/rs3*.icns — the Import/Uninstall applets reuse them (removed after 3b)
 
+# ---- 2b. RS3 engine helper app (Contents/Helpers/RaceStudio 3.app) --------------------------
+# The applet starts RS3 with `open` on this nested app instead of running wine as its own child.
+# On macOS 27 an app's child GUI processes are its "subordinates": when the applet quits, loginwindow
+# (Background Task Management: not allowed in background) kills the hidden ones, explorer.exe takes
+# wineserver down and RS3 freezes. Full reasoning in src/rs3-engine.sh. Needs rs3.icns from step 2.
+say "Building RS3 engine helper app"
+HELPER="$APP/Contents/Helpers/RaceStudio 3.app"
+mkdir -p "$HELPER/Contents/MacOS" "$HELPER/Contents/Resources"
+swiftc -O -target "arm64-apple-macos$MIN_OS" -o "$HELPER/Contents/MacOS/rs3-engine" "$SRC/rs3-engine.swift" \
+  || { echo "rs3-engine build failed"; exit 1; }
+ditto "$SRC/rs3-engine.sh" "$HELPER/Contents/Resources/rs3-engine.sh"
+chmod +x "$HELPER/Contents/Resources/rs3-engine.sh"
+cp "$DIST/rs3.icns" "$HELPER/Contents/Resources/rs3.icns"
+cat > "$HELPER/Contents/Info.plist" <<PLIST || { echo "helper Info.plist write failed"; exit 1; }
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleIdentifier</key><string>$BUNDLE_ID.engine</string>
+  <key>CFBundleName</key><string>RaceStudio 3</string>
+  <key>CFBundleExecutable</key><string>rs3-engine</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleIconFile</key><string>rs3</string>
+  <key>CFBundleShortVersionString</key><string>$VERSION</string>
+  <key>CFBundleVersion</key><string>$VERSION.$PKG_REV</string>
+  <key>LSMinimumSystemVersion</key><string>$MIN_OS</string>
+</dict></plist>
+PLIST
+plutil -lint -s "$HELPER/Contents/Info.plist" || { echo "helper Info.plist invalid"; exit 1; }
+
 # ---- 3. Info.plist --------------------------------------------------------------------------
 PL="$APP/Contents/Info.plist"
 pset() { /usr/libexec/PlistBuddy -c "Set :$1 $2" "$PL" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :$1 $3 $2" "$PL"; }
@@ -387,6 +416,11 @@ if [ "${HARDENED_RUNTIME:-0}" = 1 ]; then
   codesign --force --options runtime $TS --sign "$IDENTITY" "$APP/Contents/MacOS/aim-bridge"     || { echo "aim-bridge codesign failed"; exit 1; }
   # shellcheck disable=SC2086
   codesign --force --options runtime $TS --sign "$IDENTITY" "$APP/Contents/MacOS/aim-bridge-ctl" || { echo "aim-bridge-ctl codesign failed"; exit 1; }
+  say "Signing the RS3 engine helper app…"
+  # shellcheck disable=SC2086
+  codesign --force --options runtime $TS --sign "$IDENTITY" "$HELPER/Contents/MacOS/rs3-engine" || { echo "rs3-engine codesign failed"; exit 1; }
+  # shellcheck disable=SC2086
+  codesign --force --options runtime $TS --sign "$IDENTITY" "$HELPER" || { echo "engine helper codesign failed"; exit 1; }
   say "Signing the app bundle…"
   # shellcheck disable=SC2086
   codesign --force --options runtime $TS --entitlements "$ENT" --sign "$IDENTITY" "$APP" || { echo "codesign failed"; exit 1; }

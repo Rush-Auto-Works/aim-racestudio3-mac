@@ -69,7 +69,9 @@ Applet contract — five machine-readable lines, all parsed by both `.applescrip
 
 Resolves Wine in `$ROOT/wine`, exports `WINEPREFIX/WINEARCH=win64/WINEDEBUG=-all`,
 `WINEDLLOVERRIDES="mscoree=d;mshtml=d"` (no .NET / Gecko), runs `arch -x86_64 <wine> '<RS3 exe>'` detached.
-(Bundled mode launches Wine directly from the app bundle via the applet's `launchRS3`, not this script.)
+(Bundled mode: the applet's `launchRS3` runs the pre-launch hygiene, then `open`s the nested helper
+`Contents/Helpers/RaceStudio 3.app`, whose `rs3-engine.sh` sets the same env and execs Wine. Never
+run Wine as the applet's own child: on macOS 27 that makes it a subordinate that dies with the applet.)
 
 ## Tests — `installer/test/`
 
