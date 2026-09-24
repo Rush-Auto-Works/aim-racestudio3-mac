@@ -44,9 +44,11 @@ grep -qF '/usr/bin/open ' "$AS" && grep -qF 'Contents/Helpers/RaceStudio 3.app' 
   && ok "applet never runs wine as its own child" || bad "applet still nohups wine"
 
 # The helper ships LSUIElement: it execs Wine immediately and has no UI of its own. Without it
-# the helper owns LaunchServices' foreground slot on launch and macOS shows its EMPTY app menu
-# (bold "RaceStudio 3" title, nothing in the dropdown) and ⌘Q is dead — live A/B 2026-09-24.
-grep -q 'LSUIElement' "$SRC_DIR/../build/build-apps.sh" \
+# the macOS-27 helper launch showed a bold-but-empty app menu and dead ⌘Q (live A/B on a
+# disposable prefix, 2026-09-24: LSUIElement on the helper restored both). Assert the literal
+# XML bool in the build script's Info.plist heredoc, not just the word, so a comment match
+# cannot pass this test.
+grep -q '<key>LSUIElement</key><true/>' "$SRC_DIR/../build/build-apps.sh" \
   && ok "helper Info.plist sets LSUIElement" || bad "helper Info.plist missing LSUIElement"
 
 # The helper's executable must compile with the CI toolchain (macos-14 runs this suite). Only the
