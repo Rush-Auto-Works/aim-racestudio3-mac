@@ -391,7 +391,10 @@ fi
 # --disable-gpu-compositing: RS3's embedded CEF (Chromium 66) can't present GPU-composited frames
 # to the winemac window under Wine, so the web-maps track background renders WHITE while the
 # renderer is actually producing the map. Compositing done in software makes the frames present —
-# verified on-device 2026-08-02, issue #37. Mirrors RaceStudio3.applescript.
+# verified on-device 2026-08-02, issue #37. Mirrors rs3-engine.sh (the bundled app's launch path).
+# Every launch appends to run.log. Past 10 MB, keep it as run.log.1 and start fresh, so a crash
+# log survives one relaunch without growing forever (one +winsock debug session made it 234 MB).
+[ "\$(stat -f %z "\$ROOT/logs/run.log" 2>/dev/null || echo 0)" -gt 10485760 ] && mv -f "\$ROOT/logs/run.log" "\$ROOT/logs/run.log.1"
 nohup arch -x86_64 "\$WB" '$RS3_WIN_EXE' --disable-gpu-compositing >> "\$ROOT/logs/run.log" 2>&1 &
 disown
 LAUNCH

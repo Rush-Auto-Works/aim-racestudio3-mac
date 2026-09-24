@@ -60,6 +60,8 @@ copy_if_present() {  # $1=source file  $2=basename in OUT
 }
 copy_if_present "$INSTALL_ROOT/logs/run.log"     "run.log"
 copy_if_present "$INSTALL_ROOT/logs/install.log" "install.log"
+# The previous launch generation (rotated past 10 MB). Optional: most installs never have one.
+[ -f "$INSTALL_ROOT/logs/run.log.1" ] && cp "$INSTALL_ROOT/logs/run.log.1" "$OUT/run.log.1" 2>/dev/null
 copy_if_present "$BRIDGE_LOG"                     "aim-bridge.log"
 
 {

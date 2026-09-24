@@ -19,6 +19,9 @@ export WINEPREFIX="$ROOT/prefix" WINEARCH=win64 WINEDEBUG=-all
 export WINEDLLOVERRIDES="mscoree=d;mshtml=d"
 export XDG_CACHE_HOME="$ROOT/cache" XDG_CONFIG_HOME="$ROOT/xdg-config" XDG_DATA_HOME="$ROOT/xdg-data"
 mkdir -p "$ROOT/logs"
+# Every launch appends to run.log. Past 10 MB, keep it as run.log.1 and start fresh, so a crash
+# log survives one relaunch without growing forever (one +winsock debug session made it 234 MB).
+[ "$(stat -f %z "$ROOT/logs/run.log" 2>/dev/null || echo 0)" -gt 10485760 ] && mv -f "$ROOT/logs/run.log" "$ROOT/logs/run.log.1"
 # exec, not background: this process becomes RS3, so the helper app lives exactly as long as RS3.
 # --disable-gpu-compositing: CEF web maps render white under Wine without it (issue #37).
 exec /usr/bin/arch -x86_64 "$RES/wine/bin/wine" 'C:\AIM_SPORT\RaceStudio3\64\AiMRS3-64-ReleaseU.exe' --disable-gpu-compositing >> "$ROOT/logs/run.log" 2>&1
