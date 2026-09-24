@@ -14,13 +14,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- **Addresses RaceStudio 3 freezing (grey, unresponsive window) every few minutes while analysing
+  sessions** — two likely causes identified on a 3.83.50 install, both in the WiFi path (issue #40):
+  - RaceStudio 3.83.39+ rewrote its WiFi manager and now calls `WlanSetInterface`, which Wine
+    only stubs — every launch raised a Wine "unimplemented function" exception inside RS3's WiFi
+    thread. The `wlanapi` patch now accepts that call on the synthetic interface and gives every
+    other still-stubbed `wlanapi` export a real entry point that returns `ERROR_NOT_SUPPORTED`
+    instead of raising — except the two EAP profile setters (`WlanSetProfileEapUserData`,
+    `WlanSetProfileEapXmlUserData`), which stay Wine stubs; RaceStudio 3 does not use EAP.
+  - The WiFi relay forwarded RS3's dash discovery to `10.0.0.1` even when the Mac was not on a
+    dash /24, so a home router or hotspot at that address could answer and RS3 would chase a
+    phantom dash. The relay now drops discovery and closes control connections unless an
+    interface is on a dash subnet (`10/11/12.0.0.x`), re-checked on every packet.
 - **The RaceStudio 3 log no longer grows forever.** Every launch appended to `run.log`, and one
   debugging session had pushed it to 234 MB. Past 10 MB it now moves to `run.log.1` at launch,
   so the previous session's log is still there after a crash. Show Logs collects both.
 
 ## [3.83.50-3] — 2026-09-24
 
-**Fixes RaceStudio 3 freezing a few seconds after opening on macOS 27.** (`3.83.50-2` was a
+**Addresses RaceStudio 3 freezing a few seconds after opening on macOS 27.** (`3.83.50-2` was a
 fork's unsigned build and was never released here.)
 
 - **RaceStudio 3 no longer freezes a few seconds after opening on macOS 27.** macOS 27 kills

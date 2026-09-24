@@ -82,7 +82,13 @@ This file is constraints, conventions, and hard-won gotchas only.
   pieces (all load-bearing; each prior one is necessary-but-insufficient — don't drop any):
   1. **`wlanapi.dll` patch** (`wine-patch/wlanapi-synth-iface.patch`) — Wine's `wlanapi` reports
      zero Wi-Fi interfaces, so RS3 never starts discovery. Present ONE synthetic *connected*
-     interface (`WlanEnumInterfaces` + `WlanQueryInterface(current_connection)`).
+     interface (`WlanEnumInterfaces` + `WlanQueryInterface(current_connection)`). **And never let
+     `wlanapi` raise into RS3**: 3.83.39+ calls `WlanSetInterface` (accepted) and may reach other
+     exports — every former `@ stub` now returns `ERROR_NOT_SUPPORTED` instead of Wine's stub
+     exception, EXCEPT `WlanSetProfileEapUserData`/`WlanSetProfileEapXmlUserData` (by-value
+     `EAP_METHOD_TYPE`, inexpressible in the `.spec`; RS3 does no EAP), which still raise. The
+     stub exception unwound RS3's Wi-Fi thread on every launch and matched a grey-freeze-every-
+     10-minutes report on 3.83.50 (2026-09-05, issue #40).
   2. **`ws2_32.dll` outbound redirect** (`wine-patch/ws2_32-localnet.patch`) — RS3 addresses
      aim-ka discovery to **`0.0.0.0:36002`** under Wine (NOT `10.0.0.255`/gateway). Redirect both
      `10.0.0.0/24` and `0.0.0.0:36002` → `127.0.0.1`, remap port `36002`→`36003`.
@@ -90,6 +96,9 @@ This file is constraints, conventions, and hard-won gotchas only.
      ignores replies not from the dash, so rewrite the recv source back to `10.0.0.1:36002`.
   4. **root `SMAppService` daemon `aim-bridge`** — listens `127.0.0.1:36003`(UDP)/`:2000`(TCP),
      relays to `dash:36002`/`:2000` (registered by `aim-bridge-ctl`; one-time Login Items approval).
+     It relays **only while an interface is on a dash /24** (10/11/12.0.0.x) — otherwise UDP is
+     dropped and TCP closed, because `10.0.0.1` over the default route is a home router/hotspot
+     that RS3 would "discover" as a phantom dash and stall on (seen 2026-09-05).
   Both DLLs built in CI by `wine-patch/build-wine-dlls.sh`, swapped by `build-apps.sh` step 1e.
   Wine loads PE builtins from the BUNDLE `lib/wine/`, not the prefix — the launcher refreshes the
   prefix copies of BOTH DLLs on upgrade (Wine only seeds them at prefix-creation). Full detail:

@@ -1,5 +1,5 @@
---- a/dlls/wlanapi/main.c	2026-06-17 10:04:18
-+++ b/dlls/wlanapi/main.c	2026-06-17 10:04:21
+--- a/dlls/wlanapi/main.c	2026-05-15 13:11:12
++++ b/dlls/wlanapi/main.c	2026-09-05 12:53:30
 @@ -38,6 +38,50 @@
  
  #define WLAN_MAGIC 0x574c414e /* WLAN */
@@ -81,7 +81,7 @@
  
      return ERROR_SUCCESS;
  }
-@@ -167,10 +219,51 @@
+@@ -167,12 +219,116 @@
  DWORD WINAPI WlanQueryInterface(HANDLE handle, const GUID *guid, WLAN_INTF_OPCODE opcode,
                      void *reserved, DWORD *data_size, void **data, WLAN_OPCODE_VALUE_TYPE *opcode_type)
  {
@@ -134,4 +134,136 @@
 +    return ERROR_NOT_SUPPORTED;
  }
  
++/* AiM: RS3 3.83.39 rewrote its Wi-Fi manager. Right after WlanQueryInterface reports the
++ * synthetic interface "connected", the new code calls WlanSetInterface — and can reach other
++ * exports the old menu never touched. Wine 11.9 marks all of those `@ stub`, and calling a stub
++ * raises EXCEPTION_WINE_STUB into the calling RS3 thread ("wine: Call from … to unimplemented
++ * function wlanapi.dll.WlanSetInterface, aborting" in run.log on EVERY launch, 3.83.50 verified
++ * 2026-09-05). RS3 swallows the exception, but its Wi-Fi thread unwinds mid-operation, which is
++ * the classic way to leave a lock held and freeze the UI minutes later.
++ *
++ * So: accept WlanSetInterface on the synthetic interface (there is nothing to set — the
++ * association is fake and always "connected"), and give every remaining export a real entry
++ * point that returns ERROR_NOT_SUPPORTED instead of raising. None of this touches macOS Wi-Fi;
++ * that is the point. (WlanSetProfileEapUserData / WlanSetProfileEapXmlUserData stay stubs: they
++ * take EAP_METHOD_TYPE by value, which the .spec cannot express; RS3 does no EAP.) */
++DWORD WINAPI WlanSetInterface(HANDLE handle, const GUID *guid, WLAN_INTF_OPCODE opcode,
++                              DWORD data_size, const void *data, void *reserved)
++{
++    FIXME("(%p, %s, 0x%x, %lu, %p, %p) AiM: accepted on the synthetic interface\n",
++          handle, wine_dbgstr_guid(guid), opcode, data_size, data, reserved);
++
++    if (!handle || !guid || reserved || (data_size && !data))
++        return ERROR_INVALID_PARAMETER;
++    if (!handle_index(handle))
++        return ERROR_INVALID_HANDLE;
++
++    AIM_DIAG_ONCE(("AiM/wlanapi: WlanSetInterface(opcode 0x%x, %lu bytes) -> accepted (was a Wine stub exception in RS3's Wi-Fi thread)\n",
++                   opcode, data_size));
++    return ERROR_SUCCESS;
++}
++
++/* AiM: a non-raising "not supported" body for the exports Wine 11.9 leaves as `@ stub`. */
++#define AIM_NOT_SUPPORTED(name, ...) \
++    DWORD WINAPI name(__VA_ARGS__) \
++    { \
++        FIXME("AiM: " #name " -> ERROR_NOT_SUPPORTED (synthetic interface)\n"); \
++        AIM_DIAG_ONCE(("AiM/wlanapi: " #name " -> ERROR_NOT_SUPPORTED (no stub exception; RS3's Wi-Fi rewrite reached a call the synthetic interface cannot serve)\n")); \
++        return ERROR_NOT_SUPPORTED; \
++    }
++
++AIM_NOT_SUPPORTED(WlanConnect, HANDLE handle, const GUID *guid, const void *params, void *reserved)
++AIM_NOT_SUPPORTED(WlanDisconnect, HANDLE handle, const GUID *guid, void *reserved)
++AIM_NOT_SUPPORTED(WlanDeleteProfile, HANDLE handle, const GUID *guid, const WCHAR *name, void *reserved)
++AIM_NOT_SUPPORTED(WlanExtractPsdIEDataList, HANDLE handle, DWORD ie_size, const BYTE *ie, const WCHAR *format, void *reserved, void **list)
++AIM_NOT_SUPPORTED(WlanGetFilterList, HANDLE handle, DWORD type, void *reserved, void **list)
++AIM_NOT_SUPPORTED(WlanGetInterfaceCapability, HANDLE handle, const GUID *guid, void *reserved, void **capability)
++AIM_NOT_SUPPORTED(WlanGetNetworkBssList, HANDLE handle, const GUID *guid, const DOT11_SSID *ssid, DOT11_BSS_TYPE type, BOOL secure, void *reserved, void **list)
++AIM_NOT_SUPPORTED(WlanGetProfile, HANDLE handle, const GUID *guid, const WCHAR *name, void *reserved, WCHAR **xml, DWORD *flags, DWORD *access)
++AIM_NOT_SUPPORTED(WlanGetProfileCustomUserData, HANDLE handle, const GUID *guid, const WCHAR *name, void *reserved, DWORD *size, BYTE **data)
++AIM_NOT_SUPPORTED(WlanGetProfileList, HANDLE handle, const GUID *guid, void *reserved, void **list)
++AIM_NOT_SUPPORTED(WlanGetSecuritySettings, HANDLE handle, DWORD object, WLAN_OPCODE_VALUE_TYPE *type, WCHAR **sddl, DWORD *access)
++AIM_NOT_SUPPORTED(WlanIhvControl, HANDLE handle, const GUID *guid, DWORD type, DWORD in_size, void *in, DWORD out_size, void *out, DWORD *out_ret)
++AIM_NOT_SUPPORTED(WlanQueryAutoConfigParameter, HANDLE handle, DWORD opcode, void *reserved, DWORD *size, void **data, WLAN_OPCODE_VALUE_TYPE *type)
++AIM_NOT_SUPPORTED(WlanReasonCodeToString, WLAN_REASON_CODE code, DWORD size, WCHAR *str, void *reserved)
++AIM_NOT_SUPPORTED(WlanRenameProfile, HANDLE handle, const GUID *guid, const WCHAR *old_name, const WCHAR *new_name, void *reserved)
++AIM_NOT_SUPPORTED(WlanSaveTemporaryProfile, HANDLE handle, const GUID *guid, const WCHAR *name, const WCHAR *all_user, DWORD flags, BOOL overwrite, void *reserved)
++AIM_NOT_SUPPORTED(WlanSetAutoConfigParameter, HANDLE handle, DWORD opcode, DWORD size, const void *data, void *reserved)
++AIM_NOT_SUPPORTED(WlanSetFilterList, HANDLE handle, DWORD type, const void *list, void *reserved)
++AIM_NOT_SUPPORTED(WlanSetProfile, HANDLE handle, const GUID *guid, DWORD flags, const WCHAR *xml, const WCHAR *all_user, BOOL overwrite, void *reserved, DWORD *reason)
++AIM_NOT_SUPPORTED(WlanSetProfileCustomUserData, HANDLE handle, const GUID *guid, const WCHAR *name, DWORD size, const BYTE *data, void *reserved)
++AIM_NOT_SUPPORTED(WlanSetProfileList, HANDLE handle, const GUID *guid, DWORD count, const WCHAR **names, void *reserved)
++AIM_NOT_SUPPORTED(WlanSetProfilePosition, HANDLE handle, const GUID *guid, const WCHAR *name, DWORD position, void *reserved)
++AIM_NOT_SUPPORTED(WlanSetPsdIEDataList, HANDLE handle, const WCHAR *format, const void *list, void *reserved)
++AIM_NOT_SUPPORTED(WlanSetSecuritySettings, HANDLE handle, DWORD object, const WCHAR *sddl)
++
  DWORD WINAPI WlanHostedNetworkQueryProperty(HANDLE handle, WLAN_HOSTED_NETWORK_OPCODE opcode,
+                                             DWORD *data_size, void **data,
+                                             WLAN_OPCODE_VALUE_TYPE *opcode_type, void *reserved)
+--- a/dlls/wlanapi/wlanapi.spec	2026-05-15 13:11:12
++++ b/dlls/wlanapi/wlanapi.spec	2026-09-05 12:53:30
+@@ -1,39 +1,39 @@
+ @ stdcall WlanAllocateMemory(long)
+ @ stdcall WlanCloseHandle(ptr ptr)
+-@ stub WlanConnect
+-@ stub WlanDeleteProfile
+-@ stub WlanDisconnect
++@ stdcall WlanConnect(ptr ptr ptr ptr)
++@ stdcall WlanDeleteProfile(ptr ptr wstr ptr)
++@ stdcall WlanDisconnect(ptr ptr ptr)
+ @ stdcall WlanEnumInterfaces(long ptr ptr)
+-@ stub WlanExtractPsdIEDataList
++@ stdcall WlanExtractPsdIEDataList(ptr long ptr wstr ptr ptr)
+ @ stdcall WlanFreeMemory(ptr)
+ @ stdcall WlanGetAvailableNetworkList(ptr ptr long ptr ptr)
+-@ stub WlanGetFilterList
+-@ stub WlanGetInterfaceCapability
+-@ stub WlanGetNetworkBssList
+-@ stub WlanGetProfile
+-@ stub WlanGetProfileCustomUserData
+-@ stub WlanGetProfileList
+-@ stub WlanGetSecuritySettings
++@ stdcall WlanGetFilterList(ptr long ptr ptr)
++@ stdcall WlanGetInterfaceCapability(ptr ptr ptr ptr)
++@ stdcall WlanGetNetworkBssList(ptr ptr ptr long long ptr ptr)
++@ stdcall WlanGetProfile(ptr ptr wstr ptr ptr ptr ptr)
++@ stdcall WlanGetProfileCustomUserData(ptr ptr wstr ptr ptr ptr)
++@ stdcall WlanGetProfileList(ptr ptr ptr ptr)
++@ stdcall WlanGetSecuritySettings(ptr long ptr ptr ptr)
+ @ stdcall WlanHostedNetworkQueryProperty(ptr long ptr ptr ptr ptr)
+ @ stdcall WlanHostedNetworkQuerySecondaryKey(ptr ptr ptr ptr ptr ptr ptr)
+ @ stdcall WlanHostedNetworkQueryStatus(ptr ptr ptr)
+-@ stub WlanIhvControl
++@ stdcall WlanIhvControl(ptr ptr long long ptr long ptr ptr)
+ @ stdcall WlanOpenHandle(long ptr ptr ptr)
+-@ stub WlanQueryAutoConfigParameter
++@ stdcall WlanQueryAutoConfigParameter(ptr long ptr ptr ptr ptr)
+ @ stdcall WlanQueryInterface(ptr ptr long ptr ptr ptr ptr)
+-@ stub WlanReasonCodeToString
++@ stdcall WlanReasonCodeToString(long long ptr ptr)
+ @ stdcall WlanRegisterNotification(ptr long long ptr ptr ptr ptr)
+-@ stub WlanRenameProfile
+-@ stub WlanSaveTemporaryProfile
++@ stdcall WlanRenameProfile(ptr ptr wstr wstr ptr)
++@ stdcall WlanSaveTemporaryProfile(ptr ptr wstr wstr long long ptr)
+ @ stdcall WlanScan(ptr ptr ptr ptr ptr)
+-@ stub WlanSetAutoConfigParameter
+-@ stub WlanSetFilterList
+-@ stub WlanSetInterface
+-@ stub WlanSetProfile
+-@ stub WlanSetProfileCustomUserData
++@ stdcall WlanSetAutoConfigParameter(ptr long long ptr ptr)
++@ stdcall WlanSetFilterList(ptr long ptr ptr)
++@ stdcall WlanSetInterface(ptr ptr long long ptr ptr)
++@ stdcall WlanSetProfile(ptr ptr long wstr wstr long ptr ptr)
++@ stdcall WlanSetProfileCustomUserData(ptr ptr wstr long ptr ptr)
+ @ stub WlanSetProfileEapUserData
+ @ stub WlanSetProfileEapXmlUserData
+-@ stub WlanSetProfileList
+-@ stub WlanSetProfilePosition
+-@ stub WlanSetPsdIEDataList
+-@ stub WlanSetSecuritySettings
++@ stdcall WlanSetProfileList(ptr ptr long ptr ptr)
++@ stdcall WlanSetProfilePosition(ptr ptr wstr long ptr)
++@ stdcall WlanSetPsdIEDataList(ptr wstr ptr ptr)
++@ stdcall WlanSetSecuritySettings(ptr long wstr)
