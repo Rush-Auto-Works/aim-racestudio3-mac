@@ -60,7 +60,13 @@ if /usr/bin/arch -x86_64 /usr/bin/true 2>/dev/null; then
   cp "$SRC_DIR/rs3-engine.sh" "$HRES/rs3-engine.sh"
   printf '#!/bin/bash\nprintf "%%s\\n" "$WINEPREFIX" "$@" > "%s/argv"\n' "$SBX" > "$OUTER/Resources/wine/bin/wine"
   chmod +x "$OUTER/Resources/wine/bin/wine"
+  LOGD="$SBX/home/Library/Application Support/RaceStudio3/logs"; mkdir -p "$LOGD"
+  head -c 11000000 /dev/zero > "$LOGD/run.log"   # past the 10 MB rotation threshold
   HOME="$SBX/home" bash "$HRES/rs3-engine.sh" >/dev/null 2>&1
+  [ "$(stat -f %z "$LOGD/run.log.1" 2>/dev/null || echo 0)" -eq 11000000 ] \
+    && ok "engine script rotates a large run.log to run.log.1" || bad "engine script did not rotate run.log"
+  [ "$(stat -f %z "$LOGD/run.log" 2>/dev/null || echo 99999999)" -lt 1000000 ] \
+    && ok "engine script starts a fresh run.log" || bad "engine script kept appending to the big run.log"
   [ -f "$SBX/argv" ] && ok "engine script execs the outer app's wine" || bad "engine script did not run outer wine"
   grep -qxF "$SBX/home/Library/Application Support/RaceStudio3/prefix" "$SBX/argv" 2>/dev/null \
     && ok "engine script sets WINEPREFIX" || bad "engine script WINEPREFIX wrong"
@@ -71,6 +77,9 @@ if /usr/bin/arch -x86_64 /usr/bin/true 2>/dev/null; then
 else
   echo "  skip engine exec check (no Rosetta)"
 fi
+# run.log is appended forever by every launch; one +winsock debug session made it 234 MB. Both
+# launch paths rotate it to run.log.1 past 10 MB.
+grep -qF 'run.log.1' "$LS" && ok "launch.sh rotates run.log" || bad "launch.sh never rotates run.log"
 grep -q 'WINEPREFIX=' "$LS" && ok "launch.sh exports WINEPREFIX" || bad "launch.sh no WINEPREFIX"
 ! grep -q '/.wine' "$LS" && ok "launch.sh never uses ~/.wine" || bad "launch.sh references ~/.wine"
 

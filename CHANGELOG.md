@@ -14,6 +14,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- **The RaceStudio 3 log no longer grows forever.** Every launch appended to `run.log`, and one
+  debugging session had pushed it to 234 MB. Past 10 MB it now moves to `run.log.1` at launch,
+  so the previous session's log is still there after a crash. Show Logs collects both.
+
 ## [3.83.50-3] — 2026-09-24
 
 **Fixes RaceStudio 3 freezing a few seconds after opening on macOS 27.** (`3.83.50-2` was a
