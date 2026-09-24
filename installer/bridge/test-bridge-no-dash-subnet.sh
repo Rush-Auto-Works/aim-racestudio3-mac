@@ -19,12 +19,25 @@ PIDS=(); trap 'for p in "${PIDS[@]:-}"; do kill "$p" 2>/dev/null||true; done; rm
 SKIP_SIGN=1 bash "$HERE/build-bridge.sh" >/dev/null 2>&1 && [ -x "$BIN" ] && ok "built" || { bad build; exit 1; }
 
 # A "dash" IS listening on loopback — but the relay believes the Mac is off the dash subnet
-# (DASH_ADDR=""), so it must never be reached. It records whether anything arrived on UDP.
+# (DASH_ADDR=""), so it must never be reached. Two listeners record whether anything arrived:
+# UDP datagrams and TCP connections (a TCP "closed at once" assertion alone would also pass
+# on a failed upstream dial, so the TCP side needs a positive never-connected proof).
 python3 - "$D_UDP" >"$LOG.udp" 2>&1 <<'PY' &
 import socket, sys
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.bind(("127.0.0.1", int(sys.argv[1]))); s.settimeout(6)
 try:
     d, a = s.recvfrom(65536); print("LEAKED", d)
+except socket.timeout:
+    print("NOTHING")
+PY
+PIDS+=($!)
+python3 - "$D_TCP" >"$LOG.tcp" 2>&1 <<'PY' &
+import socket, sys
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind(("127.0.0.1", int(sys.argv[1]))); s.listen(1); s.settimeout(6)
+try:
+    c, a = s.accept(); print("CONNECTED", a)
 except socket.timeout:
     print("NOTHING")
 PY
@@ -66,11 +79,14 @@ except socket.timeout:
 wait "${PIDS[0]}" 2>/dev/null
 grep -q "^NOTHING" "$LOG.udp" && ok "nothing reached the dash port" || bad "datagram LEAKED to the dash port: $(cat "$LOG.udp")"
 
+wait "${PIDS[1]}" 2>/dev/null
+grep -q "^NOTHING" "$LOG.tcp" && ok "no TCP connection ever reached the dash port" || bad "TCP CONNECTED to the dash port: $(cat "$LOG.tcp")"
+
 echo "== relay alive + log names the reason =="
 kill -0 "$RELAY" 2>/dev/null && ok "relay still running" || bad "relay died"
 grep -q "tcp: RS3 opened the control channel (#1) but NO interface on a dash subnet" "$LOG" && ok "tcp-nodash milestone logged" || bad "tcp-nodash line missing"
 grep -q "udp: datagram from RS3 .* DROPPED (#1, 12B) — NO interface on a dash subnet" "$LOG" && ok "c2d-nodash milestone logged" || bad "c2d-nodash line missing"
-rm -f "$LOG.udp"
+rm -f "$LOG.udp" "$LOG.tcp"
 
 echo "bridge-no-dash-subnet: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

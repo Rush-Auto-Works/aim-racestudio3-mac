@@ -117,7 +117,7 @@ func serveTCP() {
         let cs = accept(ls, nil, nil)
         if cs < 0 { continue }
         let an = counts.bump("tcp-accept")
-        if milestone(an) { logmsg("tcp: RS3 opened the control channel (#\(an)) — it found a device, dialing dash") }
+        if milestone(an) { logmsg("tcp: RS3 opened the control channel (#\(an)) — it found a device") }
         DispatchQueue.global().async {
             let dash = DashResolve.resolve()
             guard let dashIP = dash.ip else {
