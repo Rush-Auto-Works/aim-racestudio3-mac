@@ -67,6 +67,11 @@ if /usr/bin/arch -x86_64 /usr/bin/true 2>/dev/null; then
     && ok "engine script rotates a large run.log to run.log.1" || bad "engine script did not rotate run.log"
   [ "$(stat -f %z "$LOGD/run.log" 2>/dev/null || echo 99999999)" -lt 1000000 ] \
     && ok "engine script starts a fresh run.log" || bad "engine script kept appending to the big run.log"
+  mv -f "$LOGD/run.log.1" "$SBX/old-run.log.1"
+  printf 'small\n' > "$LOGD/run.log"
+  HOME="$SBX/home" bash "$HRES/rs3-engine.sh" >/dev/null 2>&1
+  grep -qx small "$LOGD/run.log" && [ ! -e "$LOGD/run.log.1" ] \
+    && ok "engine script leaves a small run.log alone" || bad "engine script rotated a small run.log"
   [ -f "$SBX/argv" ] && ok "engine script execs the outer app's wine" || bad "engine script did not run outer wine"
   grep -qxF "$SBX/home/Library/Application Support/RaceStudio3/prefix" "$SBX/argv" 2>/dev/null \
     && ok "engine script sets WINEPREFIX" || bad "engine script WINEPREFIX wrong"
@@ -79,7 +84,17 @@ else
 fi
 # run.log is appended forever by every launch; one +winsock debug session made it 234 MB. Both
 # launch paths rotate it to run.log.1 past 10 MB.
-grep -qF 'run.log.1' "$LS" && ok "launch.sh rotates run.log" || bad "launch.sh never rotates run.log"
+# Run the generated rotation line itself (not a hand-written copy) against an 11 MB sandbox log.
+ROTL="$(grep -F 'run.log.1' "$LS")"
+[ -n "$ROTL" ] && ok "launch.sh carries a run.log rotation line" || bad "launch.sh never rotates run.log"
+RROOT="$SBX/rot-root"; mkdir -p "$RROOT/logs"; head -c 11000000 /dev/zero > "$RROOT/logs/run.log"
+ROOT="$RROOT" bash -c "$ROTL" 2>/dev/null
+[ "$(stat -f %z "$RROOT/logs/run.log.1" 2>/dev/null || echo 0)" -eq 11000000 ] && [ ! -e "$RROOT/logs/run.log" ] \
+  && ok "launch.sh rotation moves a large run.log to run.log.1" || bad "launch.sh rotation does not rotate"
+printf 'small\n' > "$RROOT/logs/run.log"
+ROOT="$RROOT" bash -c "$ROTL" 2>/dev/null
+grep -qx small "$RROOT/logs/run.log" 2>/dev/null \
+  && ok "launch.sh rotation leaves a small run.log alone" || bad "launch.sh rotation moved a small run.log"
 grep -q 'WINEPREFIX=' "$LS" && ok "launch.sh exports WINEPREFIX" || bad "launch.sh no WINEPREFIX"
 ! grep -q '/.wine' "$LS" && ok "launch.sh never uses ~/.wine" || bad "launch.sh references ~/.wine"
 
