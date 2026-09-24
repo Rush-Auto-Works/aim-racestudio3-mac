@@ -14,10 +14,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.83.50-3] — 2026-09-24
+
+**Fixes RaceStudio 3 freezing a few seconds after opening on macOS 27.** (`3.83.50-2` was a
+fork's unsigned build and was never released here.)
+
 - **RaceStudio 3 no longer freezes a few seconds after opening on macOS 27.** macOS 27 kills
   hidden helper processes that belong to an app that has just quit. The small launcher app quits
   once RS3's window is up, so macOS took down part of Wine with it and RS3 hung. RS3 now starts as
   its own app, so closing the launcher leaves it alone.
+
+## [3.83.50-1] — 2026-08-31
+
+**Updates RaceStudio 3 to 3.83.50.**
+
 - **Double-clicking a `.zconf2` configuration export now imports it.** It used to fail with
   "Import: folder not found" — the importer only knew about session files and folders. A
   configuration is copied into your `cfgs/` folder (and the icons and masks it references into
