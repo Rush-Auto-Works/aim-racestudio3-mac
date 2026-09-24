@@ -90,8 +90,9 @@ This file is constraints, conventions, and hard-won gotchas only.
      stub exception unwound RS3's Wi-Fi thread on every launch and matched a grey-freeze-every-
      10-minutes report on 3.83.50 (2026-09-05, issue #40).
   2. **`ws2_32.dll` outbound redirect** (`wine-patch/ws2_32-localnet.patch`) — RS3 addresses
-     aim-ka discovery to **`0.0.0.0:36002`** under Wine (NOT `10.0.0.255`/gateway). Redirect both
-     `10.0.0.0/24` and `0.0.0.0:36002` → `127.0.0.1`, remap port `36002`→`36003`.
+     aim-ka discovery to **`0.0.0.0:36002`** under Wine (NOT `10.0.0.255`/gateway). Redirect the
+     dash subnets `10.0.0.0/24`, `11.0.0.0/24`, and `12.0.0.0/24` plus `0.0.0.0:36002` →
+     `127.0.0.1`, remap port `36002`→`36003`.
   3. **`ws2_32.dll` inbound source-rewrite** — the relay replies from `127.0.0.1:36003`; RS3
      ignores replies not from the dash, so rewrite the recv source back to `10.0.0.1:36002`.
   4. **root `SMAppService` daemon `aim-bridge`** — listens `127.0.0.1:36003`(UDP)/`:2000`(TCP),
