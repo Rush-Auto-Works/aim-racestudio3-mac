@@ -43,6 +43,15 @@ grep -qF '/usr/bin/open ' "$AS" && grep -qF 'Contents/Helpers/RaceStudio 3.app' 
 ! grep -qE 'nohup .*wine|nohup arch' "$AS" \
   && ok "applet never runs wine as its own child" || bad "applet still nohups wine"
 
+# The helper's executable must compile with the CI toolchain (macos-14 runs this suite). Only the
+# tagged release build compiled it before, so a Swift error surfaced at release time, not on the PR.
+if command -v swiftc >/dev/null 2>&1; then
+  swiftc -O -target arm64-apple-macos12.0 -o "$SBX/rs3-engine" "$SRC_DIR/rs3-engine.swift" >/dev/null 2>&1 \
+    && ok "rs3-engine.swift compiles" || bad "rs3-engine.swift does not compile"
+else
+  echo "  skip rs3-engine compile check (no swiftc)"
+fi
+
 # Run the engine script inside a fake bundle layout with a stub `wine` that records its argv. It must
 # find the OUTER app's Resources/wine and exec it (not background it) with the RS3 exe + flag.
 if /usr/bin/arch -x86_64 /usr/bin/true 2>/dev/null; then
