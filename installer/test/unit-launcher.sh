@@ -30,8 +30,38 @@ grep -q 'AiMRS3-64-ReleaseU.exe' "$LS" && ok "launch.sh runs the RS3 exe" || bad
 # command line (same line as the exe) — assert each separately so they can't drift apart.
 grep -qE 'AiMRS3-64-ReleaseU\.exe.*--disable-gpu-compositing' "$LS" \
   && ok "launch.sh disables GPU compositing (web maps)" || bad "launch.sh missing --disable-gpu-compositing"
-grep -qE 'AiMRS3-64-ReleaseU\.exe.*--disable-gpu-compositing' "$SRC_DIR/RaceStudio3.applescript" \
-  && ok "applet disables GPU compositing (web maps)" || bad "applet missing --disable-gpu-compositing"
+grep -qE 'AiMRS3-64-ReleaseU\.exe.*--disable-gpu-compositing' "$SRC_DIR/rs3-engine.sh" \
+  && ok "engine helper disables GPU compositing (web maps)" || bad "engine helper missing --disable-gpu-compositing"
+
+# macOS 27: the applet must NOT start Wine as its own child. LaunchServices counts Wine's hidden
+# processes as the applet's subordinates and, when the applet quits, kills them (BTM "not allowed
+# in background") -> explorer.exe dies, wineserver with it, RS3 freezes. The applet hands off to the
+# nested helper app via `open`, so Wine gets its own LaunchServices app and coalition.
+AS="$SRC_DIR/RaceStudio3.applescript"
+grep -qF '/usr/bin/open ' "$AS" && grep -qF 'Contents/Helpers/RaceStudio 3.app' "$AS" \
+  && ok "applet launches RS3 via open on the helper app" || bad "applet does not open the helper app"
+! grep -qE 'nohup .*wine|nohup arch' "$AS" \
+  && ok "applet never runs wine as its own child" || bad "applet still nohups wine"
+
+# Run the engine script inside a fake bundle layout with a stub `wine` that records its argv. It must
+# find the OUTER app's Resources/wine and exec it (not background it) with the RS3 exe + flag.
+if /usr/bin/arch -x86_64 /usr/bin/true 2>/dev/null; then
+  OUTER="$SBX/Fake.app/Contents"; HRES="$OUTER/Helpers/RaceStudio 3.app/Contents/Resources"
+  mkdir -p "$HRES" "$OUTER/Resources/wine/bin" "$SBX/home"
+  cp "$SRC_DIR/rs3-engine.sh" "$HRES/rs3-engine.sh"
+  printf '#!/bin/bash\nprintf "%%s\\n" "$WINEPREFIX" "$@" > "%s/argv"\n' "$SBX" > "$OUTER/Resources/wine/bin/wine"
+  chmod +x "$OUTER/Resources/wine/bin/wine"
+  HOME="$SBX/home" bash "$HRES/rs3-engine.sh" >/dev/null 2>&1
+  [ -f "$SBX/argv" ] && ok "engine script execs the outer app's wine" || bad "engine script did not run outer wine"
+  grep -qxF "$SBX/home/Library/Application Support/RaceStudio3/prefix" "$SBX/argv" 2>/dev/null \
+    && ok "engine script sets WINEPREFIX" || bad "engine script WINEPREFIX wrong"
+  grep -qx 'C:\\AIM_SPORT\\RaceStudio3\\64\\AiMRS3-64-ReleaseU.exe' "$SBX/argv" 2>/dev/null \
+    && ok "engine script passes the RS3 exe" || bad "engine script RS3 exe wrong"
+  [ -f "$SBX/home/Library/Application Support/RaceStudio3/logs/run.log" ] \
+    && ok "engine script logs to run.log" || bad "engine script run.log missing"
+else
+  echo "  skip engine exec check (no Rosetta)"
+fi
 grep -q 'WINEPREFIX=' "$LS" && ok "launch.sh exports WINEPREFIX" || bad "launch.sh no WINEPREFIX"
 ! grep -q '/.wine' "$LS" && ok "launch.sh never uses ~/.wine" || bad "launch.sh references ~/.wine"
 
