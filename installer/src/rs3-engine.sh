@@ -22,6 +22,35 @@ mkdir -p "$ROOT/logs"
 # Every launch appends to run.log. Past 10 MB, keep it as run.log.1 and start fresh, so a crash
 # log survives one relaunch without growing forever (one +winsock debug session made it 234 MB).
 [ "$(stat -f %z "$ROOT/logs/run.log" 2>/dev/null || echo 0)" -gt 10485760 ] && mv -f "$ROOT/logs/run.log" "$ROOT/logs/run.log.1"
-# exec, not background: this process becomes RS3, so the helper app lives exactly as long as RS3.
+# Foreground wait, not exec: on a clean quit wine reaps its own services. But on 2026-09-24,
+# after this session was closed, RS3 and wineserver were both gone while Wine's services
+# (services.exe, winedevice.exe, explorer.exe) had survived as reparented orphans (ppid 1).
+# The log captured the aftermath, not the killer. Orphans keep this app's LaunchServices
+# record alive and render in the Dock as "RaceStudio 3 — Running in Background". Since the
+# helper outlives wine, it can tear them down.
 # --disable-gpu-compositing: CEF web maps render white under Wine without it (issue #37).
-exec /usr/bin/arch -x86_64 "$RES/wine/bin/wine" 'C:\AIM_SPORT\RaceStudio3\64\AiMRS3-64-ReleaseU.exe' --disable-gpu-compositing >> "$ROOT/logs/run.log" 2>&1
+/usr/bin/arch -x86_64 "$RES/wine/bin/wine" 'C:\AIM_SPORT\RaceStudio3\64\AiMRS3-64-ReleaseU.exe' --disable-gpu-compositing >> "$ROOT/logs/run.log" 2>&1
+rc=$?
+# Pass 1: a live wineserver reaps all of its clients in one shot (fast, exact). macOS ships no
+# GNU timeout; bound it with a background killer instead (mirrors lib/wine.sh's watchdog intent).
+if [ -x "$RES/wine/bin/wineserver" ]; then
+    WINEPREFIX="$WINEPREFIX" "$RES/wine/bin/wineserver" -k >/dev/null 2>&1 &
+    kpid=$!
+    ( sleep 10; kill -9 "$kpid" 2>/dev/null ) & wp=$!
+    wait "$kpid" 2>/dev/null || true
+    kill "$wp" 2>/dev/null; wait "$wp" 2>/dev/null
+fi
+# Pass 2 (orphans whose wineserver died with the session): ps shows these clients with rewritten
+# argv ("C:\windows\system32\winedevice.exe", bundle path invisible), so scope by argv shape
+# FIRST, then confirm the process really is ours via its text mappings into the bundle's wine
+# tree. Both must hit; never a bare pkill. Orphan condition is enforced per candidate: PPID
+# must be 1 (the observed orphan shape), so any process still parented to a live session's
+# wineserver is ineligible regardless of its argv or mappings. No wineserver-liveness gate:
+# its real argv is "$RES/wine/lib/wine/../../bin/wineserver", which a "$RES/wine/bin/wineserver"
+# pattern never matches, so such a guard would be a no-op pretending to be a guard.
+# Verified on a disposable prefix 2026-09-24, per-PID: 6 forced orphans in, 5 killed by the
+# sweep, 1 self-exited between listing and check, 0 survive, 0 non-Wine processes touched.
+for pid in $(ps -axww -o pid=,ppid=,args= | awk '$2 == 1 && $3 ~ /^C:\\/ {print $1}'); do
+    lsof -p "$pid" 2>/dev/null | grep -qF "$RES/wine/" && kill "$pid" 2>/dev/null || true
+done
+exit "$rc"
