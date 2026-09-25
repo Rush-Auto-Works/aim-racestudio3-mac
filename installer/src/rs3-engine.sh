@@ -43,14 +43,24 @@ fi
 # Pass 2 (orphans whose wineserver died with the session): ps shows these clients with rewritten
 # argv ("C:\windows\system32\winedevice.exe", bundle path invisible), so scope by argv shape
 # FIRST, then confirm the process really is ours via its text mappings into the bundle's wine
-# tree. Both must hit; never a bare pkill. Orphan condition is enforced per candidate: PPID
-# must be 1 (the observed orphan shape), so any process still parented to a live session's
-# wineserver is ineligible regardless of its argv or mappings. No wineserver-liveness gate:
-# its real argv is "$RES/wine/lib/wine/../../bin/wineserver", which a "$RES/wine/bin/wineserver"
-# pattern never matches, so such a guard would be a no-op pretending to be a guard.
-# Verified on a disposable prefix 2026-09-24, per-PID: 6 forced orphans in, 5 killed by the
-# sweep, 1 self-exited between listing and check, 0 survive, 0 non-Wine processes touched.
-for pid in $(ps -axww -o pid=,ppid=,args= | awk '$2 == 1 && $3 ~ /^C:\\/ {print $1}'); do
-    lsof -p "$pid" 2>/dev/null | grep -qF "$RES/wine/" && kill "$pid" 2>/dev/null || true
-done
+# tree. Both must hit; never a bare pkill. SIGKILL is required: an orphaned Wine service ignores
+# SIGTERM (proven on device 2026-09-25, winedevice.exe survived plain kill for minutes). PPID
+# must be 1, and no RS3 process may be alive: Wine's services also show PPID 1 during a live
+# session, so the ordering (wine already returned) plus this guard is what keeps a running
+# session safe. Retried a few times because one pass can race a late-spawned service.
+# Verified on device 2026-09-25 (scratch bundle + forced quit): every orphan of this bundle died.
+# The guard pattern is the full exe name on purpose: a bare "AiMRS3-64" also matches the
+# launcher applet's own hygiene shell, which would silently suppress this sweep.
+if ! pgrep -f 'AiMRS3-64-ReleaseU' >/dev/null 2>&1; then
+    for _ in 1 2 3 4 5; do
+        left=0
+        for pid in $(ps -axww -o pid=,ppid=,args= | awk '$2 == 1 && $3 ~ /^C:\\/ {print $1}'); do
+            if lsof -p "$pid" 2>/dev/null | grep -qF "$RES/wine/"; then
+                kill -9 "$pid" 2>/dev/null && left=1
+            fi
+        done
+        [ "$left" = 0 ] && break
+        sleep 1
+    done
+fi
 exit "$rc"
