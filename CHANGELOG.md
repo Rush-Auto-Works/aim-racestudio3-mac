@@ -12,6 +12,18 @@ only this installer is versioned here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.83.50-5] — 2026-09-25
+
+- **Addresses a stale "RaceStudio 3 — Running in Background" entry in the Dock after quitting
+  RaceStudio 3.** On macOS 27 a quit can end RaceStudio 3 and `wineserver` while Wine's helper
+  services (`services.exe`, `winedevice.exe`, `explorer.exe`) keep running as orphaned processes.
+  Those orphans held the launcher's launch record open, so macOS kept showing the app as running.
+  The launcher helper now waits for Wine instead of replacing itself with it, and clears any of its
+  own leftover Wine processes once RaceStudio 3 has exited — first by asking a live `wineserver` to
+  shut its clients down, then by killing any orphan whose command line is a Wine client and whose
+  loaded files come from this app's own Wine, which also covers the case where `wineserver` is
+  already gone. Verified on device with a forced quit: four live helper processes, none surviving.
+
 ## [3.83.50-4] — 2026-09-24
 
 - **Addresses RaceStudio 3 freezing (grey, unresponsive window) every few minutes while analysing
