@@ -12,6 +12,14 @@ only this installer is versioned here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.83.65-1] — 2026-10-06
+
+- **Updates the bundled RaceStudio 3 from 3.83.50 to 3.83.65** (AiM release of Sep 30th, 2026).
+  Per AiM's notes: HTTPS calls now validate the server's TLS certificate, WiFi devices on
+  link-local addresses are accepted again on Ethernet, WiFi signal-strength icons use 5 levels,
+  clearer warnings while connecting to a WiFi device, plus SafeIgnition, analysis and CAN2 keypad
+  fixes. The installer, WiFi bridge and launcher are unchanged from 3.83.50-5.
+
 ## [3.83.50-5] — 2026-09-25
 
 - **Addresses a stale "RaceStudio 3 — Running in Background" entry in the Dock after quitting
