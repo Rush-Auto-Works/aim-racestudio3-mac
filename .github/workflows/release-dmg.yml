@@ -31,6 +31,7 @@ on:
 
 permissions:
   contents: write   # create releases / upload assets
+  issues: write     # open an issue when a tag build fails
 
 concurrency:
   group: release-dmg-${{ github.ref }}
@@ -266,4 +267,29 @@ jobs:
           else
             # shellcheck disable=SC2086
             gh release create "$TAG" $assets --title "RaceStudio 3 $TAG" --notes-file "$notes_file" $prerelease_flag
+          fi
+
+      - name: Open an issue if the release build failed
+        # A failed tag build leaves a tag with no release and nobody watching (the weekly updater
+        # tags and dispatches unattended). One open issue per tag; a re-failure adds a comment.
+        if: failure() && startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="release-dmg failed for $TAG"
+          msg="The release build for $TAG failed: $RUN_URL. The tag exists, but its release may be missing or incomplete (the build can fail after the release was created). Fix the cause, then re-run with: gh workflow run release-dmg.yml --ref $TAG"
+          # Search by this tag's full title (quotes stripped so the search phrase stays valid), then
+          # keep the exact-title check in jq, which takes the title as data (--arg) so no character
+          # in a tag name can break the filter. A failed lookup falls through to creating the issue:
+          # a duplicate is better than a step that aborts before reporting the failure.
+          phrase="${title//\"/ }"
+          existing="$(gh issue list --state open --limit 100 --search "\"$phrase\" in:title" --json number,title \
+            | jq -r --arg t "$title" '[.[] | select(.title == $t)][0].number // empty' || true)"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$msg"
+          else
+            gh issue create --title "$title" --body "$msg"
           fi
