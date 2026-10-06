@@ -281,10 +281,13 @@ jobs:
           set -euo pipefail
           title="release-dmg failed for $TAG"
           msg="The release build for $TAG failed: $RUN_URL. The tag exists, but its release may be missing or incomplete (the build can fail after the release was created). Fix the cause, then re-run with: gh workflow run release-dmg.yml --ref $TAG"
-          # The tag goes to jq as data (--arg), never into the filter source, so a quote or other
-          # odd character in a tag name cannot break the lookup. The search term is fixed.
-          existing="$(gh issue list --state open --limit 100 --search "release-dmg failed for in:title" --json number,title \
-            | jq -r --arg t "$title" '[.[] | select(.title == $t)][0].number // empty')"
+          # Search by this tag's full title (quotes stripped so the search phrase stays valid), then
+          # keep the exact-title check in jq, which takes the title as data (--arg) so no character
+          # in a tag name can break the filter. A failed lookup falls through to creating the issue:
+          # a duplicate is better than a step that aborts before reporting the failure.
+          phrase="${title//\"/ }"
+          existing="$(gh issue list --state open --limit 100 --search "\"$phrase\" in:title" --json number,title \
+            | jq -r --arg t "$title" '[.[] | select(.title == $t)][0].number // empty' || true)"
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --body "$msg"
           else
