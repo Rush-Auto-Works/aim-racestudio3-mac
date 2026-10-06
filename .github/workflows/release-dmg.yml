@@ -224,6 +224,10 @@ jobs:
           else
             install_line="RaceStudio 3 for macOS — drag the AiM folder to Applications, open once to set up. Connect AiM devices over Wi-Fi or USB (USB support is new and tentative)."
           fi
+          # Every release points at AiM's own notes for the bundled RaceStudio 3 (the part of the
+          # tag before the packaging revision, e.g. 3.83.65 from 3.83.65-1).
+          aim_notes_url="https://www.aim-sportline.com/docs/racestudio3/html/release/software-release.html"
+          install_line="$install_line"$'\n\n'"What changed in RaceStudio 3 ${ver%%-*} itself: [AiM release notes]($aim_notes_url)."
           body="$(awk -v hdr="## [$ver]" 'index($0,hdr)==1{f=1;next} /^## \[/{if(f)exit} f{print}' CHANGELOG.md)"
           notes_file="$RUNNER_TEMP/relnotes.md"
           if [ -n "$(printf '%s' "$body" | tr -d '[:space:]')" ]; then
