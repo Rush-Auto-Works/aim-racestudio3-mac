@@ -111,8 +111,7 @@ done < <(find "$RES/wine/lib/wine" -type f -name wine -path '*-unix/wine')
 # winemac.drv builds the bold "RaceStudio 3" app menu in compiled Cocoa. We rebuild that one unix
 # module from a source patch (installer/wine-patch/winemac-native-menu.patch) so RS3's app menu
 # gains Import / Uninstall / Show Logs items above a ⌘Q Quit, then swap it for the bundle's stock
-# winemac.so. The patch also folds in the ⌘Q remap that used to be a post-build binary edit
-# (patch-wine-cmdq.py, now retired). The module is x86_64 (built under Rosetta) to match the
+# winemac.so. The patch also binds ⌘Q to Quit. The module is x86_64 (built under Rosetta) to match the
 # osx64 bundle; build with installer/wine-patch/build-winemac-so.sh (CI does this). Like 1c/1e,
 # must run BEFORE signing — it replaces a Mach-O the app-bundle seal then covers.
 WINEMAC_SO_DIR="${WINEMAC_SO_DIR:-$HERE/../wine-patch/build/winemac}"
@@ -320,15 +319,21 @@ plutil -lint -s "$HELPER/Contents/Info.plist" || { echo "helper Info.plist inval
 
 # ---- 3. Info.plist --------------------------------------------------------------------------
 PL="$APP/Contents/Info.plist"
-pset() { /usr/libexec/PlistBuddy -c "Set :$1 $2" "$PL" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :$1 $3 $2" "$PL"; }
-pset CFBundleIdentifier "$BUNDLE_ID" string
-pset CFBundleName "RaceStudio 3" string
-pset CFBundleShortVersionString "$VERSION" string
+# Set the key, else add it. The script has no errexit, so a failed Add must stop the build here
+# or the plist ships without the stamp.
+plist_set() { # <plist> <key> <value> <type>
+  /usr/libexec/PlistBuddy -c "Set :$2 $3" "$1" 2>/dev/null \
+    || /usr/libexec/PlistBuddy -c "Add :$2 $4 $3" "$1" \
+    || { echo "failed to stamp $2 in $1" >&2; exit 1; }
+}
+plist_set "$PL" CFBundleIdentifier "$BUNDLE_ID" string
+plist_set "$PL" CFBundleName "RaceStudio 3" string
+plist_set "$PL" CFBundleShortVersionString "$VERSION" string
 # CFBundleVersion = upstream version + packaging revision (e.g. 3.83.20.2), monotonic per build;
 # CFBundleShortVersionString stays the clean upstream version users see.
-pset CFBundleVersion "${VERSION}.${PKG_REV}" string
-pset LSMinimumSystemVersion "$MIN_OS" string
-pset CFBundleIconFile "applet" string
+plist_set "$PL" CFBundleVersion "${VERSION}.${PKG_REV}" string
+plist_set "$PL" LSMinimumSystemVersion "$MIN_OS" string
+plist_set "$PL" CFBundleIconFile "applet" string
 # osacompile droplets set CFBundleIconName=droplet, which OVERRIDES CFBundleIconFile and forces the
 # generic system droplet icon. Remove it so our applet.icns (the RS3 icon) is used.
 /usr/libexec/PlistBuddy -c "Delete :CFBundleIconName" "$PL" 2>/dev/null || true
@@ -336,8 +341,8 @@ pset CFBundleIconFile "applet" string
 # ---- 3b. standalone Import / Uninstall apps -------------------------------------------------
 # AppleScript applets that ship as SIBLINGS of RaceStudio 3.app inside the DMG's "AiM" folder, so
 # the whole folder drops into /Applications/AiM in one drag. Wine owns the macOS menu bar while RS3
-# runs and that menu can't host custom items, and the old NSStatusItem menu-bar helper proved
-# unreliable (Bartender/Tahoe), so these standalone apps are the reachable Import/Uninstall surface.
+# runs and that menu can't host custom items, and a menu-bar helper is invisible under
+# Bartender/Tahoe, so these standalone apps are the reachable Import/Uninstall surface.
 say "Building helper apps (Import / Uninstall / Show Logs)"
 IMPORT_APP_BUILT="$DIST/Import RaceStudio 3 Data.app"
 UNINSTALL_APP_BUILT="$DIST/Uninstall RaceStudio 3.app"
@@ -370,10 +375,10 @@ brand_applet() { # <app> <bundle-id> <name> <icns>
   local bid="$2" nm="$3" icns="$4" pl="$1/Contents/Info.plist" r="$1/Contents/Resources"
   [ -f "$r/applet.icns" ]  && cp "$icns" "$r/applet.icns"
   [ -f "$r/droplet.icns" ] && cp "$icns" "$r/droplet.icns"
-  /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $bid" "$pl" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string $bid" "$pl"
-  /usr/libexec/PlistBuddy -c "Set :CFBundleName $nm" "$pl" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleName string $nm" "$pl"
-  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$pl" 2>/dev/null || true
-  /usr/libexec/PlistBuddy -c "Add :LSMinimumSystemVersion string $MIN_OS" "$pl" 2>/dev/null || true
+  plist_set "$pl" CFBundleIdentifier "$bid" string
+  plist_set "$pl" CFBundleName "$nm" string
+  plist_set "$pl" CFBundleShortVersionString "$VERSION" string
+  plist_set "$pl" LSMinimumSystemVersion "$MIN_OS" string
   # osacompile sets CFBundleIconName=applet/droplet, which OVERRIDES CFBundleIconFile and points at a
   # non-existent asset-catalog icon -> blank icon. Remove it so our overwritten .icns is used.
   /usr/libexec/PlistBuddy -c "Delete :CFBundleIconName" "$pl" 2>/dev/null || true

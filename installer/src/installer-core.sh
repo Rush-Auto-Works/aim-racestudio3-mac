@@ -482,7 +482,7 @@ do_reinstall() {
       ui_warn "Reinstall will replace RaceStudio 3 $reinstall_ver with the version this app ships ($RS3_PINNED_VER)."
     fi
   fi
-  rm -rf "$WINE_ROOT" "$PREFIX" 2>/dev/null || true
+  rm -rf "$WINE_ROOT" "$PREFIX" || die "Couldn't remove the old Wine install. Quit RaceStudio 3 and try again."
   ledger_reset_for_reinstall
   WINE_BIN=""
   run_all

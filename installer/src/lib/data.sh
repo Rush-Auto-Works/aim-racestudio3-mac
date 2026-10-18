@@ -236,10 +236,6 @@ import_session_dir() {
   ui_import_dest "$dest"
 }
 
-# import_xrk_dir <dir> : back-compat wrapper for import_session_dir (historical name; a folder of
-# loose .xrk sessions).
-import_xrk_dir() { import_session_dir "$@"; }
-
 # ---- configuration import (.zconf2 / .zconfig) ---------------------------------------------
 # A configuration export is a zip whose top level holds one or more `cfg_<timestamp>` folders (the
 # `.aimcfg` plus its `devices/` tree) and, optionally, a `to_copy_in_app_root_folder/user/…`

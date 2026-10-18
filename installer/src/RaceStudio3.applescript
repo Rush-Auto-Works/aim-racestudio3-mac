@@ -332,7 +332,7 @@ on importOne(coreScript, p)
 	end try
 end importOne
 
--- ---- install engine (shared with the old standalone installer) --------------------------
+-- ---- install engine ----------------------------------------------------------------------
 on runPhase(coreScript, ph, tmo, stepIndex, total)
 	repeat
 		set out to runCoreAsync(coreScript, ph, tmo, stepIndex, total)

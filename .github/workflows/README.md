@@ -1,6 +1,8 @@
 # Release workflow — `release-dmg.yml`
 
-Builds, codesigns, **notarizes + staples**, and releases `RaceStudio 3.dmg`.
+Builds, codesigns, **notarizes + staples**, and releases `RaceStudio3-<version>-<rev>.dmg` and a
+matching `.pkg`. `weekly-rs3-update.yml` checks AiM's download page every Monday, bumps the pin,
+tags the release and dispatches this workflow.
 
 ## Why a macOS runner (not Ubicloud)
 
@@ -11,9 +13,10 @@ change `runs-on:` to your runner's labels.
 
 ## Trigger
 
-- **Push a tag** `vX.Y.Z` → builds + notarizes + creates/updates a GitHub Release with the DMG.
-- **Run manually** (Actions → release-dmg → Run workflow) → builds + uploads the DMG as a
-  workflow artifact only (no Release).
+- **Push a tag** `v<RS3 version>-<pkg rev>` (for example `v3.84.04-1`) → builds + notarizes +
+  creates/updates a GitHub Release with the DMG and the `.pkg`. A failed tag build opens an issue.
+- **Run manually** (Actions → release-dmg → Run workflow) → builds + uploads the DMG and `.pkg` as
+  a workflow artifact only (no Release). Dispatched on a tag ref, it publishes that tag.
 
 ## Required secrets
 
@@ -30,8 +33,7 @@ Settings → Secrets and variables → Actions → *New repository secret*:
 
 > Notarization uses an **App Store Connect API key** (created at appstoreconnect.apple.com →
 > Users and Access → Integrations → Keys → **+**). It avoids account.apple.com entirely and is the
-> recommended CI credential. (An app-specific password works too — set `APPLE_ID` + `APPLE_APP_PASSWORD`
-> + `APPLE_TEAM_ID` instead and the build falls back to it.)
+> recommended CI credential. The workflow only passes the three `ASC_*` secrets to the build.
 
 Optional:
 
@@ -39,6 +41,8 @@ Optional:
 |--------|-----------|
 | `CODESIGN_IDENTITY` | full identity name; defaults to `Developer ID Application: Samuel Reed (HYBSCYDCMB)` |
 | `RS3_LOGO_B64` | base64 of the colored RS3 icon PNG (AiM's mark, gitignored). Omit → icon falls back to the Rush logo. |
+| `DEVELOPER_ID_INSTALLER_CERT_P12` | base64 of your **Developer ID Installer** cert (`.p12`). Signs and notarizes the `.pkg`; without it the `.pkg` ships unsigned. |
+| `DEVELOPER_ID_INSTALLER_CERT_PASSWORD` | the password you set when exporting that `.p12` |
 
 ### Exporting the cert to a base64 `.p12`
 
@@ -63,8 +67,12 @@ gh secret set RS3_LOGO_B64 -R Rush-Auto-Works/aim-racestudio3-mac < <(base64 -i 
 
 ## Cut a release
 
+The weekly updater does this when AiM ships a new RaceStudio 3. To release by hand, run the
+`/update-racestudio3` skill (`.claude/skills/update-racestudio3/SKILL.md`), or copy `tag=` from
+`bash installer/build/check-rs3-update.sh` and push it:
+
 ```sh
-git tag v1.0.0 && git push origin v1.0.0
+git tag -a v3.84.04-1 -m "RaceStudio 3 3.84.04" && git push origin v3.84.04-1
 ```
 
 ## Note on the first run

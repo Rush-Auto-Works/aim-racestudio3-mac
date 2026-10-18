@@ -17,6 +17,8 @@ Usage: patch-wine-appname.py <path-to-unix-loader> [app-name]
 Default app name: "RaceStudio 3". Idempotent: re-running is a no-op if already set.
 Re-sign the binary afterwards (this invalidates any existing code signature).
 """
+from __future__ import annotations
+
 import re
 import sys
 import struct
@@ -25,7 +27,7 @@ from xml.sax.saxutils import escape
 LC_SEGMENT_64 = 0x19
 
 
-def find_info_plist_section(data: bytes):
+def find_info_plist_section(data: bytes | bytearray) -> tuple[int, int] | None:
     """Return (file_offset, size) of the __TEXT,__info_plist section, or None."""
     if data[:4] not in (b"\xcf\xfa\xed\xfe",):  # MH_MAGIC_64 little-endian
         # Could be fat or big-endian; this loader is thin x86_64 LE in practice.
@@ -49,7 +51,7 @@ def find_info_plist_section(data: bytes):
     return None
 
 
-def main():
+def main() -> None:
     if len(sys.argv) < 2:
         raise SystemExit("usage: patch-wine-appname.py <unix-loader> [app-name]")
     path = sys.argv[1]
@@ -66,7 +68,7 @@ def main():
     # Escaping first also makes the idempotency check below compare against the stored (escaped) value.
     new_name = escape(name).encode("utf-8")
 
-    def cur_val(key):
+    def cur_val(key: bytes) -> bytes | None:
         m = re.search(rb"<key>" + re.escape(key) + rb"</key>\s*<string>([^<]*)</string>", sec)
         return m.group(1) if m else None
 

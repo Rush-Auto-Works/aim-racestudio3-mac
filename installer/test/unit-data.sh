@@ -15,8 +15,6 @@ scenario() {
   printf '\n# scenario: %s\n' "$n"
 }
 
-src_of()  { printf '%s' "$PREFIX/drive_c/$RS3_REL_USER"; }
-
 # ---- 1. clean install: DST absent --------------------------------------------------------
 scenario clean
 SRC="$(make_fresh_user)"
@@ -147,7 +145,7 @@ import_merge "$SANDBOX/import/ext/AIM_SPORT"
 assert_eq "$(cat "$DATA_DIR/cfgs/keep.zconfig")" "EXISTING" "import: existing file not clobbered"
 assert_file "$DATA_DIR/cfgs/new.zconfig" "import: new file merged in"
 
-# ---- 10b. import_xrk_dir: a folder of loose .xrk sessions (no user tree) --------------------
+# ---- 10b. import_session_dir: a folder of loose .xrk sessions (no user tree) --------------------
 scenario import-xrk
 xdir="$SANDBOX/import/xrk/RUSH_SR_C0319"
 mkdir -p "$xdir/sub"
@@ -156,7 +154,7 @@ printf 'LAP2\n' > "$xdir/sub/run2.XRK"   # case-insensitive + nested
 printf 'junk\n' > "$xdir/notes.txt"      # non-.xrk ignored
 assert_true  "_dir_has_session_file \"$xdir\""         "xrk: folder detected as having session files"
 assert_false "[ -n \"\$(_find_user_tree \"$xdir\")\" ]" "xrk: not mistaken for a user tree"
-import_xrk_dir "$xdir"
+import_session_dir "$xdir"
 assert_file "$DATA_DIR/data/RUSH_SR_C0319/run1.xrk"     "xrk: top-level session copied"
 assert_file "$DATA_DIR/data/RUSH_SR_C0319/sub/run2.XRK" "xrk: nested session copied"
 assert_absent "$DATA_DIR/data/RUSH_SR_C0319/notes.txt"  "xrk: non-.xrk file not imported"
