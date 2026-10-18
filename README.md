@@ -9,7 +9,7 @@ license, no virtual machine.
 
 ## Install — 3 steps, about 10 minutes
 
-1. **Download `RaceStudio 3.dmg`** from the
+1. **Download the latest `RaceStudio3-<version>.dmg`** from the
    [**Releases**](https://github.com/Rush-Auto-Works/aim-racestudio3-mac/releases) page and open it.
 2. **Drag the `AiM` folder onto Applications** (the arrow shows you where).
 3. **Open RaceStudio 3** from **Applications ▸ AiM**.
@@ -44,16 +44,9 @@ thing, and paste it into Claude or ChatGPT on your Mac. It'll find your old data
 is — including inside a Parallels Windows setup — and copy it in.
 
 **Or use RaceStudio 3's own Import/Export** buttons, same as on Windows. RS3 still thinks it's
-on Windows, but it runs in a slim Windows environment that mounts your whole Mac drive at the
-root `/`. So in its file browser, expand **My Computer → `/`** and your real Mac home is under
-**Users → your-name** (Desktop, Documents, Downloads all live there). The `Z:` drive points to
-the same `/` if you prefer drive letters.
-
-<p align="center">
-  <img src="img/import-home-dir-tree.png" width="220"
-       alt="RS3 file browser showing the Mac drive mounted at / with the home folder under Users">
-</p>
-<p align="center"><i>RS3's file browser: the Mac drive is <code>/</code>; your home is <code>/Users/your-name</code>.</i></p>
+on Windows, but it runs in a slim Windows environment. In its file browser, expand
+**My Computer → `C:` → users → your-name** and your Desktop, Documents and Downloads folders
+are there. External drives and SD cards show up under their own drive letters.
 
 </details>
 
@@ -112,11 +105,10 @@ does; details in that file.)
 </details>
 
 <details>
-<summary><b>No release posted yet? / Build it yourself</b></summary>
+<summary><b>Build it yourself</b></summary>
 
 The notarized DMG is produced from this repo by `installer/build/build-apps.sh` (needs an
-Apple Developer ID). Until a release is up, you can build it yourself. Design notes:
-[docs/installer-design.md](docs/installer-design.md).
+Apple Developer ID). Design notes: [docs/installer-design.md](docs/installer-design.md).
 
 </details>
 
@@ -153,4 +145,4 @@ More: [installer-design.md](docs/installer-design.md) ·
 > **Independent community project — not affiliated with AiM.** Built by enthusiasts; not owned,
 > sanctioned, or supported by AiM Tech / AiM Sportline. "RaceStudio 3" and "AiM" are trademarks
 > of their respective owners, used here only to describe what this project runs. Use at your own
-> risk. Worked out on a 2026 Apple Silicon Mac with RaceStudio 3 v3.83.20. PRs welcome.
+> risk. Worked out on a 2026 Apple Silicon Mac with the current RaceStudio 3 release. PRs welcome.

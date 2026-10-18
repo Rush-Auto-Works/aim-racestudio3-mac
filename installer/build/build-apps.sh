@@ -111,8 +111,7 @@ done < <(find "$RES/wine/lib/wine" -type f -name wine -path '*-unix/wine')
 # winemac.drv builds the bold "RaceStudio 3" app menu in compiled Cocoa. We rebuild that one unix
 # module from a source patch (installer/wine-patch/winemac-native-menu.patch) so RS3's app menu
 # gains Import / Uninstall / Show Logs items above a ⌘Q Quit, then swap it for the bundle's stock
-# winemac.so. The patch also folds in the ⌘Q remap that used to be a post-build binary edit
-# (patch-wine-cmdq.py, now retired). The module is x86_64 (built under Rosetta) to match the
+# winemac.so. The patch also binds ⌘Q to Quit. The module is x86_64 (built under Rosetta) to match the
 # osx64 bundle; build with installer/wine-patch/build-winemac-so.sh (CI does this). Like 1c/1e,
 # must run BEFORE signing — it replaces a Mach-O the app-bundle seal then covers.
 WINEMAC_SO_DIR="${WINEMAC_SO_DIR:-$HERE/../wine-patch/build/winemac}"
@@ -336,8 +335,8 @@ pset CFBundleIconFile "applet" string
 # ---- 3b. standalone Import / Uninstall apps -------------------------------------------------
 # AppleScript applets that ship as SIBLINGS of RaceStudio 3.app inside the DMG's "AiM" folder, so
 # the whole folder drops into /Applications/AiM in one drag. Wine owns the macOS menu bar while RS3
-# runs and that menu can't host custom items, and the old NSStatusItem menu-bar helper proved
-# unreliable (Bartender/Tahoe), so these standalone apps are the reachable Import/Uninstall surface.
+# runs and that menu can't host custom items, and a menu-bar helper is invisible under
+# Bartender/Tahoe, so these standalone apps are the reachable Import/Uninstall surface.
 say "Building helper apps (Import / Uninstall / Show Logs)"
 IMPORT_APP_BUILT="$DIST/Import RaceStudio 3 Data.app"
 UNINSTALL_APP_BUILT="$DIST/Uninstall RaceStudio 3.app"
