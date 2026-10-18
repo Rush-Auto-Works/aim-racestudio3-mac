@@ -18,7 +18,7 @@ GRAY = (130, 136, 144, 255)
 ACCENT = (255, 122, 0, 255)  # Rush orange
 
 
-def load_font(size, bold=False):
+def load_font(size: int, bold: bool = False):
     names = (["SFNSDisplay-Bold.otf", "HelveticaNeue-Bold.ttf"] if bold else
              ["SFNSDisplay.ttf", "HelveticaNeue.ttf"])
     paths = [f"/System/Library/Fonts/{n}" for n in names] + [
@@ -34,7 +34,7 @@ def load_font(size, bold=False):
     raise SystemExit(f"no usable font found for the DMG background, tried: {', '.join(paths)}")
 
 
-def main():
+def main() -> None:
     if len(sys.argv) != 3:
         raise SystemExit(f"Usage: {sys.argv[0]} <black-logo.png> <out.png>")
     logo_path, out_path = sys.argv[1], sys.argv[2]

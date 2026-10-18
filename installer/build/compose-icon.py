@@ -43,7 +43,7 @@ cy = (S - logo.height) // 2 if badge == "none" else int(S * 0.36) - logo.height 
 img.paste(logo, ((S - logo.width) // 2, cy), logo)
 
 
-def draw_badge(kind):
+def draw_badge(kind: str) -> None:
     # Both badges sit bottom-LEFT for consistency (import's arrow points right, into RS3).
     bx, by, r = int(S * 0.30), int(S * 0.70), int(S * 0.195)
     white = (255, 255, 255, 255)
