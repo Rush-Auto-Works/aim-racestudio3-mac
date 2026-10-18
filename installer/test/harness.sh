@@ -37,7 +37,6 @@ assert_true()   { if eval "$1"; then _ok "${2:-$1}"; else _fail "${2:-$1}"; fi; 
 assert_false()  { if eval "$1"; then _fail "${2:-not($1)}"; else _ok "${2:-not($1)}"; fi; }
 assert_eq()     { if [ "$1" = "$2" ]; then _ok "${3:-eq}"; else _fail "${3:-eq}: '$1' != '$2'"; fi; }
 assert_file()   { if [ -f "$1" ]; then _ok "file $1"; else _fail "file missing $1"; fi; }
-assert_dir()    { if [ -d "$1" ]; then _ok "dir $1"; else _fail "dir missing $1"; fi; }
 assert_symlink_to() { # <link> <target>
   if [ -L "$1" ] && [ "$(readlink "$1")" = "$2" ]; then _ok "symlink $1 -> $2";
   else _fail "symlink $1 -> $2 (got '$(readlink "$1" 2>/dev/null)')"; fi; }

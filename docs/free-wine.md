@@ -58,9 +58,8 @@ dependency, so the direct download is simpler.)
    "$WINE" "$HOME/Downloads/RaceStudio3-64_xxx.exe"      # run the AiM installer, click through
    ```
    On modern Wine the installer behaves like it does on CrossOver. If it gives you trouble,
-   the app is xcopy-deployable — see the extract-and-deploy trick in
-   [old-crossover-workarounds.md](old-crossover-workarounds.md) §4 (the app lands in
-   `C:\AIM_SPORT\RaceStudio3\`).
+   the app is xcopy-deployable: extract the installer and copy the files into
+   `C:\AIM_SPORT\RaceStudio3\`.
 
 3. **Run it.**
    ```sh
