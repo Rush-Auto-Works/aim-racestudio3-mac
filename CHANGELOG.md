@@ -14,7 +14,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [3.84.4-1] — 2026-10-18
 
-- **Updates the bundled RaceStudio 3 from 3.83.65 to 3.84.4** (AiM release of Oct 8th, 2026).
+- **Updates the bundled RaceStudio 3 from 3.83.65 to 3.84.04** (AiM release of Oct 8th, 2026).
   Per AiM's notes: SmartyCam 4 GPD support, a "Restore last state at power on" option for
   status variables and power outputs, a fix for GPS position accuracy being multiplied by 100
   in Analysis, a fix for a freeze when saving a custom protocol in a large library, and several
