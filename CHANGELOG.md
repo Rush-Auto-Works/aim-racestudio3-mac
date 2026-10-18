@@ -12,6 +12,20 @@ only this installer is versioned here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.84.04-1] — 2026-10-18
+
+- **Updates the bundled RaceStudio 3 from 3.83.65 to 3.84.04** (AiM release of Oct 8th, 2026).
+  Per AiM's notes: SmartyCam 4 GPD support, a "Restore last state at power on" option for
+  status variables and power outputs, a fix for GPS position accuracy being multiplied by 100
+  in Analysis, a fix for a freeze when saving a custom protocol in a large library, and several
+  fixes for configurations opened from older versions. The installer, WiFi bridge and launcher
+  are unchanged from 3.83.65-1.
+- The weekly updater first tagged this release `v3.84.4-1`, dropping the leading zero of AiM's
+  `3.84.04`. That tag never produced a release (its build failed on a transient `hdiutil convert`
+  error) and is retired. The updater now zero-pads the patch field, and a test fails when
+  `pins.env` disagrees with its own installer filename.
+- Adds the `/update-racestudio3` project skill for checking AiM's download page and releasing.
+
 ## [3.83.65-1] — 2026-10-06
 
 - **Updates the bundled RaceStudio 3 from 3.83.50 to 3.83.65** (AiM release of Sep 30th, 2026).

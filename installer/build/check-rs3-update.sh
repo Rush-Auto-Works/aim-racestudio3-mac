@@ -26,7 +26,7 @@ emit() { printf '%s\n' "$1"; [ -n "${GITHUB_OUTPUT:-}" ] && printf '%s\n' "$1" >
 die()  { echo "check-rs3-update: $1" >&2; exit 1; }
 
 # vercode (e.g. 38320) -> dotted version (3.83.20)
-vercode_to_ver() { printf '%d.%d.%d' $(( $1 / 10000 )) $(( ($1 / 100) % 100 )) $(( $1 % 100 )); }
+vercode_to_ver() { printf '%d.%d.%02d' $(( $1 / 10000 )) $(( ($1 / 100) % 100 )) $(( $1 % 100 )); }
 
 html="$(curl -fsSL --proto '=https' "$PAGE")" || die "couldn't fetch $PAGE"
 
