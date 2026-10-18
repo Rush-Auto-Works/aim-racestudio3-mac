@@ -372,8 +372,8 @@ brand_applet() { # <app> <bundle-id> <name> <icns>
   [ -f "$r/droplet.icns" ] && cp "$icns" "$r/droplet.icns"
   /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $bid" "$pl" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string $bid" "$pl"
   /usr/libexec/PlistBuddy -c "Set :CFBundleName $nm" "$pl" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleName string $nm" "$pl"
-  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$pl" 2>/dev/null || true
-  /usr/libexec/PlistBuddy -c "Add :LSMinimumSystemVersion string $MIN_OS" "$pl" 2>/dev/null || true
+  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$pl" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $VERSION" "$pl"
+  /usr/libexec/PlistBuddy -c "Set :LSMinimumSystemVersion $MIN_OS" "$pl" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :LSMinimumSystemVersion string $MIN_OS" "$pl"
   # osacompile sets CFBundleIconName=applet/droplet, which OVERRIDES CFBundleIconFile and points at a
   # non-existent asset-catalog icon -> blank icon. Remove it so our overwritten .icns is used.
   /usr/libexec/PlistBuddy -c "Delete :CFBundleIconName" "$pl" 2>/dev/null || true

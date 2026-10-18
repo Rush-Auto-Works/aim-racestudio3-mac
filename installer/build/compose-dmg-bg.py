@@ -28,9 +28,10 @@ def load_font(size, bold=False):
     for p in paths:
         try:
             return ImageFont.truetype(p, size)
-        except Exception:
+        except OSError:
             continue
-    return ImageFont.load_default()
+    # PIL's default font lacks glyphs and would put tofu in the DMG caption.
+    raise SystemExit(f"no usable font found for the DMG background, tried: {', '.join(paths)}")
 
 
 def main():
