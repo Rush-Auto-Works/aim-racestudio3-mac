@@ -7,7 +7,7 @@ description: Check AiM's download page for a newer RaceStudio 3 and release it a
 
 Releases the newest AiM RaceStudio 3 through this repo's pipeline. The weekly workflow does steps 1 to 3 on its own; this skill does the same by hand and covers the cases where it stopped halfway.
 
-Read `CLAUDE.md` (Conventions) and `codemaps/build-release.md` first. Tag format is `v<RS3 version>-<pkg rev>`, for example `v3.84.4-1`.
+Read `CLAUDE.md` (Conventions) and `codemaps/build-release.md` first. Tag format is `v<RS3 version>-<pkg rev>`, for example `v3.84.04-1`. The version spells the patch field the way AiM does, two digits (`3.84.04`, never `3.84.4`). `check-rs3-update.sh` builds it from the installer filename's vercode (`38404`) with `%02d`, and `unit-update-pins.sh` fails when `pins.env` disagrees with its own filename. Never type a version or tag by hand: copy `version=` and `tag=` from the script.
 
 ## 1. Find the latest version
 
@@ -17,7 +17,7 @@ Source of truth: https://www.aim-sportline.com/docs/racestudio3/html/release/dow
 bash installer/build/check-rs3-update.sh
 ```
 
-It prints `pinned` and `latest` to stderr and `updated=true|false`. Quote the version from that output, and cross-check it against the page (the page writes `3.84.04`, the pin and tag write `3.84.4`).
+It prints `pinned` and `latest` to stderr and `updated=true|false`. Quote the version from that output, and cross-check it against the page (the page, the pin and the tag all write `3.84.04`).
 
 ## 2. Work out where the release stands
 

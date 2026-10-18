@@ -115,5 +115,27 @@ rc=$?
 cmp -s "$SBX/pins.env" "$before" \
   && ok "pins.env byte-identical after a rejected rewrite" || bad "pins.env was modified by a rejected rewrite"
 
+# --- version spelling: one formatter, and pins.env must agree with it ---------------------------
+# AiM writes the patch field as two digits (3.84.04), and the release tag, DMG name and CHANGELOG
+# header all come from RS3_PINNED_VER. The vercode in the installer filename (38404) is the
+# source of truth, so the formatter must zero-pad the patch, and the committed pin must equal what
+# the formatter makes of its own filename.
+sed -n '/^vercode_to_ver() /p' "$SCRIPT" > "$SBX/vercode.sh"
+[ -s "$SBX/vercode.sh" ] && ok "extracted vercode_to_ver from the real script" || bad "could not extract vercode_to_ver"
+for pair in 38404:3.84.04 38320:3.83.20 38365:3.83.65 37227:3.72.27 38400:3.84.00; do
+  code="${pair%%:*}"; want="${pair#*:}"
+  got="$(bash -c ". '$SBX/vercode.sh'; vercode_to_ver $code")"
+  [ "$got" = "$want" ] && ok "vercode $code -> $want" || bad "vercode $code gave '$got', want $want"
+done
+
+PINFILE="$HERE/../src/pins.env"
+pin_ver="$(sed -nE 's/^RS3_PINNED_VER="(.*)"/\1/p' "$PINFILE" | head -1)"
+pin_file="$(sed -nE 's/^RS3_PINNED_FILE="(.*)"/\1/p' "$PINFILE" | head -1)"
+pin_code="$(printf '%s' "$pin_file" | sed -nE 's#RaceStudio3-64_([0-9]+)_.*#\1#p')"
+want_ver="$(bash -c ". '$SBX/vercode.sh'; vercode_to_ver '$pin_code'" 2>/dev/null)"
+[ -n "$pin_code" ] && [ "$pin_ver" = "$want_ver" ] \
+  && ok "pins.env RS3_PINNED_VER ($pin_ver) matches its installer filename" \
+  || bad "pins.env RS3_PINNED_VER is '$pin_ver' but $pin_file implies '$want_ver'"
+
 echo "unit-update-pins: $P passed, $F failed"
 [ "$F" -eq 0 ]
