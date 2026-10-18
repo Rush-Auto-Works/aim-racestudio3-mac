@@ -145,4 +145,4 @@ More: [installer-design.md](docs/installer-design.md) ·
 > **Independent community project — not affiliated with AiM.** Built by enthusiasts; not owned,
 > sanctioned, or supported by AiM Tech / AiM Sportline. "RaceStudio 3" and "AiM" are trademarks
 > of their respective owners, used here only to describe what this project runs. Use at your own
-> risk. Worked out on a 2026 Apple Silicon Mac with the current RaceStudio 3 release. PRs welcome.
+> risk. Worked out on a 2026 Apple Silicon Mac. PRs welcome.
