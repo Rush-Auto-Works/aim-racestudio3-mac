@@ -18,6 +18,10 @@ ROOT="$HOME/Library/Application Support/RaceStudio3"
 export WINEPREFIX="$ROOT/prefix" WINEARCH=win64 WINEDEBUG=-all
 export WINEDLLOVERRIDES="mscoree=d;mshtml=d"
 export XDG_CACHE_HOME="$ROOT/cache" XDG_CONFIG_HOME="$ROOT/xdg-config" XDG_DATA_HOME="$ROOT/xdg-data"
+# Wine passes the Mac environment through, and a Mac DOTNET_ROOT (e.g. Homebrew .NET) points RS3's
+# .NET Core helper aim_client/MessageHubPipe.exe at macOS binaries: it shows "install .NET Core"
+# and AiM Cloud stops working. The prefix has its own runtime under C:\Program Files\dotnet.
+unset DOTNET_ROOT DOTNET_ROOT_X64
 mkdir -p "$ROOT/logs"
 # Every launch appends to run.log. Past 10 MB, keep it as run.log.1 and start fresh, so a crash
 # log survives one relaunch without growing forever (one +winsock debug session made it 234 MB).

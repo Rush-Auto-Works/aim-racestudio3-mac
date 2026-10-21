@@ -44,6 +44,7 @@ wine_env_export() {
   export XDG_CONFIG_HOME="$INSTALL_ROOT/xdg-config"
   export XDG_DATA_HOME="$INSTALL_ROOT/xdg-data"
   export TMPDIR_WINE="$INSTALL_ROOT/tmp"
+  unset DOTNET_ROOT DOTNET_ROOT_X64   # a Mac .NET path breaks the prefix's .NET Core helper (rs3-engine.sh)
   mkdir -p "$XDG_CACHE_HOME" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$TMPDIR_WINE"
 }
 
