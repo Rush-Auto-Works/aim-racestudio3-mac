@@ -85,6 +85,19 @@ if /usr/bin/arch -x86_64 /usr/bin/true 2>/dev/null; then
     && ok "engine script clears DOTNET_ROOT before wine" || bad "engine script leaks DOTNET_ROOT into wine"
   grep -qx small "$LOGD/run.log" && [ ! -e "$LOGD/run.log.1" ] \
     && ok "engine script leaves a small run.log alone" || bad "engine script rotated a small run.log"
+  # Issue #56: a read-only logs/ with an appendable oversized run.log makes the mv fail. The log must
+  # still be capped (truncated), not left to grow past 10 MB on every launch.
+  head -c 11000000 /dev/zero > "$LOGD/run.log"; chmod 555 "$LOGD"
+  HOME="$SBX/home" bash "$HRES/rs3-engine.sh" >/dev/null 2>&1
+  chmod 755 "$LOGD"
+  [ "$(stat -f %z "$LOGD/run.log" 2>/dev/null || echo 99999999)" -lt 1000000 ] \
+    && ok "engine script truncates run.log when the rotation mv fails" || bad "engine script left an oversized run.log after a failed mv"
+  # Issue #58: a running RS3 still writes to run.log; rotating would strand its output in run.log.1.
+  mkdir -p "$SBX/stubbin"; printf '#!/bin/sh\nexit 0\n' > "$SBX/stubbin/pgrep"; chmod +x "$SBX/stubbin/pgrep"
+  rm -f "$LOGD/run.log.1"; head -c 11000000 /dev/zero > "$LOGD/run.log"
+  PATH="$SBX/stubbin:$PATH" HOME="$SBX/home" bash "$HRES/rs3-engine.sh" >/dev/null 2>&1
+  [ ! -e "$LOGD/run.log.1" ] && [ "$(stat -f %z "$LOGD/run.log" 2>/dev/null || echo 0)" -ge 11000000 ] \
+    && ok "engine script skips rotation while RS3 is running" || bad "engine script rotated run.log under a running RS3"
   [ -f "$SBX/argv" ] && ok "engine script execs the outer app's wine" || bad "engine script did not run outer wine"
   grep -qxF "$SBX/home/Library/Application Support/RaceStudio3/prefix" "$SBX/argv" 2>/dev/null \
     && ok "engine script sets WINEPREFIX" || bad "engine script WINEPREFIX wrong"
@@ -108,6 +121,18 @@ printf 'small\n' > "$RROOT/logs/run.log"
 ROOT="$RROOT" bash -c "$ROTL" 2>/dev/null
 grep -qx small "$RROOT/logs/run.log" 2>/dev/null \
   && ok "launch.sh rotation leaves a small run.log alone" || bad "launch.sh rotation moved a small run.log"
+# Issue #56: the mv fails (read-only logs/) but run.log is still appendable: truncate instead of growing.
+head -c 11000000 /dev/zero > "$RROOT/logs/run.log"; rm -f "$RROOT/logs/run.log.1"; chmod 555 "$RROOT/logs"
+ROOT="$RROOT" bash -c "$ROTL" 2>/dev/null
+chmod 755 "$RROOT/logs"
+[ "$(stat -f %z "$RROOT/logs/run.log" 2>/dev/null || echo 99999999)" -lt 1000000 ] \
+  && ok "launch.sh rotation truncates run.log when the mv fails" || bad "launch.sh rotation left an oversized run.log after a failed mv"
+# Issue #58: skip rotation while RS3 is running (it is still writing to run.log).
+mkdir -p "$SBX/stubbin"; printf '#!/bin/sh\nexit 0\n' > "$SBX/stubbin/pgrep"; chmod +x "$SBX/stubbin/pgrep"
+head -c 11000000 /dev/zero > "$RROOT/logs/run.log"
+PATH="$SBX/stubbin:$PATH" ROOT="$RROOT" bash -c "$ROTL" 2>/dev/null
+[ ! -e "$RROOT/logs/run.log.1" ] && [ "$(stat -f %z "$RROOT/logs/run.log" 2>/dev/null || echo 0)" -ge 11000000 ] \
+  && ok "launch.sh rotation skips while RS3 is running" || bad "launch.sh rotated run.log under a running RS3"
 grep -q 'WINEPREFIX=' "$LS" && ok "launch.sh exports WINEPREFIX" || bad "launch.sh no WINEPREFIX"
 grep -qE '^unset DOTNET_ROOT DOTNET_ROOT_X64' "$LS" && ok "launch.sh clears DOTNET_ROOT" || bad "launch.sh leaks DOTNET_ROOT"
 ( DOTNET_ROOT=/x DOTNET_ROOT_X64=/x PREFIX="$SBX/we/prefix" INSTALL_ROOT="$SBX/we" WINE_BIN=/usr/bin/true

@@ -12,6 +12,13 @@ only this installer is versioned here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+- Log handling edge cases around `run.log` (issues 56, 57 and 58). Addresses: when the log is past
+  10 MB and moving it aside fails, the launchers now truncate it instead of letting it keep growing.
+  Rotation is skipped while RaceStudio 3 is running, so a live session's output isn't stranded in
+  `run.log.1`. Show Logs now lists `run.log.1` in the README when it exists but can't be copied.
+
 ## [3.84.04-2] — 2026-10-21
 
 - **RaceStudio 3 started from a terminal no longer shows "To run this application, you must install
