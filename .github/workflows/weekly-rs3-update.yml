@@ -50,19 +50,5 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.check.outputs.tag }}
           VERSION: ${{ steps.check.outputs.version }}
-        run: |
-          set -euo pipefail
-          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
-            echo "Tag $TAG already exists — re-dispatching release build only."
-            gh workflow run release-dmg.yml --ref "$TAG"
-            exit 0
-          fi
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add installer/src/pins.env
-          git commit -m "chore(pins): bump RaceStudio 3 to $VERSION (auto)"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
-          git tag -a "$TAG" -m "RaceStudio 3 $VERSION (auto)"
-          git push origin "$TAG"
-          gh workflow run release-dmg.yml --ref "$TAG"
-          echo "Bumped to $VERSION, tagged $TAG, dispatched release-dmg."
+        # Commits the corrected pins first even when the tag exists (issue #39), then tags and dispatches.
+        run: bash installer/build/publish-rs3-bump.sh

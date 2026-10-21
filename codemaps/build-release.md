@@ -46,7 +46,7 @@ Key vars: `VERSION` ← `RS3_PINNED_VER` (override `RS3_VERSION`); `VOL="RaceStu
 | File | Trigger | Runner | Does |
 |------|---------|--------|------|
 | `release-dmg.yml` | push tag `v*`, `workflow_dispatch` | `macos-14` (GitHub-hosted) | build+notarize; publish Release ONLY on `refs/tags/*`. DMG referenced via `installer/dist/*.dmg` glob. |
-| `weekly-rs3-update.yml` | cron Mon 12:00 UTC, dispatch | `ubicloud-standard-2` | `check-rs3-update.sh --apply`; if newer: commit pins to main, tag `v<ver>`, `gh workflow run release-dmg.yml --ref <tag>` (GITHUB_TOKEN tag pushes don't auto-trigger → explicit dispatch is the single build). |
+| `weekly-rs3-update.yml` | cron Mon 12:00 UTC, dispatch | `ubicloud-standard-2` | `check-rs3-update.sh --apply`; if newer: `publish-rs3-bump.sh` commits pins to main (even when the tag exists; a stale existing tag fails loudly, #39), tags `v<ver>`, `gh workflow run release-dmg.yml --ref <tag>` (GITHUB_TOKEN tag pushes don't auto-trigger → explicit dispatch is the single build). |
 
 Secrets (release-dmg): `DEVELOPER_ID_CERT_P12` `DEVELOPER_ID_CERT_PASSWORD` `KEYCHAIN_PASSWORD`
 `ASC_KEY_P8` `ASC_KEY_ID` `ASC_ISSUER_ID`; optional `CODESIGN_IDENTITY` `RS3_LOGO_B64`.
