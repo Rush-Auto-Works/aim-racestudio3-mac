@@ -169,3 +169,21 @@ This file is constraints, conventions, and hard-won gotchas only.
   iMovie libraries whose `.fcpcache` links loop back). Nothing is lost by removing it: home folders
   are already `C:\users\<user>\{Desktop,Documents,Downloads,…}` and external volumes get their own
   letters, so host export still works. `collect-logs.sh` reports the drive's presence.
+- **Slow Device Configurations view = RS3 3.83.65's config re-save loop, fixed in 3.84.04.** The view
+  waits on a launch-time job that re-saves configs, about 6 s per MXS config under Wine. On 3.83.65
+  under Wine it re-saved 12 of 20 configs on every launch (Windows: once, then never). On 3.84.04 it
+  re-saved one config on the first two launches, then 0 of 20, and launch CPU fell from 30-42 s to
+  about 14 s. What 3.83.65 checks was never found and isn't worth chasing (issue #67). Measure it by
+  counting `cfgs/` files newer than a launch marker across **two** launches: one launch can't tell a
+  one-time catch-up from a loop. **Ruled out, don't retry:** `options-rs3.txt` dev markers (it loops
+  with a 2-line file), timezone, the `.aimcfg` version history, file mtimes vs `LastModDate`, AES
+  speed, and wineserver `realpath()` (real per-open cost, 2.3x on open+close, but about 10% of total
+  CPU). Separately, the dev marker `WUProts-02 = WebTestPath` fetches ECU protocol indexes from AiM's
+  beta folder, where 7 of 12 files 404, and RS3 saves the 404 page as the index: keep it out of real
+  installs.
+- **A Mac `DOTNET_ROOT` breaks RS3's .NET Core helper.** Wine passes the Mac environment through, and
+  `aim_client/MessageHubPipe.exe` (.NET Core 3.1 apphost) checks `DOTNET_ROOT` before the prefix's
+  own runtime in `C:\Program Files\dotnet`. A Homebrew value points it at macOS binaries, so it shows
+  "install .NET Core" and AiM Cloud fails. Only launches from a shell carry it (launchd has none).
+  All three Wine entry points unset `DOTNET_ROOT` and `DOTNET_ROOT_X64` (PR #68); keep that in any new
+  one, and unset it by hand when running RS3 from a terminal.
