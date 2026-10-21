@@ -66,7 +66,7 @@ if /usr/bin/arch -x86_64 /usr/bin/true 2>/dev/null; then
   OUTER="$SBX/Fake.app/Contents"; HRES="$OUTER/Helpers/RaceStudio 3.app/Contents/Resources"
   mkdir -p "$HRES" "$OUTER/Resources/wine/bin" "$SBX/home"
   cp "$SRC_DIR/rs3-engine.sh" "$HRES/rs3-engine.sh"
-  printf '#!/bin/bash\nprintf "%%s\\n" "$WINEPREFIX" "$@" > "%s/argv"\n' "$SBX" > "$OUTER/Resources/wine/bin/wine"
+  printf '#!/bin/bash\nprintf "%%s\\n" "$WINEPREFIX" "$@" > "%s/argv"\necho "${DOTNET_ROOT-unset} ${DOTNET_ROOT_X64-unset}" > "%s/dotnet-env"\n' "$SBX" "$SBX" > "$OUTER/Resources/wine/bin/wine"
   chmod +x "$OUTER/Resources/wine/bin/wine"
   LOGD="$SBX/home/Library/Application Support/RaceStudio3/logs"; mkdir -p "$LOGD"
   head -c 11000000 /dev/zero > "$LOGD/run.log"   # past the 10 MB rotation threshold
@@ -77,7 +77,12 @@ if /usr/bin/arch -x86_64 /usr/bin/true 2>/dev/null; then
     && ok "engine script starts a fresh run.log" || bad "engine script kept appending to the big run.log"
   mv -f "$LOGD/run.log.1" "$SBX/old-run.log.1"
   printf 'small\n' > "$LOGD/run.log"
-  HOME="$SBX/home" bash "$HRES/rs3-engine.sh" >/dev/null 2>&1
+  # A Mac DOTNET_ROOT (Homebrew .NET) must not reach Wine: RS3's .NET Core helper would load macOS
+  # binaries and prompt "install .NET Core". Run this pass with both variables set, as a shell has them.
+  HOME="$SBX/home" DOTNET_ROOT=/opt/homebrew/opt/dotnet/libexec DOTNET_ROOT_X64=/opt/homebrew/opt/dotnet/libexec \
+    bash "$HRES/rs3-engine.sh" >/dev/null 2>&1
+  grep -qx 'unset unset' "$SBX/dotnet-env" 2>/dev/null \
+    && ok "engine script clears DOTNET_ROOT before wine" || bad "engine script leaks DOTNET_ROOT into wine"
   grep -qx small "$LOGD/run.log" && [ ! -e "$LOGD/run.log.1" ] \
     && ok "engine script leaves a small run.log alone" || bad "engine script rotated a small run.log"
   [ -f "$SBX/argv" ] && ok "engine script execs the outer app's wine" || bad "engine script did not run outer wine"
@@ -104,6 +109,10 @@ ROOT="$RROOT" bash -c "$ROTL" 2>/dev/null
 grep -qx small "$RROOT/logs/run.log" 2>/dev/null \
   && ok "launch.sh rotation leaves a small run.log alone" || bad "launch.sh rotation moved a small run.log"
 grep -q 'WINEPREFIX=' "$LS" && ok "launch.sh exports WINEPREFIX" || bad "launch.sh no WINEPREFIX"
+grep -qE '^unset DOTNET_ROOT DOTNET_ROOT_X64' "$LS" && ok "launch.sh clears DOTNET_ROOT" || bad "launch.sh leaks DOTNET_ROOT"
+( DOTNET_ROOT=/x DOTNET_ROOT_X64=/x PREFIX="$SBX/we/prefix" INSTALL_ROOT="$SBX/we" WINE_BIN=/usr/bin/true
+  . "$SRC_DIR/lib/wine.sh" && wine_env_export && [ -z "${DOTNET_ROOT+x}${DOTNET_ROOT_X64+x}" ] ) \
+  && ok "wine_env_export clears DOTNET_ROOT" || bad "wine_env_export leaks DOTNET_ROOT"
 ! grep -q '/.wine' "$LS" && ok "launch.sh never uses ~/.wine" || bad "launch.sh references ~/.wine"
 
 # Every launch must re-drop Wine's `z: -> /` drive (issue #32). That per-launch repeat is how an

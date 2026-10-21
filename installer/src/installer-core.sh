@@ -363,6 +363,7 @@ fi
 export WINEPREFIX="\$ROOT/prefix" WINEARCH=win64 WINEDEBUG=-all
 export WINEDLLOVERRIDES="mscoree=d;mshtml=d"
 export XDG_CACHE_HOME="\$ROOT/cache" XDG_CONFIG_HOME="\$ROOT/xdg-config" XDG_DATA_HOME="\$ROOT/xdg-data"
+unset DOTNET_ROOT DOTNET_ROOT_X64   # a Mac .NET path breaks the prefix's .NET Core helper (rs3-engine.sh)
 mkdir -p "\$ROOT/logs" "\$ROOT/bin"
 # Delete Wine's default \`z: -> /\` drive. Z: hands RS3 the whole Mac as a fixed disk, and RS3
 # recursively walks every fixed drive after a config clone/import — a directory-symlink cycle
