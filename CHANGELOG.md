@@ -12,6 +12,21 @@ only this installer is versioned here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.84.04-2] — 2026-10-21
+
+- **RaceStudio 3 started from a terminal no longer shows "To run this application, you must install
+  .NET Core".** Wine passes the Mac environment through, and a Homebrew `DOTNET_ROOT` sent RS3's
+  .NET Core helper (`aim_client/MessageHubPipe.exe`) to the Mac's .NET instead of the runtime in the
+  prefix, which also broke AiM Cloud. The launcher, the generated `launch.sh` and the installer now
+  clear `DOTNET_ROOT` before starting Wine. Opening RS3 from the Dock or Finder was never affected.
+- A reinstall now stops with "Couldn't remove the old Wine install. Quit RaceStudio 3 and try
+  again." when the old Wine or prefix can't be deleted, instead of carrying on over a half-removed
+  install. The build also fails when it can't write an app's version info into its Info.plist.
+  The rest of that cleanup (dead code, stale docs) changes nothing you'd see.
+- Same RaceStudio 3 3.84.04 as 3.84.04-1. On one Mac with 20 configurations, 3.84.04 also no longer
+  re-saves configurations on every launch the way 3.83.65 did under Wine, which is what made the
+  Device Configurations view slow to open.
+
 ## [3.84.04-1] — 2026-10-18
 
 - **Updates the bundled RaceStudio 3 from 3.83.65 to 3.84.04** (AiM release of Oct 8th, 2026).
