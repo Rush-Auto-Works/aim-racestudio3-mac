@@ -14,6 +14,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.84.08-1] — 2026-10-30
+
+- **Updates the bundled RaceStudio 3 from 3.84.04 to 3.84.08** (AiM release of Oct 21st, 2026).
+  Per AiM's notes: a search bar in the ECU protocol and CAN Builder protocol windows, a "Dash Item"
+  panel in Analysis, lower CPU use while moving the cursor on graphs, a fix for slow start-up with
+  many configurations, a fix for configuration names in non-Latin characters, and Ethernet settings
+  for the SmartyCam 4 GP Dual. The Wi-Fi bridge is unchanged.
 - Log handling edge cases around `run.log` (issues 56, 57 and 58). Addresses: when the log is past
   10 MB and moving it aside fails, the launchers now truncate it instead of letting it keep growing.
   Rotation is skipped while RaceStudio 3 is running, so a live session's output isn't stranded in

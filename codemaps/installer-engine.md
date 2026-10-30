@@ -77,5 +77,5 @@ run Wine as the applet's own child: on macOS 27 that makes it a subordinate that
 
 `bash installer/test/run-all.sh` (unit-{data,ledger,net,preflight,validators,launcher} + unit-pins-online + dryrun-test).
 `unit-pins-online.sh` = NETWORK test: HEADs the pinned RS3/Wine URLs, asserts size matches the pin;
-skips (77) offline or when `RS3_SKIP_ONLINE=1`. CI (`tests.yml`, macos-14) runs it only on the daily
+skips (77) offline or when `RS3_SKIP_ONLINE=1`. CI (`tests.yml`, macos-15) runs it only on the daily
 schedule, not on the PR gate. `e2e-local.sh` = offline real install. `harness.sh` = assert helpers.

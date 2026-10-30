@@ -8,7 +8,7 @@ tags the release and dispatches this workflow.
 
 The DMG needs Apple-only tooling (`osacompile`, `codesign`, `hdiutil`, `notarytool`, `iconutil`,
 `sips`). None exist on Linux, so the org's Ubicloud (Ubuntu) runners can't build it. The workflow
-uses GitHub-hosted **`macos-14`** (free minutes on a public repo). To self-host on a Mac instead,
+uses GitHub-hosted **`macos-15`** (free minutes on a public repo). To self-host on a Mac instead,
 change `runs-on:` to your runner's labels.
 
 ## Trigger
