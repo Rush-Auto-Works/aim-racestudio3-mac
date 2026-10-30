@@ -4,7 +4,7 @@
 import Foundation
 
 let script = Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/rs3-engine.sh").path
-// Explicit types: the macos-14 runner's Swift can't infer the element type of a mixed literal.
+// Explicit types: older Swift (the old macos-14 runner's) can't infer the element type of a mixed literal.
 let args: [String] = ["/bin/bash", script]
 var argv: [UnsafeMutablePointer<CChar>?] = args.map { strdup($0) }
 argv.append(nil)

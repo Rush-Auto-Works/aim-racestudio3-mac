@@ -35,11 +35,11 @@ has no x86_64 FreeType (which would abort an x86_64 configure) and `winemac.so` 
 ## CI integration — build in CI (matches the bridge)
 
 Same decision as the bridge's `ws2_32.dll` / `wlanapi.dll`: **build the module in CI, don't commit a
-prebuilt blob.** `release-dmg.yml` runs `build-winemac-so.sh` on the `macos-14` runner; `build-apps.sh`
+prebuilt blob.** `release-dmg.yml` runs `build-winemac-so.sh` on the `macos-15` runner; `build-apps.sh`
 step 1d swaps the result into the bundle (fail-loud under `HARDENED_RUNTIME=1`). Keeping it source-built
 means it tracks `WINE_PINNED_VER` automatically on a Wine bump, with no binary to re-cut by hand.
 
-> CI note: the `macos-14` runner is Apple Silicon. The winemac build runs under `arch -x86_64`, so the
+> CI note: the `macos-15` runner is Apple Silicon. The winemac build runs under `arch -x86_64`, so the
 > runner must have Rosetta 2 available. If a runner image lacks it, the build fails loudly at the
 > arch guard (it does not ship arm64) — install Rosetta in the workflow step before building.
 
