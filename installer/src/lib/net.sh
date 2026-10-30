@@ -27,6 +27,16 @@ validate_rs3_asset() {  # <s> : RaceStudio3-64_38320_..._145224.exe
   printf '%s' "$1" | grep -Eq '^RaceStudio3-64_[0-9]+(_[0-9]+){3,}\.exe$'
 }
 
+# set_curl_opts <url> -> sets the CURL_OPTS array for fetching <url>. AiM URLs also get the
+# request shape of RS3's WebUpdater (HTTP/1.1 + AIM_HTTP_UA, see pins.env); without it AiM's
+# site answers 403. The array is never empty, so "${CURL_OPTS[@]}" is safe under bash 3.2 set -u.
+set_curl_opts() {  # <url>
+  CURL_OPTS=(--proto '=https')
+  case "$1" in
+    https://www.aim-sportline.com/*) CURL_OPTS+=(--http1.1 -A "$AIM_HTTP_UA") ;;
+  esac
+}
+
 # rs3_url_from_html <html> <filename> -> prints the first https href for <filename> in <html>.
 # Pure (no network) so it's unit-testable. Exact-filename only, so even when the page lists
 # several versions we return the SAME file the pin names — the caller re-verifies size+sha.
@@ -45,7 +55,8 @@ rs3_url_from_page() {  # <page_url> <filename>
   local page="$1" file="$2" html
   validate_rs3_asset "$file" || return 1
   https_guard "$page" || return 1
-  html="$(curl -fsSL --proto '=https' --max-time 60 "$page" 2>/dev/null)" || return 1
+  set_curl_opts "$page"
+  html="$(curl "${CURL_OPTS[@]}" -fsSL --compressed --max-time 60 "$page" 2>/dev/null)" || return 1
   rs3_url_from_html "$html" "$file"
 }
 
@@ -78,7 +89,8 @@ download_verified() {
 
   # -f: fail (nonzero) on HTTP >=400 so a 403/404 body is never saved as the file.
   # -C -: resume the partial. --max-time bounds the whole transfer.
-  if ! watchdog "$tmo" curl -fSL -C - --proto '=https' --max-time "$tmo" \
+  set_curl_opts "$url"
+  if ! watchdog "$tmo" curl "${CURL_OPTS[@]}" -fSL -C - --max-time "$tmo" \
         -o "$part" "$url"; then
     ui_warn "download failed or non-200 for $url"
     return 1

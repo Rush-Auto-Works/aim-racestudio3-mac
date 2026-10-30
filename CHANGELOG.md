@@ -21,6 +21,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   panel in Analysis, lower CPU use while moving the cursor on graphs, a fix for slow start-up with
   many configurations, a fix for configuration names in non-Latin characters, and Ethernet settings
   for the SmartyCam 4 GP Dual. The Wi-Fi bridge is unchanged.
+- **The installer downloads RaceStudio 3 from AiM again.** Since about Oct 26th AiM's site has
+  refused plain downloads, so a new install stopped and asked you to fetch the installer yourself.
+  The installer now asks the way RaceStudio 3's own updater does, and the download works.
 - Log handling edge cases around `run.log` (issues 56, 57 and 58). Addresses: when the log is past
   10 MB and moving it aside fails, the launchers now truncate it instead of letting it keep growing.
   Rotation is skipped while RaceStudio 3 is running, so a live session's output isn't stranded in

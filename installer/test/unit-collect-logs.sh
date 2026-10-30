@@ -194,7 +194,7 @@ assert_true "grep -q 'RS3 version (pinned):    unknown' '$SID'" \
 # README, not dropped silently. Run only when the unreadable file really defeats cp (not root).
 ROOT2="$SANDBOX/appsupport2"; mkdir -p "$ROOT2/logs"
 printf 'x\n' > "$ROOT2/logs/run.log"; printf 'y\n' > "$ROOT2/logs/run.log.1"; chmod 000 "$ROOT2/logs/run.log.1"
-DESK2="$SANDBOX/desktop2"; mkdir -p "$DESK2"
+DESK2="$SANDBOX/desktop-runlog1"; mkdir -p "$DESK2"
 RS3_APP_SUPPORT="$ROOT2" RS3_DESKTOP_DIR="$DESK2" RS3_OPEN_CMD="$SANDBOX/fake-open.sh" bash "$SCRIPT"
 OUT2="$(find "$DESK2" -maxdepth 1 -type d -name 'AiM-Logs-*' | head -1)"
 chmod 644 "$ROOT2/logs/run.log.1"
