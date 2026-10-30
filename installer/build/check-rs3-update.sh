@@ -28,7 +28,7 @@ die()  { echo "check-rs3-update: $1" >&2; exit 1; }
 # vercode (e.g. 38320) -> dotted version (3.83.20)
 vercode_to_ver() { printf '%d.%d.%02d' $(( $1 / 10000 )) $(( ($1 / 100) % 100 )) $(( $1 % 100 )); }
 
-html="$(curl -fsSL --proto '=https' "$PAGE")" || die "couldn't fetch $PAGE"
+html="$(curl -fsSL --proto '=https' --http1.1 -A "$AIM_HTTP_UA" --compressed "$PAGE")" || die "couldn't fetch $PAGE"
 
 # All RaceStudio3-64_<vercode>_..._.exe URLs on the page, then pick the one with the max vercode.
 best_url=""; best_code=0
@@ -65,7 +65,7 @@ emit "file=$latest_file"; emit "url=$best_url"
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 dest="$tmp/$latest_file"
 echo "downloading $best_url …" >&2
-curl -fSL --proto '=https' -o "$dest" "$best_url" || die "download failed: $best_url"
+curl -fSL --proto '=https' --http1.1 -A "$AIM_HTTP_UA" -o "$dest" "$best_url" || die "download failed: $best_url"
 [ -r "$dest" ] || die "downloaded installer not readable: $dest"
 
 # size: `wc -c` is identical on BSD and GNU, so there is no platform branch to get wrong.

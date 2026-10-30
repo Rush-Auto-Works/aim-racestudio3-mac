@@ -100,4 +100,10 @@ assert_eq "$(file_size "$TAMPER")" "$GSIZE" "tampered file is the same size"
 assert_false "verify_local_asset '$TAMPER' '$GNAME' '$GSIZE' '$GSHA'" \
   "rejects a same-name same-size file with different bytes"
 
+# set_curl_opts: AiM URLs get RS3's WebUpdater request shape (else AiM answers 403); others don't.
+set_curl_opts "$RS3_PINNED_URL"
+assert_eq "${CURL_OPTS[*]}" "--proto =https --http1.1 -A $AIM_HTTP_UA" "AiM URL gets HTTP/1.1 + WebUpdater UA"
+set_curl_opts "$WINE_PINNED_URL"
+assert_eq "${CURL_OPTS[*]}" "--proto =https" "non-AiM URL gets only the HTTPS guard"
+
 finish
