@@ -51,7 +51,7 @@ grep -qF '/usr/bin/open ' "$AS" && grep -qF 'Contents/Helpers/RaceStudio 3.app' 
 grep -q '<key>LSUIElement</key><true/>' "$SRC_DIR/../build/build-apps.sh" \
   && ok "helper Info.plist sets LSUIElement" || bad "helper Info.plist missing LSUIElement"
 
-# The helper's executable must compile with the CI toolchain (macos-14 runs this suite). Only the
+# The helper's executable must compile with the CI toolchain (macos-15 runs this suite). Only the
 # tagged release build compiled it before, so a Swift error surfaced at release time, not on the PR.
 if command -v swiftc >/dev/null 2>&1; then
   swiftc -O -target arm64-apple-macos12.0 -o "$SBX/rs3-engine" "$SRC_DIR/rs3-engine.swift" >/dev/null 2>&1 \

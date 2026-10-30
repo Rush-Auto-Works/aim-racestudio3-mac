@@ -17,7 +17,7 @@ This file is constraints, conventions, and hard-won gotchas only.
   newer AiM release and auto-bumps `pins.env` + tags + releases. To do it manually, run
   `installer/build/check-rs3-update.sh --apply` then tag.
 - **The DMG build is macOS-only** (osacompile/codesign/hdiutil/notarytool). It does NOT run on
-  Ubicloud/Linux. `release-dmg.yml` uses `macos-14`; the cheap weekly *check* uses `ubicloud-standard-2`.
+  Ubicloud/Linux. `release-dmg.yml` uses `macos-15`; the cheap weekly *check* uses `ubicloud-standard-2`.
 - **A local `build-apps.sh` run is signed but NOT notarized** (no notary creds locally). Notarized
   artifacts only come from CI (ASC key in secrets) or by setting `NOTARY_PROFILE`/`NOTARY_KEY…`.
 - **CodeRabbit findings**: use the `cr-check` skill (or `~/.claude/scripts/cr-check.sh`), never raw

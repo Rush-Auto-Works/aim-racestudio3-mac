@@ -29,7 +29,7 @@ concurrency:
 
 jobs:
   test:
-    runs-on: macos-14
+    runs-on: macos-15
     env:
       # Deterministic on PR/push; live network pin check only on the scheduled run.
       RS3_SKIP_ONLINE: ${{ github.event_name == 'schedule' && '0' || '1' }}
