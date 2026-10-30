@@ -4,7 +4,8 @@ name: weekly-rs3-update
 # main, tag v<version> (matching the embedded RaceStudio 3 version), and trigger the DMG
 # build+notarize+publish — fully automatic, no human input.
 #
-# Runs the cheap check on Ubicloud; the actual DMG build runs on the macOS release-dmg workflow,
+# Runs on macos-15, not Ubicloud: AiM's Cloudflare answers 403 to the Ubicloud IP even with the
+# WebUpdater request shape (2026-10-30). The DMG build runs on the macOS release-dmg workflow,
 # which we dispatch on the new tag's ref so its release-publish step (gated on refs/tags/*) fires.
 # A GITHUB_TOKEN-pushed tag does NOT auto-trigger release-dmg (GitHub loop-prevention), so the
 # explicit dispatch below is the single build.
@@ -24,7 +25,7 @@ concurrency:
 
 jobs:
   check:
-    runs-on: ubicloud-standard-2
+    runs-on: macos-15
     steps:
       # Pinned to a commit SHA (supply-chain hardening). Default persist-credentials: true is
       # required — the bump/tag step below runs git push/tag with the checkout-provided token.
