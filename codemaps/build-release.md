@@ -33,7 +33,7 @@ Key vars: `VERSION` ← `RS3_PINNED_VER` (override `RS3_VERSION`); `VOL="RaceStu
 | `patch-wine-appname.py <loader> [name]` | Patch `CFBundleName` in the loader's Mach-O `__TEXT,__info_plist` (fixed-size section: strips XML indent, pads). Idempotency scoped to the `CFBundleName` key. |
 | `compose-icon.py <logo> <out> [none\|import\|uninstall]` | 1024² app icon (white rounded tile + RS3 wordmark). Optional badge: `import` = bottom-left orange file→RS3, `uninstall` = bottom-left red trash. |
 | `compose-dmg-bg.py <logo> <out>` | DMG background ("Drag the AiM folder into Applications"). PIL fallback font lacks `▸` → use ASCII. |
-| `check-rs3-update.sh [--apply]` | Scrape AiM page; max `RaceStudio3-64_<vercode>_*.exe` (38320→3.83.20); `--apply` downloads, hashes, rewrites pins.env. |
+| `check-rs3-update.sh [--apply]` | Scrape AiM page (HTTP/1.1 + `AIM_HTTP_UA`, else 403); max `RaceStudio3-64_<vercode>_*.exe` (38320→3.83.20); `--apply` downloads, hashes, rewrites pins.env. |
 
 ## pins.env (source of truth)
 
@@ -46,7 +46,7 @@ Key vars: `VERSION` ← `RS3_PINNED_VER` (override `RS3_VERSION`); `VOL="RaceStu
 | File | Trigger | Runner | Does |
 |------|---------|--------|------|
 | `release-dmg.yml` | push tag `v*`, `workflow_dispatch` | `macos-15` (GitHub-hosted) | build+notarize; publish Release ONLY on `refs/tags/*`. DMG referenced via `installer/dist/*.dmg` glob. |
-| `weekly-rs3-update.yml` | cron Mon 12:00 UTC, dispatch | `ubicloud-standard-2` | `check-rs3-update.sh --apply`; if newer: `publish-rs3-bump.sh` commits pins to main (even when the tag exists; a stale existing tag fails loudly, #39), tags `v<ver>`, `gh workflow run release-dmg.yml --ref <tag>` (GITHUB_TOKEN tag pushes don't auto-trigger → explicit dispatch is the single build). |
+| `weekly-rs3-update.yml` | cron Mon 12:00 UTC, dispatch | `macos-15` (AiM blocks the Ubicloud IP) | `check-rs3-update.sh --apply`; if newer: `publish-rs3-bump.sh` commits pins to main (even when the tag exists; a stale existing tag fails loudly, #39), tags `v<ver>`, `gh workflow run release-dmg.yml --ref <tag>` (GITHUB_TOKEN tag pushes don't auto-trigger → explicit dispatch is the single build). |
 
 Secrets (release-dmg): `DEVELOPER_ID_CERT_P12` `DEVELOPER_ID_CERT_PASSWORD` `KEYCHAIN_PASSWORD`
 `ASC_KEY_P8` `ASC_KEY_ID` `ASC_ISSUER_ID`; optional `CODESIGN_IDENTITY` `RS3_LOGO_B64`.
