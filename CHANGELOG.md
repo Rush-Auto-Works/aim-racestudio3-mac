@@ -12,8 +12,12 @@ only this installer is versioned here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [3.84.08-1] — 2026-10-30
 
+- **Updates the bundled RaceStudio 3 from 3.84.04 to 3.84.08** (AiM build of Oct 21st, 2026).
+  AiM lists what changed on their
+  [release notes page](https://www.aim-sportline.com/docs/racestudio3/html/release/software-release.html).
+  The Wi-Fi bridge is unchanged.
 - Log handling edge cases around `run.log` (issues 56, 57 and 58). Addresses: when the log is past
   10 MB and moving it aside fails, the launchers now truncate it instead of letting it keep growing.
   Rotation is skipped while RaceStudio 3 is running, so a live session's output isn't stranded in
