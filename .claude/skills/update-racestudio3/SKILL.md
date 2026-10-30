@@ -19,6 +19,8 @@ bash installer/build/check-rs3-update.sh
 
 It prints `pinned` and `latest` to stderr and `updated=true|false`. Quote the version from that output, and cross-check it against the page (the page, the pin and the tag all write `3.84.04`).
 
+Run it outside the sandbox. AiM's site returns 403 unless the request uses HTTP/1.1 with `AIM_HTTP_UA` (RS3's WebUpdater user agent, in `pins.env`), and it comes from an IP Cloudflare trusts: this Mac or the `macos-15` runner, not Ubicloud. The script already sends that shape. A 403 here means AiM changed what it checks. Re-capture the shape as the AiM gotcha in `CLAUDE.md` describes, and don't spoof a browser or mirror the installer. To read AiM's release notes for step 3, use the same flags: `curl --http1.1 -A "$AIM_HTTP_UA"`.
+
 ## 2. Work out where the release stands
 
 Run each command on its own (`gh` and `git` only leave the sandbox as the whole command):
