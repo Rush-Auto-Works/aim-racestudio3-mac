@@ -23,8 +23,16 @@ IMPORT_APP="$SANDBOX/AiM/Import RaceStudio 3 Data.app"
 APPS_DIR="$SANDBOX/AiM"
 DATA_DIR="$SANDBOX/AIM_SPORT"
 
-write_uninstall_script
+# Writing the script must not run anything from its text. The heredoc is unquoted, so a backtick
+# in a comment is a command substitution: one used to run `( sleep 2; rm -rf "$APPS" ) &` at
+# install time, and only set -u stopped it. With APPS set to a decoy, that would delete the decoy.
+DECOY="$SANDBOX/decoy"; mkdir -p "$DECOY"
+ERR="$(APPS="$DECOY" write_uninstall_script 2>&1 >/dev/null)"
+sleep 3   # outlast the old background "sleep 2"
 U="$INSTALL_ROOT/bin/uninstall.sh"
+assert_eq "$ERR" "" "writing uninstall.sh prints no errors"
+assert_true "[ -d '$DECOY' ]" "writing uninstall.sh deletes nothing"
+assert_true "grep -Fq '\`do shell script\`' '$U'" "comment backticks are written literally"
 
 assert_file "$U"
 assert_true "[ -x '$U' ]"                                             "uninstall.sh is executable"

@@ -424,7 +424,7 @@ launchctl bootout system/com.rushautoworks.racestudio3.bridge 2>/dev/null || tru
 # inside the bundle, and macOS keeps the launched applet running off its open executable after the
 # bundle is unlinked. rm -rf (not rmdir) so a Finder-dropped .DS_Store / folder Icon can't keep
 # /Applications/AiM alive — the folder is exclusively ours (apps + .command). (A previous
-# `( sleep 2; rm -rf "\$APPS" ) &` was killed when the admin `do shell script` returned, so
+# \`( sleep 2; rm -rf "\$APPS" ) &\` was killed when the admin \`do shell script\` returned, so
 # /Applications/AiM was left behind.)
 rm -rf "\$ROOT" "\$APPS" 2>/dev/null || true
 [ "\$REMOVE_DATA" = 1 ] && rm -rf "\$DATA" 2>/dev/null || true
