@@ -17,7 +17,8 @@ This file is constraints, conventions, and hard-won gotchas only.
   newer AiM release and auto-bumps `pins.env` + tags + releases. To do it manually, run
   `installer/build/check-rs3-update.sh --apply` then tag.
 - **The DMG build is macOS-only** (osacompile/codesign/hdiutil/notarytool). It does NOT run on
-  Ubicloud/Linux. `release-dmg.yml` uses `macos-15`; the cheap weekly *check* uses `ubicloud-standard-2`.
+  Ubicloud/Linux. `release-dmg.yml` and the weekly *check* both use `macos-15` (the check moved off
+  Ubicloud because AiM's Cloudflare blocks that IP; see the AiM gotcha below).
 - **A local `build-apps.sh` run is signed but NOT notarized** (no notary creds locally). Notarized
   artifacts only come from CI (ASC key in secrets) or by setting `NOTARY_PROFILE`/`NOTARY_KEY…`.
 - **CodeRabbit findings**: use the `cr-check` skill (or `~/.claude/scripts/cr-check.sh`), never raw
@@ -187,3 +188,14 @@ This file is constraints, conventions, and hard-won gotchas only.
   "install .NET Core" and AiM Cloud fails. Only launches from a shell carry it (launchd has none).
   All three Wine entry points unset `DOTNET_ROOT` and `DOTNET_ROOT_X64` (PR #68); keep that in any new
   one, and unset it by hand when running RS3 from a terminal.
+- **AiM's site answers 403 unless the request looks like RS3's WebUpdater.** Since about 2026-10-26
+  `www.aim-sportline.com` sits behind a Cloudflare check. It lets a request through only with
+  HTTP/1.1 **and** RS3's WinINet user agent (`AIM_HTTP_UA` in `pins.env`). Either one alone still
+  gets 403, and curl defaults to HTTP/2. Every AiM fetch goes through `lib/net.sh::set_curl_opts`
+  (or adds `--http1.1 -A "$AIM_HTTP_UA"` itself, as `check-rs3-update.sh` does). The IP counts too:
+  a home Mac and GitHub's macos-15 runner get 200, the Ubicloud runner gets 403 with the right
+  shape (2026-10-30). To re-capture the shape if AiM changes it, run RS3 for about a minute with
+  `WINEDEBUG=+wininet` and grep the log for `create_request`. RS3's web updater reads its release
+  index from `/aim-software-betas/elenco-release.htm` (cached in the prefix under
+  `AIM_SPORT/RaceStudio3/web_updates/`). **Ruled out, don't retry:** spoofing a browser user agent
+  over HTTP/2, a headless browser (it gets the JavaScript challenge), and mirroring the installer.
