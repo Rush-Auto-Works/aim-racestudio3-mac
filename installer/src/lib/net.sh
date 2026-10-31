@@ -129,10 +129,13 @@ is_dedup_name() {
 adopt_local_installer() {
   local c="$1" want="$INSTALLER_CACHE/$RS3_PINNED_FILE" tmpd
   if [ "$(dirname "$c")" = "$INSTALLER_CACHE" ]; then printf '%s\n' "$c"; return 0; fi
+  # Only over nothing or a regular file: mv onto a directory drops the copy inside it.
+  if [ -e "$want" ] && [ ! -f "$want" ]; then printf '%s\n' "$c"; return 0; fi
   tmpd="$INSTALLER_CACHE/.adopt.$$"
   if mkdir -p "$tmpd" && ditto "$c" "$tmpd/$RS3_PINNED_FILE" 2>/dev/null \
      && verify_local_asset "$tmpd/$RS3_PINNED_FILE" "$RS3_PINNED_FILE" "$RS3_PINNED_SIZE" "$RS3_PINNED_SHA256" \
-     && mv -f "$tmpd/$RS3_PINNED_FILE" "$want"; then
+     && mv -f "$tmpd/$RS3_PINNED_FILE" "$want" \
+     && verify_local_asset "$want" "$RS3_PINNED_FILE" "$RS3_PINNED_SIZE" "$RS3_PINNED_SHA256"; then
     c="$want"
   fi
   rm -rf "$tmpd" 2>/dev/null || true
