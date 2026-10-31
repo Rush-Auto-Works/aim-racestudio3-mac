@@ -151,12 +151,16 @@ phase_acquire_installer() {
   # RaceStudio 3 — so installing a newer DMG downloaded nothing, installed nothing, and left the
   # user on the old build while the CHANGELOG claimed otherwise. The size+sha check also covers the
   # GUI "choose file" path (RaceStudio3.applescript), which copies whatever the user picks.
-  local pre; pre="$(ui_recall INSTALLER_EXE || true)"
-  if [ -n "$pre" ] && [ "$DRY_RUN" != 1 ]; then
-    if verify_local_asset "$pre" "$RS3_PINNED_FILE" "$RS3_PINNED_SIZE" "$RS3_PINNED_SHA256"; then
-      ui_say "Installer ready."; return 0
-    fi
-    log "ignoring remembered installer (wrong name, size or sha): $pre"
+  # The remembered path first, then any browser-dedup copy ("… (1).exe") the GUI left in the cache:
+  # --reinstall forgets INSTALLER_EXE but keeps a verified dedup copy (ledger_reset_for_reinstall),
+  # and download_verified below only looks at the pinned name.
+  local pre c; pre="$(ui_recall INSTALLER_EXE || true)"
+  if [ "$DRY_RUN" != 1 ]; then
+    for c in ${pre:+"$pre"} "$INSTALLER_CACHE/${RS3_PINNED_FILE%.exe}"?*.exe; do
+      verify_local_asset "$c" "$RS3_PINNED_FILE" "$RS3_PINNED_SIZE" "$RS3_PINNED_SHA256" || continue
+      ui_persist INSTALLER_EXE "$c"; ui_say "Installer ready."; return 0
+    done
+    [ -z "$pre" ] || log "ignoring remembered installer (wrong name, size or sha): $pre"
   fi
 
   if [ "$DRY_RUN" = 1 ]; then
@@ -181,11 +185,15 @@ phase_acquire_installer() {
     fi
   fi
 
-  # Fallback 2: the pinned installer already sitting in ~/Downloads. Name AND bytes must match —
+  # Fallback 2: the pinned installer already sitting in ~/Downloads, under its own name or a
+  # browser's dedup name ("… (1).exe"). Name AND bytes must match (a dedup name needs the sha) —
   # the old size-only check on a `RaceStudio3-64_*.exe` glob would happily install a different
   # build that happened to be the same length.
-  local d="$HOME/Downloads/$RS3_PINNED_FILE"
-  if verify_local_asset "$d" "$RS3_PINNED_FILE" "$RS3_PINNED_SIZE" "$RS3_PINNED_SHA256"; then
+  local d=""
+  for c in "$HOME/Downloads/$RS3_PINNED_FILE" "$HOME/Downloads/${RS3_PINNED_FILE%.exe}"*.exe; do
+    verify_local_asset "$c" "$RS3_PINNED_FILE" "$RS3_PINNED_SIZE" "$RS3_PINNED_SHA256" && { d="$c"; break; }
+  done
+  if [ -n "$d" ]; then
     ditto "$d" "$want" || die "Couldn't copy the installer from Downloads: $d"
     # Verify the COPY, not the source: ditto can truncate it (full cache volume, etc), and a
     # truncated exe would otherwise fail deep inside the MSI instead of here at the source.

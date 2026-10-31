@@ -100,6 +100,20 @@ assert_eq "$(file_size "$TAMPER")" "$GSIZE" "tampered file is the same size"
 assert_false "verify_local_asset '$TAMPER' '$GNAME' '$GSIZE' '$GSHA'" \
   "rejects a same-name same-size file with different bytes"
 
+# A browser that finds the file already in ~/Downloads saves the new one under a dedup name
+# (Chrome "x (1).exe", Firefox "x(1).exe", Safari "x-1.exe" / "x 2.exe"). Those are the same
+# asset, so accept them, but only on a sha match: the name no longer proves the version (issue #43).
+STEM="${GNAME%.exe}"
+for dup in "$STEM (1).exe" "$STEM(2).exe" "$STEM-1.exe" "$STEM 2.exe" "$STEM (12).exe"; do
+  printf 'payload' > "$VLA/$dup"
+  assert_true  "verify_local_asset \"\$VLA/$dup\" '$GNAME' '$GSIZE' '$GSHA'" "accepts dedup name with sha: $dup"
+  assert_false "verify_local_asset \"\$VLA/$dup\" '$GNAME' '$GSIZE'"         "dedup name needs a sha: $dup"
+done
+for bad in "$STEM (1).exe.exe" "${STEM}x.exe" "$STEM (a).exe" "$STEM ().exe" "${STEM%_*}_000001 (1).exe" "$STEM (1).zip"; do
+  printf 'payload' > "$VLA/$bad"
+  assert_false "verify_local_asset \"\$VLA/$bad\" '$GNAME' '$GSIZE' '$GSHA'" "rejects a non-dedup name: $bad"
+done
+
 # set_curl_opts: AiM URLs get RS3's WebUpdater request shape (else AiM answers 403); others don't.
 set_curl_opts "$RS3_PINNED_URL"
 assert_eq "${CURL_OPTS[*]}" "--proto =https --http1.1 -A $AIM_HTTP_UA" "AiM URL gets HTTP/1.1 + WebUpdater UA"

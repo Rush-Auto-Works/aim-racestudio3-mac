@@ -95,4 +95,34 @@ assert_absent "$INSTALLER_CACHE/RaceStudio3-64_38326_000000_000000_20260613_0718
 assert_file   "$INSTALLER_CACHE/wine-staging-11.9-osx64.tar.xz"
 assert_eq "$(ui_recall DATA_DIR)" "$DATA_DIR" "reset: kept the user's chosen data folder"
 
+# --- --reinstall keeps the cached installer that IS the current pin (issue #44) -----------------
+# Deleting it made every reinstall re-download ~310 MB that was just verified. Only an exe matching
+# the pin's name, size AND sha survives; a same-name file with other bytes still goes.
+_SAVED_SIZE="$RS3_PINNED_SIZE"; _SAVED_SHA="$RS3_PINNED_SHA256"
+PINNED_EXE="$INSTALLER_CACHE/$RS3_PINNED_FILE"
+printf 'pinned-payload' > "$PINNED_EXE"
+RS3_PINNED_SIZE="$(file_size "$PINNED_EXE")"; RS3_PINNED_SHA256="$(sha256 "$PINNED_EXE")"
+OLD_EXE="$INSTALLER_CACHE/RaceStudio3-64_38326_000000_000000_20260613_071826.exe"
+: > "$OLD_EXE"
+ui_persist INSTALLER_EXE "$PINNED_EXE"
+ledger_reset_for_reinstall
+assert_file   "$PINNED_EXE"
+assert_absent "$OLD_EXE"
+assert_false "ui_recall INSTALLER_EXE" "reset: still forgets the remembered path"
+
+# The GUI copies a picked file into the cache under its own name, so a browser-dedup copy that
+# passes verification lives there too. Reset must keep it as well: deleting it can leave a
+# reinstall with no installer when the download fails.
+PICKED_EXE="$INSTALLER_CACHE/${RS3_PINNED_FILE%.exe} (1).exe"
+printf 'pinned-payload' > "$PICKED_EXE"
+ledger_reset_for_reinstall
+assert_file   "$PICKED_EXE"
+
+printf 'pinned-paylo4d' > "$PINNED_EXE"      # same name and size, different bytes
+printf 'pinned-paylo4d' > "$PICKED_EXE"
+ledger_reset_for_reinstall
+assert_absent "$PINNED_EXE"
+assert_absent "$PICKED_EXE"
+RS3_PINNED_SIZE="$_SAVED_SIZE"; RS3_PINNED_SHA256="$_SAVED_SHA"
+
 finish

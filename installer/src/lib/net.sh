@@ -111,17 +111,33 @@ download_verified() {
   mv -f "$part" "$dest"
 }
 
+# is_dedup_name <basename> <want_name> : true when basename is want_name plus a browser's
+# duplicate-download suffix before the extension: " (N)", "(N)", "-N" or " N".
+is_dedup_name() {
+  local base="$1" stem="${2%.*}" ext="${2##*.}" mid
+  case "$base" in "$stem"*".$ext") ;; *) return 1 ;; esac
+  mid="${base#"$stem"}"; mid="${mid%".$ext"}"
+  printf '%s' "$mid" | grep -Eq '^( ?\([0-9]+\)|[ -][0-9]+)$'
+}
+
 # verify_local_asset <path> <want_name> <want_size> [want_sha256]
 # True only when the file on disk IS the asset we mean to install. Every path that produces an
 # installer WITHOUT downloading it — a filename remembered in config.env, a file the user picked in
 # the GUI, one found in ~/Downloads — goes through this, so none of them can smuggle in a different
 # (or corrupt) build than download_verified would have accepted. Name is checked as well as bytes:
 # a correct-looking file of the WRONG VERSION is the failure this exists to stop.
+#
+# One loosening: a browser that finds the file already in Downloads saves the new copy under a dedup
+# name (Chrome "x (1).exe", Firefox "x(1).exe", Safari "x-1.exe" or "x 2.exe"). That name no longer
+# proves the version, so it is accepted only when a sha is given and matches (issue #43).
 verify_local_asset() {
-  local p="$1" name="$2" want_size="$3" want_sha="${4:-}"
+  local p="$1" name="$2" want_size="$3" want_sha="${4:-}" base
   case "$p" in *$'\n'*) return 1 ;; esac
   [ -f "$p" ] || return 1
-  [ "$(basename "$p")" = "$name" ] || return 1
+  base="$(basename "$p")"
+  if [ "$base" != "$name" ]; then
+    [ -n "$want_sha" ] && is_dedup_name "$base" "$name" || return 1
+  fi
   [ "$(file_size "$p")" = "$want_size" ] || return 1
   [ -z "$want_sha" ] || [ "$(sha256 "$p")" = "$want_sha" ]
 }

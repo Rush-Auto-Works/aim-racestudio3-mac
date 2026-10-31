@@ -14,6 +14,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- **An installer saved as "… (1).exe" now works.** When the automatic download fails and the right
+  installer is already in Downloads under a browser's duplicate name (Chrome's " (1)", Firefox's
+  "(1)", Safari's "-1"), the app accepts it as long as its checksum matches the pinned build. The
+  "Get the installer" dialog also has a Quit button, so you can close the app without a force quit
+  (issue 43).
+- **A reinstall keeps the RaceStudio 3 installer it already verified** instead of downloading the
+  same 310 MB again. Older cached installers are still removed (issue 44).
+
 ## [3.84.08-1] — 2026-10-30
 
 - **Updates the bundled RaceStudio 3 from 3.84.04 to 3.84.08** (AiM release of Oct 21st, 2026).

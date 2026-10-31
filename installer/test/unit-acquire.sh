@@ -87,6 +87,50 @@ ditto "$ASSET" "$SANDBOX/fakehome/Downloads/$STALE"
 out="$(run_acquire)"; rc=$?
 assert_true "[ $rc -eq 10 ]" "wrong build in Downloads: not accepted"
 
+# --- case 6: the pinned installer saved in ~/Downloads under a browser dedup name -> used ------
+# (issue #43) Same bytes, " (1)" appended by Chrome because an earlier copy was already there.
+rm -f "$ROOT/state/config.env" "$CACHE/$FILE" "$SANDBOX/fakehome/Downloads/"*
+ditto "$ASSET" "$SANDBOX/fakehome/Downloads/${FILE%.exe} (1).exe"
+out="$(run_acquire)"; rc=$?
+assert_true "[ $rc -eq 0 ]" "dedup-named pinned file in Downloads: phase succeeds"
+assert_true "printf '%s' \"\$out\" | grep -q 'Downloads'" "dedup-named pinned file in Downloads: used it"
+assert_file "$CACHE/$FILE"
+
+# --- case 7: a dedup-named DIFFERENT build in ~/Downloads -> not used ---------------------------
+rm -f "$ROOT/state/config.env" "$CACHE/$FILE" "$SANDBOX/fakehome/Downloads/"*
+printf 'other-build-same-name' > "$SANDBOX/fakehome/Downloads/${FILE%.exe} (1).exe"
+out="$(run_acquire)"; rc=$?
+assert_true "[ $rc -eq 10 ]" "dedup-named wrong bytes in Downloads: not accepted"
+
+# --- case 8: the GUI copied a dedup-named pick into the cache and remembered it -> accepted -----
+rm -f "$ROOT/state/config.env" "$SANDBOX/fakehome/Downloads/"*
+PICK="$CACHE/${FILE%.exe} (1).exe"
+ditto "$ASSET" "$PICK"
+printf 'INSTALLER_EXE=%q\n' "$PICK" > "$ROOT/state/config.env"
+out="$(run_acquire)"; rc=$?
+assert_true "[ $rc -eq 0 ]" "GUI-picked dedup name: phase succeeds"
+assert_true "printf '%s' \"\$out\" | grep -q 'Installer ready'" "GUI-picked dedup name: accepted"
+rm -f "$PICK" "$ROOT/state/config.env"
+
+# --- case 9: after --reinstall's reset, the kept current-pin installer is reused (issue #44) -----
+# No remembered path and a dead network: the cached exe alone must satisfy the phase.
+rm -f "$ROOT/state/config.env" "$SANDBOX/fakehome/Downloads/"*
+ditto "$ASSET" "$CACHE/$FILE"
+out="$(run_acquire)"; rc=$?
+assert_true "[ $rc -eq 0 ]" "kept current-pin installer: phase succeeds without a download"
+rm -f "$CACHE/$FILE" "$ROOT/state/config.env"
+
+# --- case 10: only a verified dedup-named copy in the cache, nothing remembered -> used --------
+# (review round 2) A reset forgets INSTALLER_EXE and keeps a verified "… (1).exe"; acquire must find
+# it even when the earlier copy to the pinned name never happened.
+rm -f "$ROOT/state/config.env" "$CACHE/$FILE" "$SANDBOX/fakehome/Downloads/"*
+ditto "$ASSET" "$CACHE/${FILE%.exe} (1).exe"
+out="$(run_acquire)"; rc=$?
+assert_true "[ $rc -eq 0 ]" "dedup copy in cache only: phase succeeds"
+remembered="$( . "$ROOT/state/config.env"; printf '%s' "$INSTALLER_EXE" )"
+assert_eq "$remembered" "$CACHE/${FILE%.exe} (1).exe" "dedup copy in cache only: remembered for silent-install"
+rm -f "$CACHE/"*.exe "$ROOT/state/config.env"
+
 # --- installed-state: a satisfying newer RS3 must skip even without our marker ---------------
 # This exercises phase_silent_install itself. Before the fix, the missing marker sends the phase
 # past the valid installed postcondition and into the installer-exe check below.
