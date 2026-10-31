@@ -181,11 +181,15 @@ phase_acquire_installer() {
     fi
   fi
 
-  # Fallback 2: the pinned installer already sitting in ~/Downloads. Name AND bytes must match —
+  # Fallback 2: the pinned installer already sitting in ~/Downloads, under its own name or a
+  # browser's dedup name ("… (1).exe"). Name AND bytes must match (a dedup name needs the sha) —
   # the old size-only check on a `RaceStudio3-64_*.exe` glob would happily install a different
   # build that happened to be the same length.
-  local d="$HOME/Downloads/$RS3_PINNED_FILE"
-  if verify_local_asset "$d" "$RS3_PINNED_FILE" "$RS3_PINNED_SIZE" "$RS3_PINNED_SHA256"; then
+  local d="" c
+  for c in "$HOME/Downloads/$RS3_PINNED_FILE" "$HOME/Downloads/${RS3_PINNED_FILE%.exe}"*.exe; do
+    verify_local_asset "$c" "$RS3_PINNED_FILE" "$RS3_PINNED_SIZE" "$RS3_PINNED_SHA256" && { d="$c"; break; }
+  done
+  if [ -n "$d" ]; then
     ditto "$d" "$want" || die "Couldn't copy the installer from Downloads: $d"
     # Verify the COPY, not the source: ditto can truncate it (full cache volume, etc), and a
     # truncated exe would otherwise fail deep inside the MSI instead of here at the source.

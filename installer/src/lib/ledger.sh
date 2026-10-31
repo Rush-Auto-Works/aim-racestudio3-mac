@@ -56,9 +56,18 @@ ledger_skip_if_done() {
 # Clearing the markers alone was not enough: the remembered INSTALLER_EXE and the cached exe both
 # survived, so "reinstall" faithfully reinstalled the same old RaceStudio 3. Keeps the rest of
 # config.env (DATA_DIR above all) and keeps the Wine tarball, which is sha-verified on reuse —
-# no reason to make every reinstall re-download 190 MB.
+# no reason to make every reinstall re-download 190 MB. The same goes for a cached installer that
+# IS the current pin (name, size and sha): only older builds go, so a reinstall doesn't re-fetch
+# ~310 MB it just verified (issue #44). acquire-installer finds the kept one via download_verified.
 ledger_reset_for_reinstall() {
   rm -f "$STATE_DIR"/*.ok 2>/dev/null || true
   ui_forget INSTALLER_EXE
-  rm -f "$INSTALLER_CACHE"/RaceStudio3-64_*.exe 2>/dev/null || true
+  local f
+  for f in "$INSTALLER_CACHE"/RaceStudio3-64_*.exe; do
+    [ -e "$f" ] || continue
+    [ "$(basename "$f")" = "$RS3_PINNED_FILE" ] \
+      && verify_local_asset "$f" "$RS3_PINNED_FILE" "$RS3_PINNED_SIZE" "$RS3_PINNED_SHA256" \
+      && continue
+    rm -f "$f" 2>/dev/null || true
+  done
 }

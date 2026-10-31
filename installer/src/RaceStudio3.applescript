@@ -418,7 +418,9 @@ on handleNeeds(coreScript, out)
 			set wantFile to do shell script "printf '%s' " & quoted form of out & " | sed -n 's|.*NEEDS_INSTALLER: \\([A-Za-z0-9._-]*\\).*|\\1|p' | head -1"
 		end try
 		if wantFile is "" then set wantFile to "RaceStudio3-64_….exe"
-		display dialog "I couldn't download the RaceStudio 3 installer automatically. I'll open AiM's download page — save “" & wantFile & "”, then choose it on the next screen." buttons {"Open AiM page"} default button 1 with title "Get the installer" with icon note
+		-- "Quit" is the way out for a user who can't get the file right now; without it the only exit
+		-- was a force quit (issue #43). error -128 is the same user-cancel every other dialog uses.
+		set b to button returned of (display dialog "I couldn't download the RaceStudio 3 installer automatically. I'll open AiM's download page — save “" & wantFile & "”, then choose it on the next screen." buttons {"Quit", "Open AiM page"} default button "Open AiM page" cancel button "Quit" with title "Get the installer" with icon note)
 		try
 			do shell script "open 'https://www.aim-sportline.com/docs/racestudio3/html/release/download-release.html'"
 		end try
