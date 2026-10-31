@@ -14,6 +14,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.84.08-2] — 2026-10-31
+
 - **An installer saved as "… (1).exe" now works.** When the automatic download fails and the right
   installer is already in Downloads under a browser's duplicate name (Chrome's " (1)", Firefox's
   "(1)", Safari's "-1"), the app accepts it as long as its checksum matches the pinned build. The
