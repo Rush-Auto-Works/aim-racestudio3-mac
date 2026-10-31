@@ -147,6 +147,15 @@ out="$(run_acquire)"; rc=$?
 assert_true "[ $rc -eq 0 ]" "external remembered installer: still found after reset"
 rm -rf "$SANDBOX/elsewhere" "$CACHE/"*.exe "$ROOT/state/config.env"
 
+# --- case 12: one in a cache SUBDIRECTORY is copied to the cache root too (review of #83) -------
+rm -f "$ROOT/state/config.env" "$CACHE/"*.exe
+SUB="$CACHE/sub/$FILE"; mkdir -p "$CACHE/sub"; ditto "$ASSET" "$SUB"
+printf 'INSTALLER_EXE=%q\n' "$SUB" > "$ROOT/state/config.env"
+out="$(run_acquire)"; rc=$?
+assert_true "[ $rc -eq 0 ]" "cache-subdir installer: accepted"
+assert_file "$CACHE/$FILE"
+rm -rf "$CACHE/sub" "$CACHE/"*.exe "$ROOT/state/config.env"
+
 # --- installed-state: a satisfying newer RS3 must skip even without our marker ---------------
 # This exercises phase_silent_install itself. Before the fix, the missing marker sends the phase
 # past the valid installed postcondition and into the installer-exe check below.

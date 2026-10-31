@@ -120,6 +120,25 @@ is_dedup_name() {
   printf '%s' "$mid" | grep -Eq '^( ?\([0-9]+\)|[ -][0-9]+)$'
 }
 
+# adopt_local_installer <verified path> : prints the path to install from. One that isn't directly
+# in $INSTALLER_CACHE (a hand-edited or older config.env, a cache subfolder) is copied to the pinned
+# name there, because --reinstall forgets INSTALLER_EXE and later lookups only check the cache root
+# and Downloads (issue #82). The copy goes through a scratch folder and replaces the cache entry
+# only once it verifies, so a failed copy (full disk) never removes a good one; then the original
+# path is printed and the install still works.
+adopt_local_installer() {
+  local c="$1" want="$INSTALLER_CACHE/$RS3_PINNED_FILE" tmpd
+  if [ "$(dirname "$c")" = "$INSTALLER_CACHE" ]; then printf '%s\n' "$c"; return 0; fi
+  tmpd="$INSTALLER_CACHE/.adopt.$$"
+  if mkdir -p "$tmpd" && ditto "$c" "$tmpd/$RS3_PINNED_FILE" 2>/dev/null \
+     && verify_local_asset "$tmpd/$RS3_PINNED_FILE" "$RS3_PINNED_FILE" "$RS3_PINNED_SIZE" "$RS3_PINNED_SHA256" \
+     && mv -f "$tmpd/$RS3_PINNED_FILE" "$want"; then
+    c="$want"
+  fi
+  rm -rf "$tmpd" 2>/dev/null || true
+  printf '%s\n' "$c"
+}
+
 # verify_local_asset <path> <want_name> <want_size> [want_sha256]
 # True only when the file on disk IS the asset we mean to install. Every path that produces an
 # installer WITHOUT downloading it — a filename remembered in config.env, a file the user picked in
