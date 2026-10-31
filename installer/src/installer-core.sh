@@ -158,6 +158,7 @@ phase_acquire_installer() {
   if [ "$DRY_RUN" != 1 ]; then
     for c in ${pre:+"$pre"} "$INSTALLER_CACHE/${RS3_PINNED_FILE%.exe}"?*.exe; do
       verify_local_asset "$c" "$RS3_PINNED_FILE" "$RS3_PINNED_SIZE" "$RS3_PINNED_SHA256" || continue
+      c="$(adopt_local_installer "$c")"   # one outside the cache is copied in (issue #82)
       ui_persist INSTALLER_EXE "$c"; ui_say "Installer ready."; return 0
     done
     [ -z "$pre" ] || log "ignoring remembered installer (wrong name, size or sha): $pre"

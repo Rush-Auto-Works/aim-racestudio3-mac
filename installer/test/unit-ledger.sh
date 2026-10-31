@@ -123,6 +123,31 @@ printf 'pinned-paylo4d' > "$PICKED_EXE"
 ledger_reset_for_reinstall
 assert_absent "$PINNED_EXE"
 assert_absent "$PICKED_EXE"
+# A verified installer remembered OUTSIDE the cache is copied in before reset forgets the path,
+# or an offline reinstall can't find it (issue #82, an older config.env reaching --reinstall).
+rm -f "$INSTALLER_CACHE"/*.exe
+EXT_DIR="$(dirname "$INSTALLER_CACHE")/elsewhere"; mkdir -p "$EXT_DIR"
+printf 'pinned-payload' > "$EXT_DIR/$RS3_PINNED_FILE"
+ui_persist INSTALLER_EXE "$EXT_DIR/$RS3_PINNED_FILE"
+ledger_reset_for_reinstall
+assert_file  "$INSTALLER_CACHE/$RS3_PINNED_FILE"
+assert_false "ui_recall INSTALLER_EXE" "reset: forgets the external path after copying it in"
+rm -rf "$EXT_DIR" "$INSTALLER_CACHE"/*.exe
+
+# adopt_local_installer never clobbers a good cache entry when its copy fails.
+printf 'pinned-payload' > "$INSTALLER_CACHE/$RS3_PINNED_FILE"
+assert_eq "$(adopt_local_installer "$(dirname "$INSTALLER_CACHE")/missing/$RS3_PINNED_FILE")" \
+  "$(dirname "$INSTALLER_CACHE")/missing/$RS3_PINNED_FILE" "adopt: a failed copy returns the original path"
+assert_file "$INSTALLER_CACHE/$RS3_PINNED_FILE"
+rm -f "$INSTALLER_CACHE"/*.exe
+# A DIRECTORY at the pinned cache name: mv would drop the copy inside it, so adopt must keep the
+# original path rather than return the directory.
+mkdir -p "$INSTALLER_CACHE/$RS3_PINNED_FILE"
+EXT_DIR="$(dirname "$INSTALLER_CACHE")/elsewhere"; mkdir -p "$EXT_DIR"
+printf 'pinned-payload' > "$EXT_DIR/$RS3_PINNED_FILE"
+assert_eq "$(adopt_local_installer "$EXT_DIR/$RS3_PINNED_FILE")" "$EXT_DIR/$RS3_PINNED_FILE" \
+  "adopt: a directory at the cache name keeps the original path"
+rm -rf "$EXT_DIR" "$INSTALLER_CACHE/$RS3_PINNED_FILE"
 RS3_PINNED_SIZE="$_SAVED_SIZE"; RS3_PINNED_SHA256="$_SAVED_SHA"
 
 finish

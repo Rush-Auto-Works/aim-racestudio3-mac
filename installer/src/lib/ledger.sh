@@ -61,6 +61,11 @@ ledger_skip_if_done() {
 # builds go, so a reinstall doesn't re-fetch ~310 MB it just verified (issue #44).
 ledger_reset_for_reinstall() {
   rm -f "$STATE_DIR"/*.ok 2>/dev/null || true
+  # Copy a verified installer remembered outside the cache in before forgetting its path (#82).
+  local pre; pre="$(ui_recall INSTALLER_EXE || true)"
+  if [ -n "$pre" ] && verify_local_asset "$pre" "$RS3_PINNED_FILE" "$RS3_PINNED_SIZE" "$RS3_PINNED_SHA256"; then
+    adopt_local_installer "$pre" >/dev/null
+  fi
   ui_forget INSTALLER_EXE
   local f
   for f in "$INSTALLER_CACHE"/RaceStudio3-64_*.exe; do
