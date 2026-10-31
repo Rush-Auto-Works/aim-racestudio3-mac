@@ -131,6 +131,22 @@ remembered="$( . "$ROOT/state/config.env"; printf '%s' "$INSTALLER_EXE" )"
 assert_eq "$remembered" "$CACHE/${FILE%.exe} (1).exe" "dedup copy in cache only: remembered for silent-install"
 rm -f "$CACHE/"*.exe "$ROOT/state/config.env"
 
+# --- case 11: a verified installer remembered OUTSIDE the cache survives --reinstall (issue #82) --
+# Acquire must copy it into the cache: reset forgets INSTALLER_EXE, and the later lookup only sees
+# the cache and Downloads.
+rm -f "$ROOT/state/config.env" "$CACHE/"*.exe "$SANDBOX/fakehome/Downloads/"*
+EXT="$SANDBOX/elsewhere/$FILE"; mkdir -p "$SANDBOX/elsewhere"; ditto "$ASSET" "$EXT"
+printf 'INSTALLER_EXE=%q\n' "$EXT" > "$ROOT/state/config.env"
+out="$(run_acquire)"; rc=$?
+assert_true "[ $rc -eq 0 ]" "external remembered installer: accepted"
+assert_file "$CACHE/$FILE"
+remembered="$( . "$ROOT/state/config.env"; printf '%s' "$INSTALLER_EXE" )"
+assert_eq "$remembered" "$CACHE/$FILE" "external remembered installer: cache copy remembered"
+rm -f "$ROOT/state/config.env"                       # what ledger_reset_for_reinstall does to it
+out="$(run_acquire)"; rc=$?
+assert_true "[ $rc -eq 0 ]" "external remembered installer: still found after reset"
+rm -rf "$SANDBOX/elsewhere" "$CACHE/"*.exe "$ROOT/state/config.env"
+
 # --- installed-state: a satisfying newer RS3 must skip even without our marker ---------------
 # This exercises phase_silent_install itself. Before the fix, the missing marker sends the phase
 # past the valid installed postcondition and into the installer-exe check below.

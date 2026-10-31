@@ -21,6 +21,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (issue 43).
 - **A reinstall keeps the RaceStudio 3 installer it already verified** instead of downloading the
   same 310 MB again. Older cached installers are still removed (issue 44).
+- An installer the app remembered from outside its own folder is now copied in, so a later
+  reinstall still finds it when the download fails (issue 82).
 
 ## [3.84.08-1] — 2026-10-30
 
