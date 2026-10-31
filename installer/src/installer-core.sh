@@ -151,20 +151,16 @@ phase_acquire_installer() {
   # RaceStudio 3 — so installing a newer DMG downloaded nothing, installed nothing, and left the
   # user on the old build while the CHANGELOG claimed otherwise. The size+sha check also covers the
   # GUI "choose file" path (RaceStudio3.applescript), which copies whatever the user picks.
-  local pre; pre="$(ui_recall INSTALLER_EXE || true)"
-  if [ -n "$pre" ] && [ "$DRY_RUN" != 1 ]; then
-    if verify_local_asset "$pre" "$RS3_PINNED_FILE" "$RS3_PINNED_SIZE" "$RS3_PINNED_SHA256"; then
-      # A GUI pick can be a browser-dedup name ("… (1).exe"). Store it under the pinned name as
-      # well: --reinstall forgets INSTALLER_EXE, and download_verified only looks at $want.
-      if [ "$pre" != "$want" ] && ditto "$pre" "$want" \
-         && verify_local_asset "$want" "$RS3_PINNED_FILE" "$RS3_PINNED_SIZE" "$RS3_PINNED_SHA256"; then
-        ui_persist INSTALLER_EXE "$want"
-      elif [ "$pre" != "$want" ]; then
-        rm -f "$want" 2>/dev/null || true   # a truncated copy must not pass for the pinned exe
-      fi
-      ui_say "Installer ready."; return 0
-    fi
-    log "ignoring remembered installer (wrong name, size or sha): $pre"
+  # The remembered path first, then any browser-dedup copy ("… (1).exe") the GUI left in the cache:
+  # --reinstall forgets INSTALLER_EXE but keeps a verified dedup copy (ledger_reset_for_reinstall),
+  # and download_verified below only looks at the pinned name.
+  local pre c; pre="$(ui_recall INSTALLER_EXE || true)"
+  if [ "$DRY_RUN" != 1 ]; then
+    for c in ${pre:+"$pre"} "$INSTALLER_CACHE/${RS3_PINNED_FILE%.exe}"?*.exe; do
+      verify_local_asset "$c" "$RS3_PINNED_FILE" "$RS3_PINNED_SIZE" "$RS3_PINNED_SHA256" || continue
+      ui_persist INSTALLER_EXE "$c"; ui_say "Installer ready."; return 0
+    done
+    [ -z "$pre" ] || log "ignoring remembered installer (wrong name, size or sha): $pre"
   fi
 
   if [ "$DRY_RUN" = 1 ]; then
@@ -193,7 +189,7 @@ phase_acquire_installer() {
   # browser's dedup name ("… (1).exe"). Name AND bytes must match (a dedup name needs the sha) —
   # the old size-only check on a `RaceStudio3-64_*.exe` glob would happily install a different
   # build that happened to be the same length.
-  local d="" c
+  local d=""
   for c in "$HOME/Downloads/$RS3_PINNED_FILE" "$HOME/Downloads/${RS3_PINNED_FILE%.exe}"*.exe; do
     verify_local_asset "$c" "$RS3_PINNED_FILE" "$RS3_PINNED_SIZE" "$RS3_PINNED_SHA256" && { d="$c"; break; }
   done
