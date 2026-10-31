@@ -12,11 +12,12 @@ Windows-guest support.
 
 macOS shows "Support Ending for Intel-based Apps" for `RaceStudio 3.app`. The entire bundled
 Wine runtime - `wine`/`wineserver`/unix libs (prebuilt, `pins.env` `WINE_PINNED_URL`) plus our
-from-source patches `winemac.so` (`installer/wine-patch/build-winemac-so.sh`), `ws2_32.dll`/
-`wlanapi.dll` (`installer/bridge/wine-patch/build-wine-dlls.sh`), and `wineusb.so`
-(`installer/wine-patch/build-wineusb-so.sh`) - is x86_64 Mach-O, whole-process-translated by
-Rosetta 2 (`arch -x86_64` in `installer/src/lib/wine.sh`, `installer-core.sh`, and every
-from-source build script). RS3 itself is a Windows **x86_64 PE** binary
+from-source unix modules `winemac.so` (`installer/wine-patch/build-winemac-so.sh`) and
+`wineusb.so` (`installer/wine-patch/build-wineusb-so.sh`) - is x86_64 Mach-O, whole-process-
+translated by Rosetta 2 (`arch -x86_64` in `installer/src/lib/wine.sh`, `installer-core.sh`, and
+those two build scripts). Our patched `ws2_32.dll`/`wlanapi.dll`
+(`installer/bridge/wine-patch/build-wine-dlls.sh`) are Windows PE DLLs cross-built with mingw, no
+Rosetta involved. RS3 itself is a Windows **x86_64 PE** binary
 (`AiMRS3-64-ReleaseU.exe`), so even a native-arm64 Wine host would still need *some* x86_64
 CPU-translation path for the guest code - the host-process architecture and the guest-code
 translation are two separate problems, and today nothing solves either half without Rosetta.
@@ -54,9 +55,9 @@ translation are two separate problems, and today nothing solves either half with
 ## Why "just build Wine for arm64 ourselves" doesn't work today
 
 The project already has the toolchain to build individual Wine modules from source
-(`build-winemac-so.sh`, `build-wineusb-so.sh`, `build-wine-dlls.sh` all cross-build PE/unix
-modules under `arch -x86_64`). That does NOT transfer to building the whole unix host side as
-arm64, because the missing piece isn't compiler support - `HOST_ARCH=aarch64` already works —
+(`build-winemac-so.sh` and `build-wineusb-so.sh` build unix modules under `arch -x86_64`;
+`build-wine-dlls.sh` cross-builds PE DLLs with mingw). That does NOT transfer to building the whole unix host side as
+arm64, because the missing piece isn't compiler support - `HOST_ARCH=aarch64` already works -
 it's the x86_64-guest-code-translation layer that has to live *inside* an arm64 host process.
 The only implementation of that on macOS is CodeWeavers' unreleased CrossOver-27 work; nothing
 public or upstream provides it. Building it ourselves would mean reimplementing an unreleased
@@ -73,7 +74,8 @@ Intel-app check never fires on it. This fully sidesteps the warning, but:
 - needs a Windows 11 license (Parallels bundles/sells one; UTM does not provide one),
 - adds VM overhead vs. a Wine process,
 - abandons this project's entire premise - a free, one-click, no-Windows-license installer
-  (see `README.md`, and CLAUDE.md's framing: "no Windows/Parallels/CrossOver").
+  (see `README.md`, "no Windows, no Parallels", and `codemaps/architecture.md`: "no
+  Windows/Parallels/CrossOver").
 
 Not pursued for those reasons, but recorded here as the one alternative that *does* technically
 solve the problem today.
