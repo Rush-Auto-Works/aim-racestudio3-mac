@@ -127,7 +127,8 @@ rm -f "$ROOT/state/config.env" "$CACHE/$FILE" "$SANDBOX/fakehome/Downloads/"*
 ditto "$ASSET" "$CACHE/${FILE%.exe} (1).exe"
 out="$(run_acquire)"; rc=$?
 assert_true "[ $rc -eq 0 ]" "dedup copy in cache only: phase succeeds"
-assert_true "grep -q 'INSTALLER_EXE=.*\\(1\\)' '$ROOT/state/config.env'" "dedup copy in cache only: remembered for silent-install"
+remembered="$( . "$ROOT/state/config.env"; printf '%s' "$INSTALLER_EXE" )"
+assert_eq "$remembered" "$CACHE/${FILE%.exe} (1).exe" "dedup copy in cache only: remembered for silent-install"
 rm -f "$CACHE/"*.exe "$ROOT/state/config.env"
 
 # --- installed-state: a satisfying newer RS3 must skip even without our marker ---------------
