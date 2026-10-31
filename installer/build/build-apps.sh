@@ -454,6 +454,20 @@ elif [ -n "${NOTARY_KEY:-}" ] && [ -n "${NOTARY_KEY_ID:-}" ] && [ -n "${NOTARY_I
 elif [ -n "${NOTARY_APPLE_ID:-}" ] && [ -n "${NOTARY_PASSWORD:-}" ]; then
   NOTARY_ARGS="--apple-id $NOTARY_APPLE_ID --password $NOTARY_PASSWORD --team-id $TEAMID"
 fi
+# stapler fetches the ticket from Apple's CloudKit, which drops connections from CI runners now and
+# then ("NSURLErrorDomain -1005 The network connection was lost", rc 68 - it hit the pkg, then the
+# Show Logs app, on two v3.84.08-2 runs 2026-10-31). The notarization had already been Accepted,
+# so retry the staple alone, with backoff, instead of failing the release.
+staple_retry() { # <path>
+  local t="$1" i
+  for i in 1 2 3 4; do
+    xcrun stapler staple "$t" && return 0
+    [ "$i" -lt 4 ] || break
+    echo "stapler failed for $(basename "$t") (attempt $i of 4); retrying in $((i * 20))s"
+    sleep $((i * 20))
+  done
+  return 1
+}
 notarize_staple() { # <path>
   [ -n "$NOTARY_ARGS" ] || return 2
   local t="$1" submitpath
@@ -464,7 +478,7 @@ notarize_staple() { # <path>
   # shellcheck disable=SC2086
   if xcrun notarytool submit "$submitpath" $NOTARY_ARGS --wait; then
     [ "${t##*.}" = "app" ] && rm -f "$submitpath"
-    xcrun stapler staple "$t" && say "stapled $(basename "$t")"
+    staple_retry "$t" && say "stapled $(basename "$t")"
   else echo "notarytool failed for $t"; [ "${t##*.}" = "app" ] && rm -f "$submitpath"; return 1; fi
 }
 # rc 2 = no notarytool credentials configured (fine — signed-only build); any other nonzero is
