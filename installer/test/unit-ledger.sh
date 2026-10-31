@@ -110,9 +110,19 @@ assert_file   "$PINNED_EXE"
 assert_absent "$OLD_EXE"
 assert_false "ui_recall INSTALLER_EXE" "reset: still forgets the remembered path"
 
+# The GUI copies a picked file into the cache under its own name, so a browser-dedup copy that
+# passes verification lives there too. Reset must keep it as well: deleting it can leave a
+# reinstall with no installer when the download fails.
+PICKED_EXE="$INSTALLER_CACHE/${RS3_PINNED_FILE%.exe} (1).exe"
+printf 'pinned-payload' > "$PICKED_EXE"
+ledger_reset_for_reinstall
+assert_file   "$PICKED_EXE"
+
 printf 'pinned-paylo4d' > "$PINNED_EXE"      # same name and size, different bytes
+printf 'pinned-paylo4d' > "$PICKED_EXE"
 ledger_reset_for_reinstall
 assert_absent "$PINNED_EXE"
+assert_absent "$PICKED_EXE"
 RS3_PINNED_SIZE="$_SAVED_SIZE"; RS3_PINNED_SHA256="$_SAVED_SHA"
 
 finish

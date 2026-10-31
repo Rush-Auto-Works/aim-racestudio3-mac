@@ -110,7 +110,10 @@ printf 'INSTALLER_EXE=%q\n' "$PICK" > "$ROOT/state/config.env"
 out="$(run_acquire)"; rc=$?
 assert_true "[ $rc -eq 0 ]" "GUI-picked dedup name: phase succeeds"
 assert_true "printf '%s' \"\$out\" | grep -q 'Installer ready'" "GUI-picked dedup name: accepted"
-rm -f "$PICK" "$ROOT/state/config.env"
+# Stored under the pinned name too, so --reinstall (which forgets INSTALLER_EXE) still finds it.
+assert_file "$CACHE/$FILE"
+assert_true "grep -q 'INSTALLER_EXE=.*$FILE' '$ROOT/state/config.env'" "GUI-picked dedup name: canonical path remembered"
+rm -f "$PICK" "$CACHE/$FILE" "$ROOT/state/config.env"
 
 # --- case 9: after --reinstall's reset, the kept current-pin installer is reused (issue #44) -----
 # No remembered path and a dead network: the cached exe alone must satisfy the phase.

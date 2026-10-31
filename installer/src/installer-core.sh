@@ -154,6 +154,14 @@ phase_acquire_installer() {
   local pre; pre="$(ui_recall INSTALLER_EXE || true)"
   if [ -n "$pre" ] && [ "$DRY_RUN" != 1 ]; then
     if verify_local_asset "$pre" "$RS3_PINNED_FILE" "$RS3_PINNED_SIZE" "$RS3_PINNED_SHA256"; then
+      # A GUI pick can be a browser-dedup name ("… (1).exe"). Store it under the pinned name as
+      # well: --reinstall forgets INSTALLER_EXE, and download_verified only looks at $want.
+      if [ "$pre" != "$want" ] && ditto "$pre" "$want" \
+         && verify_local_asset "$want" "$RS3_PINNED_FILE" "$RS3_PINNED_SIZE" "$RS3_PINNED_SHA256"; then
+        ui_persist INSTALLER_EXE "$want"
+      elif [ "$pre" != "$want" ]; then
+        rm -f "$want" 2>/dev/null || true   # a truncated copy must not pass for the pinned exe
+      fi
       ui_say "Installer ready."; return 0
     fi
     log "ignoring remembered installer (wrong name, size or sha): $pre"
