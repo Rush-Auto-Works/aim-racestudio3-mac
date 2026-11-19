@@ -305,7 +305,7 @@ phase_silent_install() {
   # optional manual-QA smoke test (off by default): launch >= 60s under watchdog, then kill.
   if [ "$SMOKE_TEST" = 1 ]; then
     ui_say "[smoke-test] launching RS3 briefly…"
-    RUN_WINE_TIMEOUT=90 run_wine "$RS3_WIN_EXE" >> "$LOG" 2>&1 || true
+    RUN_WINE_TIMEOUT=90 run_wine "$RS3_WIN_EXE" --disable-gpu-compositing --log-severity=disable >> "$LOG" 2>&1 || true
     wineserver_kill
   fi
 }
