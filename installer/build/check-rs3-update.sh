@@ -36,6 +36,7 @@ while IFS= read -r url; do
   [ -n "$url" ] || continue
   code="$(printf '%s' "$url" | sed -nE 's#.*/RaceStudio3-64_([0-9]+)_[0-9]+_[0-9]+_[0-9]+_[0-9]+\.exe#\1#p')"
   [ -n "$code" ] || continue
+  case " ${RS3_SKIP_CODES:-} " in *" $code "*) echo "held (RS3_SKIP_CODES): $code" >&2; continue ;; esac
   if [ "$code" -gt "$best_code" ] 2>/dev/null; then best_code="$code"; best_url="$url"; fi
 done < <(printf '%s' "$html" | grep -oE 'https://[^"'"'"' ]*RaceStudio3-64_[0-9]+_[0-9]+_[0-9]+_[0-9]+_[0-9]+\.exe')
 

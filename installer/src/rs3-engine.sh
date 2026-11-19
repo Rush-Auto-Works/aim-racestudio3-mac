@@ -34,7 +34,10 @@ if [ "$(stat -f %z "$ROOT/logs/run.log" 2>/dev/null || echo 0)" -gt 10485760 ] &
 # record alive and render in the Dock as "RaceStudio 3 — Running in Background". Since the
 # helper outlives wine, it can tear them down.
 # --disable-gpu-compositing: CEF web maps render white under Wine without it (issue #37).
-/usr/bin/arch -x86_64 "$RES/wine/bin/wine" 'C:\AIM_SPORT\RaceStudio3\64\AiMRS3-64-ReleaseU.exe' --disable-gpu-compositing >> "$ROOT/logs/run.log" 2>&1
+# --log-severity=disable: RS3 3.85 hangs at "Managing Web Controls" when CEF logs an error during
+# CefInitialize. The log call goes through OutputDebugStringA, and Wine's exception dispatch for
+# it waits forever on an ntdll critical section (winedbg backtrace 2026-11-19, issue #87).
+/usr/bin/arch -x86_64 "$RES/wine/bin/wine" 'C:\AIM_SPORT\RaceStudio3\64\AiMRS3-64-ReleaseU.exe' --disable-gpu-compositing --log-severity=disable >> "$ROOT/logs/run.log" 2>&1
 rc=$?
 # Pass 1: a live wineserver reaps all of its clients in one shot (fast, exact). macOS ships no
 # GNU timeout; bound it with a background killer instead (mirrors lib/wine.sh's watchdog intent).

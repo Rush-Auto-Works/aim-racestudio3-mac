@@ -14,6 +14,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.85.02-2] — 2026-11-19
+
+- **Addresses RaceStudio 3 3.85 hanging at "Managing Web Controls"** on launch (issue 87). The
+  hang happens when RaceStudio 3's built-in web view logs an error while it starts up. Under Wine
+  that log call never returns. The app now starts RaceStudio 3 with that logging turned off.
+- Stays on RaceStudio 3 3.85.02. RaceStudio 3 3.85.12 still hangs at startup under Wine, even with
+  this fix, so it isn't shipped yet (issue 89).
+
 ## [3.84.08-2] — 2026-10-31
 
 - **An installer saved as "… (1).exe" now works.** When the automatic download fails and the right

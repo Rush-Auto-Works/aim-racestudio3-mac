@@ -182,6 +182,18 @@ This file is constraints, conventions, and hard-won gotchas only.
   CPU). Separately, the dev marker `WUProts-02 = WebTestPath` fetches ECU protocol indexes from AiM's
   beta folder, where 7 of 12 files 404, and RS3 saves the 404 page as the index: keep it out of real
   installs.
+- **RS3 3.85 hangs at "Managing Web Controls" unless CEF logging is off (`--log-severity=disable`).**
+  That splash step is `CefInitialize` (the next string in the exe is "Problems with CEF"). When CEF
+  logs an error there (`WSALookupServiceBegin failed with: 8`, `Lost UI shared context`), Chromium
+  calls `OutputDebugStringA`. Wine raises `DBG_PRINTEXCEPTION_C`, and the exception dispatch waits
+  forever in `RtlEnterCriticalSection` (winedbg `bt all`, 2026-11-19, issue #87). RS3 then sits at 0%
+  CPU and never starts `MessageHubPipe.exe`. 3.84.08 shipped the same `libcef.dll`, so the change is in
+  RS3's exe. It hung in 6 of 6 untraced launches (app, `env -i`, full shell env). With
+  `WINEDEBUG=+loaddll,+process,warn+seh` it passed once, so tracing is not a diagnosis tool here. With
+  the switch it passed 2 of 2 untraced. Both launch paths (`rs3-engine.sh` and the generated
+  `launch.sh`) carry it, and `unit-launcher.sh` checks both. To get stacks from a hung RS3, write
+  `attach 0x<pid>` / `bt all` to a file in `drive_c` and run `wine winedbg --file 'C:\file'` (the
+  prefix has no `z:`). Map Wine DLL offsets to exports with `pefile`.
 - **A Mac `DOTNET_ROOT` breaks RS3's .NET Core helper.** Wine passes the Mac environment through, and
   `aim_client/MessageHubPipe.exe` (.NET Core 3.1 apphost) checks `DOTNET_ROOT` before the prefix's
   own runtime in `C:\Program Files\dotnet`. A Homebrew value points it at macOS binaries, so it shows
