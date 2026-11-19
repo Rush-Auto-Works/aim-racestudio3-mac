@@ -402,11 +402,13 @@ fi
 # to the winemac window under Wine, so the web-maps track background renders WHITE while the
 # renderer is actually producing the map. Compositing done in software makes the frames present —
 # verified on-device 2026-08-02, issue #37. Mirrors rs3-engine.sh (the bundled app's launch path).
+# --log-severity=disable: RS3 3.85 deadlocks in CefInitialize when CEF logs an error (issue #87);
+# rs3-engine.sh has the detail.
 # Every launch appends to run.log. Past 10 MB, keep it as run.log.1 and start fresh, so a crash
 # log survives one relaunch without growing forever (one +winsock debug session made it 234 MB).
 # Skip while RS3 runs (it still writes the log); if the mv fails, truncate so the cap still holds.
 if [ "\$(stat -f %z "\$ROOT/logs/run.log" 2>/dev/null || echo 0)" -gt 10485760 ] && ! pgrep -f 'AiMRS3-64-Release[U]' >/dev/null 2>&1; then mv -f "\$ROOT/logs/run.log" "\$ROOT/logs/run.log.1" 2>/dev/null || : > "\$ROOT/logs/run.log" 2>/dev/null; fi
-nohup arch -x86_64 "\$WB" '$RS3_WIN_EXE' --disable-gpu-compositing >> "\$ROOT/logs/run.log" 2>&1 &
+nohup arch -x86_64 "\$WB" '$RS3_WIN_EXE' --disable-gpu-compositing --log-severity=disable >> "\$ROOT/logs/run.log" 2>&1 &
 disown
 LAUNCH
   chmod +x "$f"

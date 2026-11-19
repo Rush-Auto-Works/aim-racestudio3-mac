@@ -32,6 +32,13 @@ grep -qE 'AiMRS3-64-ReleaseU\.exe.*--disable-gpu-compositing' "$LS" \
   && ok "launch.sh disables GPU compositing (web maps)" || bad "launch.sh missing --disable-gpu-compositing"
 grep -qE 'AiMRS3-64-ReleaseU\.exe.*--disable-gpu-compositing' "$SRC_DIR/rs3-engine.sh" \
   && ok "engine helper disables GPU compositing (web maps)" || bad "engine helper missing --disable-gpu-compositing"
+# Issue #87: RS3 3.85 deadlocks at "Managing Web Controls" when CEF logs an error during
+# CefInitialize (OutputDebugStringA -> Wine's exception dispatch never returns). With CEF logging
+# off it never takes that path. Both launch paths must carry the switch.
+grep -qE 'AiMRS3-64-ReleaseU\.exe.*--log-severity=disable' "$LS" \
+  && ok "launch.sh turns CEF logging off (#87)" || bad "launch.sh missing --log-severity=disable"
+grep -qE 'AiMRS3-64-ReleaseU\.exe.*--log-severity=disable' "$SRC_DIR/rs3-engine.sh" \
+  && ok "engine helper turns CEF logging off (#87)" || bad "engine helper missing --log-severity=disable"
 
 # macOS 27: the applet must NOT start Wine as its own child. LaunchServices counts Wine's hidden
 # processes as the applet's subordinates and, when the applet quits, kills them (BTM "not allowed

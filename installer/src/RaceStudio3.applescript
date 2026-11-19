@@ -215,7 +215,8 @@ on launchRS3()
 	-- child of this applet. On macOS 27 an applet's child GUI processes are its "subordinates", and
 	-- quitting the applet kills the hidden ones (explorer.exe), which takes wineserver down and
 	-- freezes RS3. The helper's rs3-engine.sh sets Wine's environment, the RS3 command line
-	-- (including --disable-gpu-compositing, issue #37) and the full reasoning.
+	-- (including --disable-gpu-compositing, issue #37, and --log-severity=disable, issue #87) and the
+	-- full reasoning.
 	set bridgeWait to "self_asn=\"$(/usr/bin/lsappinfo front)\"; for _i in $(seq 1 32); do f=\"$(/usr/bin/lsappinfo front)\"; if [ \"$f\" != \"$self_asn\" ]; then case \"$(/usr/bin/lsappinfo info -only name \"$f\" 2>/dev/null)\" in *RaceStudio*) break ;; esac; fi; /bin/sleep 0.25; done; /usr/bin/pgrep -f AiMRS3-64 >/dev/null 2>&1 || exit 1"
 	-- The hygiene's wineserver -k/-w need WINEPREFIX to find our session.
 	set sh to "export WINEPREFIX=" & quoted form of (root & "/prefix") & " WINEDEBUG=-all; " & hygiene & ¬
